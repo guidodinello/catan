@@ -27,6 +27,7 @@
   let gameState: GameStateView | null = $state(null);
   let legalActions: LegalAction[] = $state([]);
   let errorMessage = $state("");
+  let tradeResultMessage = $state("");
   let showTradeForm = $state(false);
 
   // Index of the one human seat this browser tab plays, per
@@ -145,10 +146,21 @@
   ) {
     if (!gameId || isBusy) return;
     isBusy = true;
+    // ProposeTrade resolves entirely inside step_bots before this response
+    // comes back (engine/game.py's _trade_response_apply clears
+    // trade_offer/trade_responders either way), so acceptance vs. every bot
+    // rejecting looks identical in the returned state unless we diff the
+    // viewer's own hand against what it was right before the request.
+    const isTrade = give !== undefined && receive !== undefined;
+    const priorResources =
+      isTrade && viewer !== undefined ? { ...gameState?.players[viewer]?.resources } : undefined;
     try {
       gameState = await postAction(gameId, { index, give, receive });
       errorMessage = "";
       showTradeForm = false;
+      tradeResultMessage = isTrade
+        ? describeTradeOutcome(priorResources, give, receive)
+        : "";
       if (isGameOver) {
         stopPolling();
         legalActions = [];
@@ -161,6 +173,28 @@
     } finally {
       isBusy = false;
     }
+  }
+
+  function describeTradeOutcome(
+    priorResources: Record<string, number> | undefined,
+    give: Record<string, number>,
+    receive: Record<string, number>,
+  ): string {
+    if (!priorResources || viewer === undefined || !gameState) {
+      return "Trade proposed.";
+    }
+    const nowResources = gameState.players[viewer].resources ?? {};
+    const expectedAfterAccept = { ...priorResources };
+    for (const [r, count] of Object.entries(give)) {
+      expectedAfterAccept[r] = (expectedAfterAccept[r] ?? 0) - count;
+    }
+    for (const [r, count] of Object.entries(receive)) {
+      expectedAfterAccept[r] = (expectedAfterAccept[r] ?? 0) + count;
+    }
+    const accepted = Object.keys(expectedAfterAccept).every(
+      (r) => (nowResources[r] ?? 0) === expectedAfterAccept[r],
+    );
+    return accepted ? "Trade accepted!" : "No one accepted your trade offer.";
   }
 
   function submitTrade(give: Record<string, number>, receive: Record<string, number>) {
@@ -211,6 +245,12 @@
         <p class="error">
           {errorMessage}
           <button onclick={() => (errorMessage = "")}>&times;</button>
+        </p>
+      {/if}
+      {#if tradeResultMessage}
+        <p class="trade-result">
+          {tradeResultMessage}
+          <button onclick={() => (tradeResultMessage = "")}>&times;</button>
         </p>
       {/if}
       <div class="layout" class:busy={isBusy}>
@@ -286,5 +326,10 @@
 
   .error {
     color: #d90429;
+  }
+
+  .trade-result {
+    color: #1d3557;
+    font-weight: bold;
   }
 </style>
