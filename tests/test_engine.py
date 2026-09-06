@@ -10,82 +10,28 @@ is_terminal().
 """
 
 import random
-from collections import defaultdict
 from typing import Any
 
 from hypothesis import settings
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
-from engine.actions import Action, ProposeTrade
-from engine.board import Resource
-from engine.game import MAX_TRADE_OFFER_SIDE, CatanGame
+from engine.actions import Action
+from engine.game import CatanGame
 from engine.state import DEV_DECK_SIZE, GameState, Phase
+from experiments.rollout import make_stratified_policy
 
 STEP_BUDGET = 4000
 TOTAL_RESOURCE_CARDS = 95
 
 
-def _sample_action(rng: random.Random, actions: list[Action]) -> Action:
-    """Sample action TYPE uniformly first, then a member of that type.
-
-    TradeBank/TradePort/PlaceSettlement etc. can each have many members for
-    one state; sampling flat would let a numerous action type dominate every
-    step, starving the driver of real progress within the step budget.
-    """
-    by_type: dict[type, list[Action]] = defaultdict(list)
-    for a in actions:
-        by_type[type(a)].append(a)
-    action_type = rng.choice(list(by_type.keys()))
-    return rng.choice(by_type[action_type])
-
-
-def _build_random_trade_offer(rng: random.Random, state: GameState) -> ProposeTrade:
-    """Construct a real multi-resource bundle for the ProposeTrade sentinel.
-
-    Mirrors what the CLI's interactive builder does: a give side drawn from
-    the proposer's actual hand (1..MAX_TRADE_OFFER_SIDE cards, across however
-    many resource types the random draw picks), and a receive side of any
-    resource types not already on the give side.
-    """
-    player = state.players[state.current_player]
-    available = [r for r in Resource if player.resources[r] > 0]
-    rng.shuffle(available)
-    give: dict[Resource, int] = {}
-    remaining = min(MAX_TRADE_OFFER_SIDE, player.resource_card_count())
-    for r in available:
-        if remaining <= 0:
-            break
-        take = rng.randint(1, min(player.resources[r], remaining))
-        give[r] = take
-        remaining -= take
-
-    receive_pool = [r for r in Resource if r not in give]
-    rng.shuffle(receive_pool)
-    receive: dict[Resource, int] = {}
-    remaining = MAX_TRADE_OFFER_SIDE
-    for r in receive_pool:
-        if remaining <= 0:
-            break
-        take = rng.randint(1, remaining)
-        receive[r] = take
-        remaining -= take
-        if rng.random() < 0.5:
-            break
-    return ProposeTrade(give=give, receive=receive)
-
-
 def _sample_and_resolve_action(
     rng: random.Random, state: GameState, actions: list[Action]
 ) -> Action:
-    """Like _sample_action, but resolves the ProposeTrade sentinel (empty
-    give/receive) into a real bundle before returning it -- the sentinel
-    itself is never directly appliable, by design (see engine.game's
-    _propose_trade_actions docstring).
+    """Sample and resolve one action via the shared stratified policy (see
+    ``experiments/rollout.py`` -- the canonical sentinel-resolution logic
+    lives there so this test and the Phase 2 rollout driver never drift).
     """
-    action = _sample_action(rng, actions)
-    if isinstance(action, ProposeTrade) and not action.give and not action.receive:
-        return _build_random_trade_offer(rng, state)
-    return action
+    return make_stratified_policy(rng)(state, actions)
 
 
 def _total_resource_cards(state: GameState) -> int:

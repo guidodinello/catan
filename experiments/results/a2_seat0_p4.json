@@ -1,0 +1,115 @@
+{
+  "git_commit": "9ce94c7f3714d9c41870c6267a203394ea96bbc4",
+  "generated_at": "2026-09-06T04:24:40.025564+00:00",
+  "experiment": "A2_feature_bucketed_random_boards",
+  "seat": 0,
+  "num_players": 4,
+  "n_games": 10000,
+  "engine_seed_base": 1,
+  "policy": "stratified",
+  "pooled_win_rate_over_all_seats_sanity_check": {
+    "n_games": 10000,
+    "wins": 2526,
+    "win_rate": 0.2526,
+    "win_rate_wilson_ci": [
+      0.24417999551386738,
+      0.2612100068799433
+    ],
+    "expected_under_null": 0.25
+  },
+  "by_pip_sum_bucket": {
+    "2-6": {
+      "n_games": 4579,
+      "wins": 738,
+      "win_rate": 0.16117056125791657,
+      "win_rate_wilson_ci": [
+        0.15080542867595403,
+        0.1721037254193532
+      ],
+      "mean_resources_through_turn_10": 2.8528062895828783,
+      "mean_resources_through_turn_20": 5.681153090194366,
+      "mean_turns_to_5vp": 167.4632768361582,
+      "turns_to_5vp_reached_fraction": 0.5798209215986023
+    },
+    "7-9": {
+      "n_games": 2917,
+      "wins": 884,
+      "win_rate": 0.3030510798765855,
+      "win_rate_wilson_ci": [
+        0.28664128199898675,
+        0.31997892789630983
+      ],
+      "mean_resources_through_turn_10": 3.8697291738087074,
+      "mean_resources_through_turn_20": 7.719917723688721,
+      "mean_turns_to_5vp": 149.25569959767546,
+      "turns_to_5vp_reached_fraction": 0.7668837847103188
+    },
+    "10-20": {
+      "n_games": 2039,
+      "wins": 878,
+      "win_rate": 0.4306032368808239,
+      "win_rate_wilson_ci": [
+        0.4092611197087176,
+        0.4522063481762487
+      ],
+      "mean_resources_through_turn_10": 4.635115252574791,
+      "mean_resources_through_turn_20": 9.24816086316822,
+      "mean_turns_to_5vp": 132.6879350348028,
+      "turns_to_5vp_reached_fraction": 0.8455125061304561
+    }
+  },
+  "by_distinct_resources": {
+    "0": {
+      "n_games": 158,
+      "wins": 11,
+      "win_rate": 0.06962025316455696,
+      "win_rate_wilson_ci": [
+        0.0393164634070653,
+        0.1203549768344871
+      ],
+      "mean_resources_through_turn_10": 1.6582278481012658,
+      "mean_resources_through_turn_20": 3.4050632911392404,
+      "mean_turns_to_5vp": 185.08333333333334,
+      "turns_to_5vp_reached_fraction": 0.3037974683544304
+    },
+    "1": {
+      "n_games": 3854,
+      "wins": 518,
+      "win_rate": 0.1344058121432278,
+      "win_rate_wilson_ci": [
+        0.12400048218656998,
+        0.14553922542457792
+      ],
+      "mean_resources_through_turn_10": 2.78386092371562,
+      "mean_resources_through_turn_20": 5.530617540217955,
+      "mean_turns_to_5vp": 173.13301886792453,
+      "turns_to_5vp_reached_fraction": 0.550077841203944
+    },
+    "2": {
+      "n_games": 3840,
+      "wins": 1116,
+      "win_rate": 0.290625,
+      "win_rate_wilson_ci": [
+        0.27647882458298806,
+        0.3051896658512297
+      ],
+      "mean_resources_through_turn_10": 3.81796875,
+      "mean_resources_through_turn_20": 7.5515625,
+      "mean_turns_to_5vp": 149.64962989072964,
+      "turns_to_5vp_reached_fraction": 0.7388020833333333
+    },
+    "3": {
+      "n_games": 2148,
+      "wins": 881,
+      "win_rate": 0.4101489757914339,
+      "win_rate_wilson_ci": [
+        0.38952687332830854,
+        0.4310918816372429
+      ],
+      "mean_resources_through_turn_10": 4.21415270018622,
+      "mean_resources_through_turn_20": 8.532122905027933,
+      "mean_turns_to_5vp": 134.4315259921744,
+      "turns_to_5vp_reached_fraction": 0.8328677839851024
+    }
+  }
+}

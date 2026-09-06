@@ -7,7 +7,7 @@ until your own next turn. VP sources: settlement 1, city 2, Longest Road 2,
 Largest Army 2, VP card 1.
 """
 
-from engine.game import CatanGame, _check_win, _victory_points
+from engine.game import CatanGame, _check_win, victory_points
 from engine.state import Phase
 
 
@@ -21,7 +21,7 @@ def test_victory_points_tally_all_sources() -> None:
     player.revealed_vp_cards = 1  # +1 = 6
     state.longest_road_owner = p  # +2 = 8
     state.largest_army_owner = p  # +2 = 10
-    assert _victory_points(state, p) == 10
+    assert victory_points(state, p) == 10
 
 
 def test_ten_vp_on_holders_turn_ends_the_game() -> None:

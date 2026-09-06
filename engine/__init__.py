@@ -30,6 +30,7 @@ from .board import Terrain as Terrain
 from .board import generate_board as generate_board
 from .game import CatanGame as CatanGame
 from .game import IllegalActionError as IllegalActionError
+from .game import victory_points as victory_points
 from .state import DevCard as DevCard
 from .state import DevCardType as DevCardType
 from .state import GameState as GameState

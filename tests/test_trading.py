@@ -9,7 +9,7 @@ resources; domestic trade is only ever with the current turn's player; both
 sides of any trade must be non-empty and must not share a resource type.
 """
 
-from engine.actions import AcceptTrade, ProposeTrade, RejectTrade
+from engine.actions import AcceptTrade, ProposeTrade, RejectTrade, TradeBank, TradePort
 from engine.board import GEOMETRY, PortType, Resource
 from engine.game import (
     MAX_TRADE_OFFER_SIDE,
@@ -17,6 +17,8 @@ from engine.game import (
     IllegalActionError,
     _apply_trade_bank,
     _apply_trade_port,
+    _bank_trade_actions,
+    _port_trade_actions,
     _propose_trade_actions,
 )
 from engine.state import Phase
@@ -210,6 +212,51 @@ def test_domestic_trade_only_with_current_player() -> None:
     # only players other than the proposer are asked to respond
     assert p not in state.trade_responders
     assert other in state.trade_responders
+
+
+def test_bank_trade_actions_never_offer_a_depleted_receive_resource() -> None:
+    """Regression: legal_actions() must never list a TradeBank that
+    apply_action() then rejects. Found while building Phase 2's rollout
+    harness -- ``_bank_trade_actions`` listed every ``receive_r`` regardless
+    of ``state.bank[receive_r]``, so a bank fully depleted of one resource
+    (routine in a long game) crashed a legal action with IllegalActionError.
+    """
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    p = state.current_player
+    player = state.players[p]
+    player.resources[Resource.LUMBER] = 4
+    state.bank[Resource.ORE] = 0
+
+    actions = _bank_trade_actions(state, p)
+    assert (
+        TradeBank(give={Resource.LUMBER: 4}, receive={Resource.ORE: 1}) not in actions
+    )
+    for action in actions:
+        assert isinstance(action, TradeBank)
+        _apply_trade_bank(state.copy(), p, action.give, action.receive)
+
+
+def test_port_trade_actions_never_offer_a_depleted_receive_resource() -> None:
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    p = state.current_player
+    player = state.players[p]
+    generic_edge = next(
+        e for e, t in state.board.port_types.items() if t is PortType.GENERIC
+    )
+    v = GEOMETRY.edge_vertices[generic_edge][0]
+    player.settlement_vertices.add(v)
+    player.resources[Resource.LUMBER] = 3
+    state.bank[Resource.ORE] = 0
+
+    actions = _port_trade_actions(state, p)
+    assert (
+        TradePort(give={Resource.LUMBER: 3}, receive={Resource.ORE: 1}) not in actions
+    )
+    for action in actions:
+        assert isinstance(action, TradePort)
+        _apply_trade_port(state.copy(), p, action.give, action.receive)
 
 
 def test_accept_trade_swaps_resources_and_reject_moves_to_next_responder() -> None:
