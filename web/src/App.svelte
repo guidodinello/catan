@@ -283,7 +283,7 @@
   onDestroy(cancelAutoReject);
 </script>
 
-<main>
+<main class:playing={status === "ok"}>
   <h1>Catan</h1>
 
   {#if status === "setup"}
@@ -411,6 +411,14 @@
 </main>
 
 <style>
+  /* app.css caps <main> at 720px for the setup/error screens, where a
+     narrow form reads better -- but that same cap starved the board of
+     room once actually playing, since Board.svelte's svg is width: 100%
+     of .board-column and scales down with whatever space it's given. */
+  main.playing {
+    max-width: 1400px;
+  }
+
   .layout {
     display: flex;
     gap: 1.5rem;
