@@ -294,15 +294,25 @@
       </g>
     {/if}
     {#if roadIndex !== undefined}
-      <!-- Deliberately wider than the visible road glyph's SIZE * 0.12 --
-           this is the click/hit target, not a drawn road, so it can be
-           easier to hit without changing how any road looks. -->
+      <!-- Purely decorative -- the dashed stroke-dasharray means SVG hit-
+           testing has gaps along it (a click landing between dashes never
+           registers), so the actual click/keyboard target is the separate
+           solid line below instead. -->
       <line
         x1={p1.x}
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
         class="highlight-edge"
+        stroke-width={SIZE * 0.32}
+        stroke-linecap="round"
+      />
+      <line
+        x1={p1.x}
+        y1={p1.y}
+        x2={p2.x}
+        y2={p2.y}
+        class="edge-hit-target"
         stroke-width={SIZE * 0.32}
         stroke-linecap="round"
         role="button"
@@ -312,14 +322,23 @@
       />
     {/if}
     {#if pickHandler}
-      <!-- Same widened hit target as roadIndex above, for road-building's
-           two-click edge pick. -->
+      <!-- Same decorative-highlight + solid-hit-target split as roadIndex
+           above, for road-building's two-click edge pick. -->
       <line
         x1={p1.x}
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
         class="highlight-edge"
+        stroke-width={SIZE * 0.32}
+        stroke-linecap="round"
+      />
+      <line
+        x1={p1.x}
+        y1={p1.y}
+        x2={p2.x}
+        y2={p2.y}
+        class="edge-hit-target"
         stroke-width={SIZE * 0.32}
         stroke-linecap="round"
         role="button"
@@ -413,6 +432,24 @@
 
   .highlight-edge {
     fill: none;
+    /* Purely decorative now -- stroke-dasharray above means SVG hit-testing
+       has gaps along a dashed stroke (a click between dashes never
+       registers), so this must never be the thing actually receiving
+       clicks; .edge-hit-target below is. */
+    pointer-events: none;
+  }
+
+  /* Invisible, solid (no dasharray) companion to .highlight-edge -- the
+     real click/keyboard target for a road edge, continuous along its full
+     length so there's no dead zone between dashes. stroke: transparent
+     (not `none`) is deliberate: SVG's default visiblePainted hit-testing
+     only counts a stroke that's actually painted, and transparent still
+     counts as painted (just invisible), whereas `none` would opt the
+     stroke back out of hit-testing entirely. */
+  .edge-hit-target {
+    cursor: pointer;
+    fill: none;
+    stroke: transparent;
   }
 
   .highlight-vertex.steal {
@@ -420,7 +457,6 @@
   }
 
   .highlight-hex:hover,
-  .highlight-edge:hover,
   .highlight-vertex:hover {
     fill: color-mix(in srgb, #ffd60a 60%, transparent);
   }
