@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { GameStateView } from "./api";
   import { PLAYER_COLOR } from "./playerColor";
+  import DevCardStrip from "./DevCardStrip.svelte";
 
   interface Props {
     state: GameStateView;
@@ -43,6 +44,7 @@
         {#if state.largest_army_owner === player.player_id}
           <span class="badge">Largest Army</span>
         {/if}
+        <DevCardStrip {player} />
       </li>
     {/each}
   </ul>
