@@ -52,6 +52,7 @@
   .trade-offer {
     border: 1px solid #ffd60a;
     background: #fff3cd;
+    color: #664d03;
     border-radius: 6px;
     padding: 0.5rem 0.75rem;
     margin-bottom: 0.75rem;

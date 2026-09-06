@@ -390,6 +390,7 @@
 
   .road-building-banner {
     background: #fff3cd;
+    color: #664d03;
     border: 1px solid #ffd60a;
     border-radius: 6px;
     padding: 0.5rem 0.75rem;
