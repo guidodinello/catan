@@ -20,21 +20,37 @@
 
   const { onCreate }: Props = $props();
 
-  let numPlayers: number = $state(3);
   // engine/game.py's CatanGame fills non-human seats with a real opponent by
-  // default (cli.py does the same with HeuristicAgent) -- default new seats
-  // to "heuristic" rather than leaving them unset.
-  let seatKinds: SeatKind[] = $state(["human", "heuristic", "heuristic"]);
+  // default (cli.py does the same with HeuristicAgent) -- default new bot
+  // seats to a round-robin cycle rather than all the same kind, so a
+  // default game has varied opponents (HeuristicAgent always rejects trade
+  // offers -- see agents/heuristic.py's docstring -- so an all-heuristic
+  // default meant every trade silently failed unless you noticed and
+  // changed the dropdowns yourself).
+  const DEFAULT_BOT_CYCLE: SeatKind[] = ["heuristic", "random", "stratified_random"];
+  // Seat 0 is the assumed human slot for this cycle's purposes; bot seats
+  // are everything after it, in order.
+  function defaultBotKind(botOrdinal: number): SeatKind {
+    return DEFAULT_BOT_CYCLE[botOrdinal % DEFAULT_BOT_CYCLE.length];
+  }
+
+  let numPlayers: number = $state(3);
+  let seatKinds: SeatKind[] = $state([
+    "human",
+    defaultBotKind(0),
+    defaultBotKind(1),
+  ]);
   let seed: number | undefined = $state(1);
 
   // Keep seatKinds' length in sync with numPlayers, defaulting any newly
-  // added seat to "heuristic" and trimming from the end when it shrinks.
+  // added seat to the next kind in the round-robin cycle and trimming from
+  // the end when it shrinks.
   $effect(() => {
     if (seatKinds.length < numPlayers) {
-      seatKinds = [
-        ...seatKinds,
-        ...Array(numPlayers - seatKinds.length).fill("heuristic"),
-      ];
+      const added = Array.from({ length: numPlayers - seatKinds.length }, (_, i) =>
+        defaultBotKind(seatKinds.length + i - 1),
+      );
+      seatKinds = [...seatKinds, ...added];
     } else if (seatKinds.length > numPlayers) {
       seatKinds = seatKinds.slice(0, numPlayers);
     }
