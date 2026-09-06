@@ -9,9 +9,20 @@ Scope simplifications (documented, not rules bugs):
   - PlayRoadBuilding is only offered when two sequential legal placements
     exist and the player has >=2 road pieces left (rather than allowing a
     single free road when only one placement/piece is available).
-  - ProposeTrade is bounded to single-resource-type give/receive multisets
-    (1-4 cards each) rather than the full cross-product of multi-resource
-    multisets, to keep the action space enumerable.
+
+Architectural principle: the engine models the real rules exactly, with no
+compromises made for the sake of a future flat/enumerable RL action space.
+Where a legal action's parameter domain is small (PlayYearOfPlenty: pick 2 of
+5 resources), legal_actions() pre-enumerates every parametrized instance.
+Where it is not (ProposeTrade: any non-empty multi-resource give/receive
+bundle), legal_actions() offers a single open-ended affordance and the actual
+bundle is constructed by the caller and fully validated in apply_action --
+never bounded to a single resource type or otherwise restricted beyond the
+real rules just to make it enumerable. Any bounding/flattening needed for a
+future discrete action space (Phase 5) belongs in a separate adapter/encoding
+layer, never baked into the engine as a rules compromise -- the same
+principle catanatron applies by confining its flat space to a separate gym
+subpackage.
 """
 
 from __future__ import annotations
@@ -835,15 +846,29 @@ def _apply_trade_port(
     _execute_trade_with_bank(state, player_idx, give, receive)
 
 
+MAX_TRADE_OFFER_SIDE = 4
+
+
 def _propose_trade(
     state: GameState,
     player_idx: int,
     give: dict[Resource, int],
     receive: dict[Resource, int],
 ) -> None:
+    """Propose a domestic trade. ``give``/``receive`` are full multi-resource
+    bundles (e.g. give 2 lumber + 1 brick for 1 ore) -- real Catan trades are
+    routinely multi-resource, so no single-resource-type restriction is
+    applied. The only cap is a per-side card count, kept small purely so an
+    interactive builder (the CLI) doesn't need to prompt for absurd amounts;
+    it is not a rules restriction and does not force a single resource type.
+    """
     _validate_trade_shape(give, receive)
-    if sum(give.values()) > 4 or sum(receive.values()) > 4:
-        raise IllegalActionError("a trade offer is capped at 4 cards per side")
+    if sum(give.values()) > MAX_TRADE_OFFER_SIDE:
+        raise IllegalActionError(f"give side is capped at {MAX_TRADE_OFFER_SIDE} cards")
+    if sum(receive.values()) > MAX_TRADE_OFFER_SIDE:
+        raise IllegalActionError(
+            f"receive side is capped at {MAX_TRADE_OFFER_SIDE} cards"
+        )
     if not _has_resources(state.players[player_idx], give):
         raise IllegalActionError("cannot offer resources you do not have")
     state.trade_offer = TradeOffer(
@@ -881,22 +906,23 @@ def _port_trade_actions(state: GameState, player_idx: int) -> list[Action]:
 
 
 def _propose_trade_actions(state: GameState, player_idx: int) -> list[Action]:
-    """Bounded to single-resource-type give/receive multisets (see module docstring)."""
+    """A single open-ended affordance, not a pre-enumeration.
+
+    The give/receive bundle space (any non-empty multi-resource multiset on
+    each side, up to MAX_TRADE_OFFER_SIDE cards) is too large to usefully
+    pre-enumerate -- and unlike PlayYearOfPlenty's tiny domain, enumerating it
+    would bury a human player under thousands of near-duplicate menu entries.
+    This sentinel (empty give/receive) signals "you may propose a trade";
+    the caller (the CLI, prompting a human; or a test driver, constructing
+    one at random) builds the actual bundle and passes a fully-specified
+    ProposeTrade to apply_action, which validates it in full -- the sentinel
+    itself always fails validation (both sides must be non-empty) so it can
+    never be applied unmodified.
+    """
     player = state.players[player_idx]
-    actions: list[Action] = []
-    for give_r in Resource:
-        max_give = min(4, player.resources[give_r])
-        for give_n in range(1, max_give + 1):
-            for receive_r in Resource:
-                if receive_r == give_r:
-                    continue
-                for receive_n in range(1, 5):
-                    actions.append(
-                        ProposeTrade(
-                            give={give_r: give_n}, receive={receive_r: receive_n}
-                        )
-                    )
-    return actions
+    if player.resource_card_count() == 0:
+        return []
+    return [ProposeTrade(give={}, receive={})]
 
 
 def _trade_response_legal(state: GameState) -> list[Action]:

@@ -12,10 +12,12 @@ sides of any trade must be non-empty and must not share a resource type.
 from engine.actions import AcceptTrade, ProposeTrade, RejectTrade
 from engine.board import GEOMETRY, PortType, Resource
 from engine.game import (
+    MAX_TRADE_OFFER_SIDE,
     CatanGame,
     IllegalActionError,
     _apply_trade_bank,
     _apply_trade_port,
+    _propose_trade_actions,
 )
 from engine.state import Phase
 
@@ -122,6 +124,72 @@ def test_no_gift_trade_requires_both_sides_non_empty() -> None:
     with_error = False
     try:
         _apply_trade_bank(state, p, {}, {Resource.ORE: 1})
+    except IllegalActionError:
+        with_error = True
+    assert with_error
+
+
+def test_propose_trade_actions_is_a_single_open_ended_affordance() -> None:
+    """legal_actions() offers one sentinel, not a pre-enumeration -- the
+    give/receive bundle is constructed by the caller (see engine.game's
+    _propose_trade_actions docstring)."""
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    p = state.current_player
+    player = state.players[p]
+    for r in Resource:
+        player.resources[r] = 0
+
+    assert _propose_trade_actions(state, p) == []
+
+    player.resources[Resource.LUMBER] = 1
+    actions = _propose_trade_actions(state, p)
+    assert actions == [ProposeTrade(give={}, receive={})]
+
+
+def test_propose_trade_supports_full_multi_resource_bundles() -> None:
+    """Real Catan trades are routinely multi-resource on both sides (e.g.
+    2 lumber + 1 brick for 1 ore) -- this must not be restricted to a single
+    resource type per side."""
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    player = state.players[p]
+    player.resources[Resource.LUMBER] = 2
+    player.resources[Resource.BRICK] = 1
+
+    game.apply_action(
+        state,
+        ProposeTrade(
+            give={Resource.LUMBER: 2, Resource.BRICK: 1},
+            receive={Resource.ORE: 1, Resource.GRAIN: 1},
+        ),
+    )
+    assert state.phase == Phase.AWAIT_TRADE_RESPONSE
+    offer = state.trade_offer
+    assert offer is not None
+    assert offer.give == {Resource.LUMBER: 2, Resource.BRICK: 1}
+    assert offer.receive == {Resource.ORE: 1, Resource.GRAIN: 1}
+
+
+def test_propose_trade_rejects_offer_exceeding_per_side_card_cap() -> None:
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    player = state.players[p]
+    player.resources[Resource.LUMBER] = MAX_TRADE_OFFER_SIDE + 1
+
+    with_error = False
+    try:
+        game.apply_action(
+            state,
+            ProposeTrade(
+                give={Resource.LUMBER: MAX_TRADE_OFFER_SIDE + 1},
+                receive={Resource.ORE: 1},
+            ),
+        )
     except IllegalActionError:
         with_error = True
     assert with_error

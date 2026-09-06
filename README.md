@@ -96,12 +96,20 @@ catanatron/prior-art comparisons) lives in `docs/research/rules-review.md` and
 5. **Trading.** `ProposeTrade` / `AcceptTrade` / `RejectTrade`: an offer goes to
    all other players at once, first accept executes, no counter-offers — a
    documented scope simplification, not a rules claim (the real game allows
-   free negotiation). The domain is bounded (single resource type per side,
-   capped at 4 cards) to keep it enumerable for `legal_actions`; even bounded,
-   domestic trade is a give-multiset × receive-multiset product, so **Phase 5
-   will need a factored/hierarchical action head for it**, not a flat
-   `Discrete` — catanatron's own flat space omits domestic trade entirely for
-   this reason.
+   free negotiation). The give/receive bundle itself is a **full multi-resource
+   bundle on each side** — e.g. give 2 lumber + 1 brick for 1 ore + 1 grain — with
+   no restriction to a single resource type; that would be a real usability
+   regression on a rule domestic trade uses constantly. Because that bundle
+   space is too large to usefully pre-enumerate, `legal_actions` offers a
+   single open-ended `ProposeTrade` affordance rather than every possible
+   instance (the same reasoning as decision 10 below); the caller (the CLI,
+   prompting a human interactively; a test driver, constructing one at random)
+   builds the actual bundle and `apply_action` validates it in full — both
+   sides non-empty, no shared resource type, capped at 4 cards per side purely
+   so an interactive builder doesn't need to prompt for absurd amounts. Even
+   so, it's a give-multiset × receive-multiset product, so **Phase 5 will need
+   a factored/hierarchical action head for it**, not a flat `Discrete` —
+   catanatron's own flat space omits domestic trade entirely for this reason.
 6. **Board setup.** Terrain (4 forest/4 pasture/4 field/3 hill/3 mountain/1
    desert) and number tokens (18, fixed distribution, one 2, one 12, no 7) are
    drawn from the game's fixed multisets, not sampled freely. The desert gets
@@ -117,6 +125,20 @@ catanatron/prior-art comparisons) lives in `docs/research/rules-review.md` and
    acted on in Phase 1 beyond a rollout-speed baseline (`pytest-benchmark`) for
    `apply_action`/full-game throughput, recorded now so a later regression is
    visible.
+10. **The engine models the real rules exactly — full stop.** No rule is ever
+    bounded, restricted, or approximated for the sake of a future flat/discrete
+    RL action space; that tradeoff belongs entirely to a separate adapter/encoding
+    layer built in Phase 5, never baked into the engine itself. Concretely: where
+    a legal action's parameter domain is small enough to enumerate exhaustively
+    (`PlayYearOfPlenty` — pick 2 of 5 resources — or `PlayMonopoly` — pick 1 of 5),
+    `legal_actions` lists every parametrized instance. Where it isn't
+    (`ProposeTrade`'s multi-resource bundles), `legal_actions` offers a single
+    open-ended affordance and the real object is constructed and fully validated
+    by the caller in `apply_action` — never narrowed to make it enumerable. This
+    is the same principle catanatron applies by confining its flat/masked
+    `Discrete` space to a separate gym subpackage (decision 1), just carried one
+    level deeper: it governs not only *how* actions are encoded, but *what a
+    legal action is allowed to represent* in the first place.
 
 ## Proposed Roadmap
 

@@ -16,8 +16,9 @@ from typing import Any
 from hypothesis import settings
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
-from engine.actions import Action
-from engine.game import CatanGame
+from engine.actions import Action, ProposeTrade
+from engine.board import Resource
+from engine.game import MAX_TRADE_OFFER_SIDE, CatanGame
 from engine.state import DEV_DECK_SIZE, GameState, Phase
 
 STEP_BUDGET = 4000
@@ -27,16 +28,64 @@ TOTAL_RESOURCE_CARDS = 95
 def _sample_action(rng: random.Random, actions: list[Action]) -> Action:
     """Sample action TYPE uniformly first, then a member of that type.
 
-    ProposeTrade/TradeBank/TradePort/PlaceSettlement etc. can each have many
-    members for one state; sampling flat would let a numerous action type
-    dominate every step (in practice, trade proposals), starving the
-    driver of real progress within the step budget.
+    TradeBank/TradePort/PlaceSettlement etc. can each have many members for
+    one state; sampling flat would let a numerous action type dominate every
+    step, starving the driver of real progress within the step budget.
     """
     by_type: dict[type, list[Action]] = defaultdict(list)
     for a in actions:
         by_type[type(a)].append(a)
     action_type = rng.choice(list(by_type.keys()))
     return rng.choice(by_type[action_type])
+
+
+def _build_random_trade_offer(rng: random.Random, state: GameState) -> ProposeTrade:
+    """Construct a real multi-resource bundle for the ProposeTrade sentinel.
+
+    Mirrors what the CLI's interactive builder does: a give side drawn from
+    the proposer's actual hand (1..MAX_TRADE_OFFER_SIDE cards, across however
+    many resource types the random draw picks), and a receive side of any
+    resource types not already on the give side.
+    """
+    player = state.players[state.current_player]
+    available = [r for r in Resource if player.resources[r] > 0]
+    rng.shuffle(available)
+    give: dict[Resource, int] = {}
+    remaining = min(MAX_TRADE_OFFER_SIDE, player.resource_card_count())
+    for r in available:
+        if remaining <= 0:
+            break
+        take = rng.randint(1, min(player.resources[r], remaining))
+        give[r] = take
+        remaining -= take
+
+    receive_pool = [r for r in Resource if r not in give]
+    rng.shuffle(receive_pool)
+    receive: dict[Resource, int] = {}
+    remaining = MAX_TRADE_OFFER_SIDE
+    for r in receive_pool:
+        if remaining <= 0:
+            break
+        take = rng.randint(1, remaining)
+        receive[r] = take
+        remaining -= take
+        if rng.random() < 0.5:
+            break
+    return ProposeTrade(give=give, receive=receive)
+
+
+def _sample_and_resolve_action(
+    rng: random.Random, state: GameState, actions: list[Action]
+) -> Action:
+    """Like _sample_action, but resolves the ProposeTrade sentinel (empty
+    give/receive) into a real bundle before returning it -- the sentinel
+    itself is never directly appliable, by design (see engine.game's
+    _propose_trade_actions docstring).
+    """
+    action = _sample_action(rng, actions)
+    if isinstance(action, ProposeTrade) and not action.give and not action.receive:
+        return _build_random_trade_offer(rng, state)
+    return action
 
 
 def _total_resource_cards(state: GameState) -> int:
@@ -79,7 +128,9 @@ def test_random_games_never_violate_core_invariants() -> None:
         _assert_invariants(game, state)
         steps = 0
         while not game.is_terminal(state) and steps < STEP_BUDGET:
-            action = _sample_action(driver_rng, game.legal_actions(state))
+            action = _sample_and_resolve_action(
+                driver_rng, state, game.legal_actions(state)
+            )
             game.apply_action(state, action)
             _assert_invariants(game, state)
             steps += 1
@@ -104,7 +155,7 @@ class CatanStateMachine(RuleBasedStateMachine):
             return
         legal = self.game.legal_actions(self.state)
         assert legal, f"empty legal_actions at phase {self.state.phase}"
-        action = _sample_action(self.driver_rng, legal)
+        action = _sample_and_resolve_action(self.driver_rng, self.state, legal)
         self.game.apply_action(self.state, action)
         self.steps += 1
 
@@ -145,7 +196,9 @@ def _play_one_random_game(seed: int) -> None:
     state = game.reset(seed=seed)
     steps = 0
     while not game.is_terminal(state) and steps < STEP_BUDGET:
-        action = _sample_action(driver_rng, game.legal_actions(state))
+        action = _sample_and_resolve_action(
+            driver_rng, state, game.legal_actions(state)
+        )
         game.apply_action(state, action)
         steps += 1
 

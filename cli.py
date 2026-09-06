@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from engine.actions import Action
+from engine.actions import Action, ProposeTrade
 from engine.board import GEOMETRY, PortType, Resource, Terrain
-from engine.game import CatanGame
-from engine.state import DevCardType, GameState, acting_player
+from engine.game import MAX_TRADE_OFFER_SIDE, CatanGame
+from engine.state import DevCardType, GameState, PlayerState, acting_player
 
 TERRAIN_LETTERS: dict[Terrain, str] = {
     Terrain.FOREST: "L",
@@ -122,7 +122,47 @@ def _prompt_int(prompt: str, valid: range | list[int]) -> int:
         print("Out of range, try again.")
 
 
-def choose_action(legal_actions: list[Action]) -> Action:
+def _prompt_resource_bundle(
+    side_label: str, hand: dict[Resource, int] | None
+) -> dict[Resource, int]:
+    """Prompt for a multi-resource bundle, one count per resource type.
+
+    ``hand`` caps each resource by what the player actually holds (the give
+    side); ``None`` means uncapped except by the per-side card total (the
+    receive side -- the proposer need not know what any other player holds).
+    """
+    print(f"  {side_label} (enter a count for each resource, 0 to skip):")
+    bundle: dict[Resource, int] = {}
+    total = 0
+    for r in Resource:
+        remaining = MAX_TRADE_OFFER_SIDE - total
+        if remaining <= 0:
+            break
+        cap = remaining if hand is None else min(hand.get(r, 0), remaining)
+        if cap <= 0:
+            continue
+        count = _prompt_int(f"    {RESOURCE_LETTERS[r]} (0-{cap}): ", range(cap + 1))
+        if count > 0:
+            bundle[r] = count
+            total += count
+    return bundle
+
+
+def _prompt_propose_trade(player: PlayerState) -> ProposeTrade:
+    print(f"\nPropose a trade (up to {MAX_TRADE_OFFER_SIDE} cards per side):")
+    while True:
+        give = _prompt_resource_bundle("You give", player.resources)
+        receive = _prompt_resource_bundle("You receive", None)
+        if not give or not receive:
+            print("Both sides must be non-empty -- try again.")
+            continue
+        if set(give) & set(receive):
+            print("Cannot trade like-for-like resources -- try again.")
+            continue
+        return ProposeTrade(give=give, receive=receive)
+
+
+def choose_action(legal_actions: list[Action], state: GameState, actor: int) -> Action:
     by_type: dict[type, list[Action]] = defaultdict(list)
     for a in legal_actions:
         by_type[type(a)].append(a)
@@ -135,7 +175,11 @@ def choose_action(legal_actions: list[Action]) -> Action:
         print(f"  {i}: {t.__name__}{suffix}")
 
     idx = _prompt_int("Choose an action type: ", range(len(types)))
-    options = by_type[types[idx]]
+    action_type = types[idx]
+    if action_type is ProposeTrade:
+        return _prompt_propose_trade(state.players[actor])
+
+    options = by_type[action_type]
     if len(options) == 1:
         return options[0]
 
@@ -157,7 +201,7 @@ def run_hotseat_game(num_players: int = 3, seed: int | None = None) -> None:
         print(f"\nPhase: {state.phase.name} -- Player {_player_label(actor)} to act")
 
         legal = game.legal_actions(state)
-        action = choose_action(legal)
+        action = choose_action(legal, state, actor)
         try:
             game.apply_action(state, action)
         except Exception as exc:  # noqa: BLE001 -- surface any rule violation to the player
