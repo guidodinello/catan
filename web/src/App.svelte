@@ -315,7 +315,13 @@
       <Board {geometry} state={gameState} />
     {:else}
       <p>
-        Phase: {gameState.phase}, acting player: {gameState.acting_player}
+        Phase: {gameState.phase}, turn: Player {gameState.current_player}
+        {#if gameState.acting_player !== gameState.current_player}
+          <!-- Distinct from current_player while awaiting a domestic-trade
+               response -- e.g. it's Player 2's turn, but Player 0 (you) must
+               respond to their trade offer before anything else can happen. -->
+          (Player {gameState.acting_player} must respond to a trade)
+        {/if}
         {#if isBusy}
           <em>-- applying your move (any bot turns resolve automatically)...</em>
         {/if}
