@@ -1,0 +1,86 @@
+{
+  "git_commit": "c51e4bd47284c3bc5e7f5e3c4009fc8e8016502c",
+  "generated_at": "2026-09-06T18:42:42.712239+00:00",
+  "experiment": "benchmark",
+  "mode": "heuristic_vs_random",
+  "num_players": 3,
+  "n_games": 3999,
+  "engine_seed_base": 1,
+  "driver_seed_base": 1,
+  "by_role": {
+    "random": {
+      "n_seat_occupancies": 7998,
+      "wins": 230,
+      "win_rate": 0.02875718929732433,
+      "win_rate_wilson_ci": [
+        0.02531467477544153,
+        0.032652164633678024
+      ],
+      "mean_resources_through_turn_10": 3.176419104776194,
+      "seat_occupancy_counts": {
+        "0": 2666,
+        "1": 2666,
+        "2": 2666
+      }
+    },
+    "heuristic": {
+      "n_seat_occupancies": 3999,
+      "wins": 3769,
+      "win_rate": 0.9424856214053513,
+      "win_rate_wilson_ci": [
+        0.9348359249327138,
+        0.9492860260382471
+      ],
+      "mean_resources_through_turn_10": 6.520880220055013,
+      "seat_occupancy_counts": {
+        "0": 1333,
+        "1": 1333,
+        "2": 1333
+      }
+    }
+  },
+  "by_seat": {
+    "0": {
+      "n_games": 3999,
+      "wins": 1341,
+      "win_rate": 0.3353338334583646,
+      "win_rate_wilson_ci": [
+        0.32086572098696464,
+        0.35011800056467257
+      ],
+      "expected_under_null": 0.3333333333333333
+    },
+    "1": {
+      "n_games": 3999,
+      "wins": 1328,
+      "win_rate": 0.3320830207551888,
+      "win_rate_wilson_ci": [
+        0.31765350694883404,
+        0.34683482869569804
+      ],
+      "expected_under_null": 0.3333333333333333
+    },
+    "2": {
+      "n_games": 3999,
+      "wins": 1330,
+      "win_rate": 0.3325831457864466,
+      "win_rate_wilson_ci": [
+        0.3181476429290612,
+        0.34733998285502543
+      ],
+      "expected_under_null": 0.3333333333333333
+    }
+  },
+  "comparisons": {
+    "random_vs_heuristic": {
+      "z": -100.0814222159547,
+      "p_value": 0.0
+    }
+  },
+  "known_biases": [
+    "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- every agent reveals VP cards immediately.",
+    "Bank shortage (_produce) skips a resource when the bank cannot cover all claimants; heuristic agents produce more, so they hit this more often than random agents did in Phase 2.",
+    "HeuristicAgent is hand-tuned against Phase 2's random-play results; a rule that helps against random opponents need not help against a good one. heuristic_vs_heuristic is the check."
+  ],
+  "non_winner_exceeded_ten_rate": 0.00025006251562890725
+}

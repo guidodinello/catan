@@ -161,9 +161,9 @@ in `experiments/results/`):
     is only well-posed per seat, and seat 0 (first picker, full board) is
     the default.
 13. **A local, stdlib-only `experiments/mcstats.py`**, not a dependency on
-    the sibling `mmo-utils` package — see `docs/shared-ml-package.md`'s own
-    verdict that this layer (`mc_tables.py`'s analog) should be rebuilt per
-    game, not extracted. Revisit at Phase 4.
+    the sibling `mmo-utils` package — see `~/projects/docs/shared-ml-package.md`'s
+    own verdict that this layer (`mc_tables.py`'s analog) should be rebuilt
+    per game, not extracted. Revisit at Phase 4.
 14. **Found while building Phase 2, fixed in Phase 1 territory (engine
     correctness, not scope creep):** `_bank_trade_actions`/`_port_trade_
     actions` listed a `TradeBank`/`TradePort` as legal without checking the
@@ -178,6 +178,45 @@ in `experiments/results/`):
     10,000 4-player games — see `experiments/results/tables.md`. Left for
     Phase 3 to decide whether it's worth closing.
 
+Resolved while building Phase 3 (full sourcing in `docs/plans/phase-3-agents.md`;
+results in `experiments/results/benchmark.md`):
+
+16. **Win rate becomes the primary metric, not a reversal of decision 11.**
+    Decision 11 held because every Phase 2 number was conditional on
+    uniform-random play; Phase 3 is a benchmark, where the policy itself is
+    the thing under test, so a policy-conditional win rate is now the point.
+    The `GameRecord` intermediate metrics (cumulative resources, turns-to-
+    5-VP) survive as diagnostics that catch a heuristic winning by exploiting
+    an engine quirk rather than by playing well — see gate 2 in
+    `experiments/results/benchmark.md`.
+17. **RNG ownership moves into the agent.** `experiments/rollout.py`'s
+    `run_game`/`run_many` take a module-level `AgentFactory` — `(num_players,
+    engine_seed, driver_seed) -> list[Agent]`, indexed by player id — instead
+    of one shared `policy_factory`. The driver derives no per-seat streams and
+    holds no policy RNG itself; each agent owns whatever randomness it needs.
+    The Phase 2 default (`n` `StratifiedRandomAgent`s sharing **one**
+    `random.Random`, no rotation) is kept as `default_agent_factory` purely to
+    reproduce Phase 2's exact draw sequence — every file under
+    `experiments/results/` from Phase 2 stays replayable from its recorded
+    `(engine_seed, driver_seed)` pair (verified by a bit-identity regression
+    test against golden pre-refactor records, `tests/test_agents.py`).
+18. **Agents do not propose domestic trades.** `ProposeTrade` is an
+    open-ended sentinel (decisions 5, 10); a heuristic that negotiates trades
+    is a research project of its own, out of scope here. `RandomAgent`/
+    `StratifiedRandomAgent` resolve the sentinel themselves
+    (`agents/random_agent.py`'s `build_random_trade_offer`, moved verbatim
+    from Phase 2's `rollout.py`); `HeuristicAgent` filters it out of its
+    candidate set and always rejects when it is the one being asked to
+    respond to another agent's trade. `run_game` fails fast with a clear
+    error if any agent ever returns the unresolved sentinel.
+19. **`_check_win` re-measured under `HeuristicAgent`, decision: not fixed.**
+    Contrary to the plan's own speculation that purposeful play would raise
+    the Longest-Road-transfer detection gap (decision 15), the measured rate
+    under `heuristic_vs_heuristic` self-play is 0.150% (3p) / 0.125% (4p) —
+    the same order of magnitude as Phase 2's 0.22% baseline, not higher. Left
+    unfixed: `_check_win` still evaluates only the turn player. See
+    `experiments/results/benchmark.md` for the full measurement.
+
 ## Proposed Roadmap
 
 - [x] **Phase 1 — Engine**: board generation, game state, legal actions,
@@ -185,8 +224,9 @@ in `experiments/results/`):
 - [x] **Phase 2 — Monte Carlo analysis**: starting placement win-probability
       experiments, resource/VP probability tables. See `experiments/` and
       `experiments/results/`.
-- [ ] **Phase 3 — Agents**: RandomAgent, heuristic agents (settlement
-      placement heuristics, build-order policies), benchmark harness.
+- [x] **Phase 3 — Agents**: RandomAgent, heuristic agents (settlement
+      placement heuristics, build-order policies), benchmark harness. See
+      `agents/` and `experiments/benchmark.py`.
 - [ ] **Phase 4 — Shared ML package extraction**: generic `Agent` protocol
       + benchmark runner extracted from `truco-py`, adopted by Catan.
 - [ ] **Phase 5 — RL**: gymnasium env, state encoder, MaskablePPO training
@@ -209,5 +249,18 @@ win rate across random boards) and four resource/VP tables
 (`experiments/exp_tables.py`), plus `tests/test_experiments.py` (including a
 deterministic analytic-vs-engine cross-check). Full-scale results (800-
 10,000 games per arm, 3- and 4-player) are committed under
-`experiments/results/` with hand-written summaries. Phase 3+ (agents, shared
-ML package, RL) not started.
+`experiments/results/` with hand-written summaries.
+
+Phase 3 complete: the `Agent` protocol and three agents (`agents/base.py`,
+`agents/random_agent.py`'s `RandomAgent`/`StratifiedRandomAgent`,
+`agents/heuristic.py`'s `HeuristicAgent`, `agents/human.py`'s `HumanAgent`,
+which `cli.py` now uses for hot-seat play), a per-seat-agent rollout driver
+(`experiments/rollout.py`, rewritten around a module-level `AgentFactory`),
+and a benchmark harness with a mode registry and mandatory seat rotation
+(`experiments/benchmark.py`). All three acceptance gates pass at full scale
+(random-vs-random ≈ 1/n per seat, heuristic beats random by a wide margin
+with non-overlapping CIs, heuristic-vs-heuristic self-play runs cleanly);
+`_check_win`'s known gap (decision 15) was re-measured and left unfixed
+(decision 19). Results committed under `experiments/results/benchmark_*.json`
+with a hand-written summary in `experiments/results/benchmark.md`. Phase 4+
+(shared ML package extraction, RL) not started.

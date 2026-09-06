@@ -15,10 +15,10 @@ from typing import Any
 from hypothesis import settings
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
+from agents.random_agent import StratifiedRandomAgent
 from engine.actions import Action
 from engine.game import CatanGame
 from engine.state import DEV_DECK_SIZE, GameState, Phase
-from experiments.rollout import make_stratified_policy
 
 STEP_BUDGET = 4000
 TOTAL_RESOURCE_CARDS = 95
@@ -27,11 +27,11 @@ TOTAL_RESOURCE_CARDS = 95
 def _sample_and_resolve_action(
     rng: random.Random, state: GameState, actions: list[Action]
 ) -> Action:
-    """Sample and resolve one action via the shared stratified policy (see
-    ``experiments/rollout.py`` -- the canonical sentinel-resolution logic
-    lives there so this test and the Phase 2 rollout driver never drift).
+    """Sample and resolve one action via the shared stratified agent (see
+    ``agents/random_agent.py`` -- the canonical sentinel-resolution logic
+    lives there so this test and the Phase 3 rollout driver never drift).
     """
-    return make_stratified_policy(rng)(state, actions)
+    return StratifiedRandomAgent(rng).choose_action(state, actions, 0)
 
 
 def _total_resource_cards(state: GameState) -> int:
