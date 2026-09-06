@@ -277,12 +277,12 @@
     {@const roadIndex = roadSites.get(edge.edge_id)}
     {@const pickHandler = edgePickHandlers?.get(edge.edge_id)}
     {@const [p1, p2] = edgeEndpoints(edge, pixelsByVertexId)}
+    {@const dx = p2.x - p1.x}
+    {@const dy = p2.y - p1.y}
+    {@const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI}
+    {@const roadLength = Math.hypot(dx, dy)}
+    {@const roadMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }}
     {#if color}
-      {@const dx = p2.x - p1.x}
-      {@const dy = p2.y - p1.y}
-      {@const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI}
-      {@const roadLength = Math.hypot(dx, dy)}
-      {@const roadMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }}
       {@const lengthScale = roadLength / 24}
       {@const thicknessScale = (SIZE * 0.12) / 8}
       <g
@@ -297,7 +297,10 @@
       <!-- Purely decorative -- the dashed stroke-dasharray means SVG hit-
            testing has gaps along it (a click landing between dashes never
            registers), so the actual click/keyboard target is the separate
-           solid line below instead. -->
+           filled rect below instead (a stroked invisible line here proved
+           unreliable for hit-testing even with pointer-events: all --
+           switched to a filled shape, which is the standard, dependable
+           way to make an invisible SVG click target). -->
       <line
         x1={p1.x}
         y1={p1.y}
@@ -307,14 +310,13 @@
         stroke-width={SIZE * 0.32}
         stroke-linecap="round"
       />
-      <line
-        x1={p1.x}
-        y1={p1.y}
-        x2={p2.x}
-        y2={p2.y}
+      <rect
+        x={-roadLength / 2}
+        y={-(SIZE * 0.32) / 2}
+        width={roadLength}
+        height={SIZE * 0.32}
+        transform="translate({roadMid.x}, {roadMid.y}) rotate({angleDeg})"
         class="edge-hit-target"
-        stroke-width={SIZE * 0.32}
-        stroke-linecap="round"
         role="button"
         tabindex="0"
         onclick={() => onSelect?.(roadIndex)}
@@ -322,8 +324,8 @@
       />
     {/if}
     {#if pickHandler}
-      <!-- Same decorative-highlight + solid-hit-target split as roadIndex
-           above, for road-building's two-click edge pick. -->
+      <!-- Same decorative-highlight + filled-rect-hit-target split as
+           roadIndex above, for road-building's two-click edge pick. -->
       <line
         x1={p1.x}
         y1={p1.y}
@@ -333,14 +335,13 @@
         stroke-width={SIZE * 0.32}
         stroke-linecap="round"
       />
-      <line
-        x1={p1.x}
-        y1={p1.y}
-        x2={p2.x}
-        y2={p2.y}
+      <rect
+        x={-roadLength / 2}
+        y={-(SIZE * 0.32) / 2}
+        width={roadLength}
+        height={SIZE * 0.32}
+        transform="translate({roadMid.x}, {roadMid.y}) rotate({angleDeg})"
         class="edge-hit-target"
-        stroke-width={SIZE * 0.32}
-        stroke-linecap="round"
         role="button"
         tabindex="0"
         onclick={pickHandler}
@@ -355,7 +356,7 @@
     {@const cityIndex = citySites.get(vertexId)}
     {@const stealIndex = stealTargetVertices.get(vertexId)}
     {#if owner}
-      {@const buildingScale = owner.city ? SIZE * 0.0183 : SIZE * 0.0117}
+      {@const buildingScale = owner.city ? SIZE * 0.023 : SIZE * 0.02}
       <g
         class="board-glyph"
         style="color: {owner.color}"
@@ -439,20 +440,20 @@
     pointer-events: none;
   }
 
-  /* Invisible, solid (no dasharray) companion to .highlight-edge -- the
-     real click/keyboard target for a road edge, continuous along its full
-     length so there's no dead zone between dashes. A fully transparent
-     stroke turned out unreliable for hit-testing in practice (default
-     `pointer-events: visiblePainted` hit-testing does not consistently
-     treat a zero-alpha stroke as "painted" across engines -- it broke
-     clicks everywhere, not just between dashes), so pointer-events: all
-     forces this element to be hit-testable regardless of paint/visibility,
-     which is what an invisible click-catcher actually needs. */
+  /* Invisible companion to .highlight-edge -- the real click/keyboard
+     target for a road edge, a filled <rect> (not a stroked <line>) so
+     there's a genuine continuous interior area with no dead zones between
+     dashes. A transparent *stroke* on an invisible <line> turned out
+     unreliable for hit-testing in practice -- neither the default
+     `pointer-events: visiblePainted` nor an explicit `pointer-events: all`
+     consistently registered clicks on it. `pointer-events: fill` is
+     unambiguous by spec: hit-test the shape's fill interior regardless of
+     the fill color/opacity, which is exactly what an invisible click
+     target needs and is the standard, dependable way to build one. */
   .edge-hit-target {
     cursor: pointer;
-    fill: none;
-    stroke: transparent;
-    pointer-events: all;
+    fill: transparent;
+    pointer-events: fill;
   }
 
   .highlight-vertex.steal {

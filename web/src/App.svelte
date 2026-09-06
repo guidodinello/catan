@@ -385,7 +385,7 @@
       </div>
       <Board {geometry} state={gameState} />
     {:else}
-      <p>
+      <p class="phase-line">
         Phase: {gameState.phase}, turn: Player {gameState.current_player}
         {#if gameState.acting_player !== gameState.current_player}
           <!-- Distinct from current_player while awaiting a domestic-trade
@@ -505,10 +505,22 @@
     max-width: 1400px;
   }
 
+  main h1 {
+    font-size: 3rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .phase-line {
+    font-size: 1.2rem;
+  }
+
   .layout {
     display: flex;
     gap: 1.5rem;
-    align-items: flex-start;
+    /* stretch (not the default-overriding flex-start) so .panel-column
+       matches .board-column's height instead of shrink-wrapping its own
+       content and leaving empty space below it next to a taller board. */
+    align-items: stretch;
   }
 
   .layout.busy {
@@ -523,6 +535,17 @@
 
   .panel-column {
     flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The last box (normally ActionPanel, or whichever form is currently
+     open below it) grows to fill the remaining stretched height from
+     .layout above, so the column reaches the board's bottom without
+     spreading big empty gaps between every box (space-between's effect,
+     tried first and rejected -- it looked disconnected, not "aligned"). */
+  .panel-column > :global(:last-child) {
+    flex: 1;
   }
 
   .panel-column.disabled {
