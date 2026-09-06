@@ -53,6 +53,46 @@ and built.
     `server/`+`App.svelte` change either way (not attempted here per this
     item's own stop condition), but it's a narrower first slice than full
     action replay/animation if this gets picked up later.
+- **Dice roll history (last 5), not just the latest.** `HandSummary.svelte`
+  only ever shows `state.dice_roll`, the single most recent roll —
+  `engine/state.py`'s `GameState.dice_roll: tuple[int, int] | None` has no
+  history, and neither does `server/serialize.py`'s wire format. Raised
+  during play. Two real options, not a quick fix, and they're not
+  equivalent:
+  1. **Frontend-only rolling buffer.** `App.svelte` appends `dice_roll` to
+     a capped `lastRolls` array each time `gameState` changes (poll tick or
+     action response) and passes it to `HandSummary.svelte` instead of the
+     single value. Hot-reload only, no backend change, doable immediately.
+     **But it has a real, silent gap, not just a cosmetic one**: `step_bots`
+     (`server/bots.py`) resolves every consecutive bot action synchronously
+     inside one HTTP response, so a multi-bot-turn batch between two human
+     turns can contain several actual die rolls, and the client only ever
+     sees the *last* `gameState` in that batch — every roll before the final
+     one in the same batch never reaches the frontend at all. This is the
+     exact same root cause already written up under "Visible, paced bot
+     turns" above. So a frontend-only buffer wouldn't be "the last 5 rolls,"
+     it'd be "the last 5 rolls the client happened to observe" — silently
+     wrong (looks complete, isn't) unless the gap is disclosed in the UI
+     copy itself (e.g. a tooltip/caption noting bot-turn rolls between
+     human turns may be skipped), not just a code comment nobody playing
+     the game would ever see.
+  2. **Server-tracked roll history.** Add an actual list to `GameState`
+     (e.g. `dice_roll_history: list[tuple[int, int]]`, appended to
+     wherever dice are rolled today, capped at some length) and expose it
+     in `server/serialize.py`'s output. Correct and complete — captures
+     every roll including mid-batch bot rolls — but it's an `engine/` +
+     `server/` change, which means restarting the live `uvicorn` on `:8000`
+     and losing the game in progress. Needs explicit go-ahead first, like
+     the other backend-touching items here.
+  - **Recommendation:** don't ship option 1 as a silent fix — the gap is
+    exactly the kind of thing a player would notice and distrust ("wait, I
+    swear there were more rolls than that") without ever being told why.
+    Either (a) do option 2 whenever "Visible, paced bot turns" gets
+    picked up, since both need the same underlying capability (a durable,
+    per-action-or-per-roll record that survives a synchronous bot batch —
+    solving one mostly hands you the other), or (b) if option 1 is wanted
+    sooner as a stopgap, ship it with the gap explicitly disclosed in the
+    UI, not hidden.
 - ~~**Resume a game by ID.**~~ Done — `GameSetup.svelte` has a "Resume a
   game" section (game id + optional viewer seat, prefilled from
   `localStorage` via `web/src/lib/lastGame.ts`); `App.svelte`'s
