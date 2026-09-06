@@ -11,12 +11,12 @@ catan = "main:main"
 
 [dependency-groups]
 dev = [
-    "pre-commit>=4.0",
-    "ruff>=0.11",
-    "mypy>=1.13",
-    "pytest>=8.0",
-    "pytest-benchmark>=5.1",
-    "hypothesis>=6.112",
+    "pre-commit>=4.6.2",
+    "ruff>=0.16.5",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "pytest-benchmark>=5.3.0",
+    "hypothesis>=6.167.1",
 ]
 
 [build-system]
