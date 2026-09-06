@@ -217,6 +217,52 @@ results in `experiments/results/benchmark.md`):
     unfixed: `_check_win` still evaluates only the turn player. See
     `experiments/results/benchmark.md` for the full measurement.
 
+Resolved while planning the web GUI (full detail in
+`docs/plans/gui-web-frontend.md`):
+
+20. **Redaction moves to the API boundary, not the engine.** Decision 4 left
+    `GameState` with full ground truth and no `player_view()`, on the
+    reasoning that the CLI's own discipline (never print another player's
+    hand) was enough. A browser client breaks that reasoning — anyone can
+    open DevTools — so the web server gets a `player_view(state, viewer)`
+    serializer that redacts other seats' hands/dev cards to counts only.
+    This is additive, not a reversal: the engine still holds full truth by
+    design, exactly as decision 4 intended; only the new HTTP boundary needs
+    its own gate.
+21. **Legal actions cross the wire by index, with one exception.** The
+    server lists `legal_actions(state)` as an indexed, render-hinted array;
+    the client posts back `{index}` and never constructs an
+    `engine/actions.py` dataclass itself. `ProposeTrade`'s open-ended
+    sentinel (decisions 5/10/18) is the one action that needs a
+    caller-constructed bundle, so its wire format carries `give`/`receive`
+    alongside the index — the same shape `agents/human.py`'s
+    `_prompt_propose_trade` already builds interactively, just over HTTP
+    instead of `input()`.
+22. **Sessions are in-memory only, multiple concurrent games.** A
+    `dict[game_id, GameSession]` with TTL eviction; no disk persistence.
+    Pickling a live `random.Random` across restarts is possible but couples
+    the save format to `state.py`'s field layout for a local dev/demo tool
+    that doesn't need it — revisit only if actually requested.
+23. **No game logic in the frontend.** It renders geometry the server sends
+    (board topology is RNG-free and identical across games — `engine/
+    board.py`'s `GEOMETRY` singleton — so it's serialized once per game, not
+    per turn) and highlights/posts legal actions the server already
+    computed. Legality, resolution, and RNG stay in `engine/`, matching
+    decision 8's stance that this is one simulator, not two.
+24. **Frontend: Svelte + Vite, not vanilla TypeScript or React.** The app's
+    real complexity is reactive UI state (legal-action highlighting on the
+    board, a side panel that swaps per game phase, an open/close trade
+    form) re-rendering on every poll. Plain TS was rejected as hand-rolled
+    DOM diffing for exactly the kind of state a reactive layer already
+    solves; React was rejected as sized for a big multi-screen SPA whose
+    main value — ecosystem depth — this one-board-plus-a-panel app doesn't
+    need. Svelte compiles to a small, near-vanilla-JS runtime with low
+    boilerplate, a good fit at this scale. `~/projects/fitted`'s stack
+    (Postgres/SQLAlchemy/Celery/auth backend; React/TanStack/Tailwind/PWA
+    frontend) was considered and not reused for the same reason in both
+    directions: sized for a production multi-user app, not a local
+    in-memory research tool.
+
 ## Proposed Roadmap
 
 - [x] **Phase 1 — Engine**: board generation, game state, legal actions,
@@ -233,6 +279,11 @@ results in `experiments/results/benchmark.md`):
       vs heuristic opponents, self-play with anti-collapse controls.
 - [ ] **Phase 6 — Retrofit** `truco-py` / `roulette` onto the shared package
       (only if the extraction holds up).
+- [ ] **Tooling — Web GUI**: FastAPI backend wrapping `engine/` + a Svelte +
+      Vite frontend, so a human can play in a browser (hot-seat
+      and/or vs. the Phase 3 agents) instead of only via `cli.py`. Runs in
+      parallel with the numbered phases above, not part of the ML track. See
+      `docs/plans/gui-web-frontend.md`.
 
 ## Status
 
