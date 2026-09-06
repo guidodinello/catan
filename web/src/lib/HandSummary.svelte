@@ -1,8 +1,6 @@
 <script lang="ts">
-  // engine/board.py's Resource enum, in its declared order (matches
-  // TradeForm.svelte's RESOURCES so a card's position stays consistent
-  // across both places it's shown).
-  const RESOURCES = ["LUMBER", "WOOL", "GRAIN", "BRICK", "ORE"] as const;
+  import { RESOURCES } from "./resources";
+  import { RESOURCE_ICON } from "./icons";
 
   interface Props {
     diceRoll: [number, number] | null;
@@ -27,7 +25,14 @@
     <p class="hand-label">Your hand</p>
     <ul class="hand">
       {#each RESOURCES as resource (resource)}
-        <li>{resource}: {resources[resource] ?? 0}</li>
+        {@const Icon = RESOURCE_ICON[resource]}
+        <li title={resource}>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <Icon />
+          </svg>
+          <span class="visually-hidden">{resource}</span>
+          {resources[resource] ?? 0}
+        </li>
       {/each}
     </ul>
   {/if}
@@ -57,5 +62,23 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
+  }
+
+  .hand li {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

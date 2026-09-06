@@ -7,6 +7,7 @@
     pointsAttribute,
     vertexPixels,
   } from "./geometry";
+  import { TERRAIN_ICON } from "./icons";
 
   interface Props {
     geometry: Geometry;
@@ -179,6 +180,16 @@
       stroke="#1d2d1f"
       stroke-width="1"
     />
+    {#if terrain && TERRAIN_ICON[terrain]}
+      {@const Icon = TERRAIN_ICON[terrain]}
+      <g
+        class="terrain-icon"
+        transform="translate({center.x - SIZE * 0.25}, {center.y - SIZE * 0.72}) scale({SIZE * 0.021})"
+        aria-hidden="true"
+      >
+        <Icon />
+      </g>
+    {/if}
     {#if token !== undefined}
       <circle cx={center.x} cy={center.y} r={SIZE * 0.28} fill="white" stroke="#333" />
       <text
@@ -315,6 +326,10 @@
     width: 100%;
     height: auto;
     max-height: 80vh;
+  }
+
+  .terrain-icon {
+    pointer-events: none;
   }
 
   .highlight-hex,
