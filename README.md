@@ -64,44 +64,85 @@ catan/
 │   ├── board.py       #   random board generation + placement validation
 │   ├── state.py       #   immutable-ish game state (mirrors GameState pattern)
 │   ├── actions.py     #   action encoding/decoding (see design decision below)
-│   └── game.py        #   reset / legal_actions / apply_action / is_terminal / get_rewards
+│   └── game.py        #   reset / legal_actions / apply_action / is_terminal / winner
 ├── agents/            # RandomAgent, heuristic agents, (later) RLAgent
 ├── experiments/       # Monte Carlo experiments (starting placement, build order, …)
 └── env/               # gymnasium wrapper for RL training
 ```
 
-## Key Design Decisions & Open Questions
+## Decisions
 
-1. **Action space (the big one).** Truco encodes actions as a fixed global
-   `Discrete(53)` + boolean masks. Catan's actions are *spatial and
-   variable* (place settlement on any of ~54 vertices, road on any edge,
-   trade offers, robber moves). A fixed enum does not scale. Options:
-   - phase-dependent action encoding (legal target list per phase), or
-   - a generated, masked discrete space sized for the board.
-   This is the first design problem to solve in the engine.
+Resolved while building Phase 1. Full sourcing (official rules citations,
+catanatron/prior-art comparisons) lives in `docs/research/rules-review.md` and
+`docs/research/engineering-review.md`.
 
-2. **Complexity scope.** Catan is far bigger than Truco (647-line engine):
-   random board generation, two placement phases, dice-roll resource
-   production, robber blocking, port trading, dev cards (incl. victory
-   point cards), longest road/largest army, hidden information (opponent
-   hands, dev cards).
-
-3. **Observability.** Opponent hands and dev cards are hidden. Decide early
-   what the state exposed to agents contains (partial observation), and
-   what the MC tables / baseline experiments can assume.
-
-4. **Reference implementation.** `catanatron` (open-source Python Catan
-   simulator with an env/agent architecture) is worth studying for
-   interface design — but the plan is to build our own simulator, matching
-   the hands-on pattern of the Truco projects.
-
-5. **Benchmark sanity checks** (from `truco-py` experience): Random vs
-   Random must be ~50/50; heuristic agents must beat random by a sane
-   margin; match-level win rate is the goal metric, not per-move accuracy.
+1. **Action space.** Structured, phase-dependent frozen dataclasses forming a
+   tagged union (`engine/actions.py`), not a flat `IntEnum`. `legal_actions(state)`
+   enumerates only what's legal right now, dispatching on the current phase.
+   Matches catanatron, which also keeps structured actions in the engine and
+   confines a flat/masked `Discrete` space to its separate gym subpackage. A
+   flat encoding is Phase 5 work and is not built now.
+2. **Engine API.** `reset(seed)`, `legal_actions(state)`, `apply_action(state, action)`,
+   `is_terminal(state)`, `winner(state) -> int | None`, plus `acting_player(state)`
+   (the player who must act now — distinct from `state.current_player`, the turn
+   player, since they differ while awaiting a domestic-trade response).
+   `get_rewards` is deferred to Phase 5; it's an RL affordance, not an engine one.
+3. **RNG ownership.** A `random.Random` lives as a field on `GameState`, cloned
+   (not aliased) by `copy()`. Every die roll, shuffle, and robber-steal draw goes
+   through it, so two branches copied from the same state never share a stream.
+4. **Observability.** State holds full ground truth; there is no
+   `player_view()` / redaction helper. The CLI simply never prints another
+   player's hand. Redaction is Phase 2+ scaffolding.
+5. **Trading.** `ProposeTrade` / `AcceptTrade` / `RejectTrade`: an offer goes to
+   all other players at once, first accept executes, no counter-offers — a
+   documented scope simplification, not a rules claim (the real game allows
+   free negotiation). The give/receive bundle itself is a **full multi-resource
+   bundle on each side** — e.g. give 2 lumber + 1 brick for 1 ore + 1 grain — with
+   no restriction to a single resource type; that would be a real usability
+   regression on a rule domestic trade uses constantly. Because that bundle
+   space is too large to usefully pre-enumerate, `legal_actions` offers a
+   single open-ended `ProposeTrade` affordance rather than every possible
+   instance (the same reasoning as decision 10 below); the caller (the CLI,
+   prompting a human interactively; a test driver, constructing one at random)
+   builds the actual bundle and `apply_action` validates it in full — both
+   sides non-empty, no shared resource type, capped at 4 cards per side purely
+   so an interactive builder doesn't need to prompt for absurd amounts. Even
+   so, it's a give-multiset × receive-multiset product, so **Phase 5 will need
+   a factored/hierarchical action head for it**, not a flat `Discrete` —
+   catanatron's own flat space omits domestic trade entirely for this reason.
+6. **Board setup.** Terrain (4 forest/4 pasture/4 field/3 hill/3 mountain/1
+   desert) and number tokens (18, fixed distribution, one 2, one 12, no 7) are
+   drawn from the game's fixed multisets, not sampled freely. The desert gets
+   no token and starts holding the robber. Red numbers (6, 8) as one class must
+   never sit on edge-adjacent hexes — enforced by rejection-resampling the
+   token assignment (equivalent to the rulebook's "swap tokens" fix).
+7. **Scope.** Base game only, 3–4 players, no expansions.
+8. **Reference implementation.** `catanatron` was studied for interface design
+   (see the engineering review) but not vendored or depended on — this is our
+   own simulator, matching the hands-on pattern of the Truco projects.
+9. **Benchmark sanity checks** (Random vs Random ≈ 50/50, heuristic agents beat
+   random by a sane margin) are a **Phase 3** concern, once agents exist — not
+   acted on in Phase 1 beyond a rollout-speed baseline (`pytest-benchmark`) for
+   `apply_action`/full-game throughput, recorded now so a later regression is
+   visible.
+10. **The engine models the real rules exactly — full stop.** No rule is ever
+    bounded, restricted, or approximated for the sake of a future flat/discrete
+    RL action space; that tradeoff belongs entirely to a separate adapter/encoding
+    layer built in Phase 5, never baked into the engine itself. Concretely: where
+    a legal action's parameter domain is small enough to enumerate exhaustively
+    (`PlayYearOfPlenty` — pick 2 of 5 resources — or `PlayMonopoly` — pick 1 of 5),
+    `legal_actions` lists every parametrized instance. Where it isn't
+    (`ProposeTrade`'s multi-resource bundles), `legal_actions` offers a single
+    open-ended affordance and the real object is constructed and fully validated
+    by the caller in `apply_action` — never narrowed to make it enumerable. This
+    is the same principle catanatron applies by confining its flat/masked
+    `Discrete` space to a separate gym subpackage (decision 1), just carried one
+    level deeper: it governs not only *how* actions are encoded, but *what a
+    legal action is allowed to represent* in the first place.
 
 ## Proposed Roadmap
 
-- [ ] **Phase 1 — Engine**: board generation, game state, legal actions,
+- [x] **Phase 1 — Engine**: board generation, game state, legal actions,
       full rule enforcement, CLI playable game (human vs humans).
 - [ ] **Phase 2 — Monte Carlo analysis**: starting placement win-probability
       experiments, resource/VP probability tables.
@@ -116,5 +157,7 @@ catan/
 
 ## Status
 
-Empty skeleton — `main.py` hello-world, `pyproject.toml` (Python 3.14),
-no commits. This README is the proposed spec; nothing implemented yet.
+Phase 1 complete: full base-game rules engine (`engine/`), a hot-seat CLI
+(`cli.py`), and a test suite (`tests/`) covering board geometry, state
+copy/determinism, every rule cluster, and a cross-cutting random-game +
+property-based invariant check. Phase 2+ (Monte Carlo, agents, RL) not started.
