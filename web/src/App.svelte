@@ -143,6 +143,7 @@
 
   function playAgain() {
     stopPolling();
+    cancelAutoReject();
     status = "setup";
     gameId = null;
     geometry = null;
@@ -247,18 +248,39 @@
   // same reasoning step_bots already applies to bot turns), so auto-submit
   // it -- but only in that exact case, never a reject the viewer could have
   // turned down deliberately.
+  // A short delay before actually submitting -- so the trade-offer banner
+  // and the "auto-rejecting" notice are visible long enough to read,
+  // instead of flashing and vanishing the instant this effect runs.
+  const AUTO_REJECT_DELAY_MS = 3000;
+  let autoRejectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function cancelAutoReject() {
+    if (autoRejectTimeout !== null) {
+      clearTimeout(autoRejectTimeout);
+      autoRejectTimeout = null;
+    }
+  }
+
   $effect(() => {
-    if (
-      isBusy ||
-      gameState?.phase !== "AWAIT_TRADE_RESPONSE" ||
-      legalActions.length !== 1 ||
-      legalActions[0].kind !== "RejectTrade"
-    ) {
+    const canOnlyReject =
+      !isBusy &&
+      gameState?.phase === "AWAIT_TRADE_RESPONSE" &&
+      legalActions.length === 1 &&
+      legalActions[0].kind === "RejectTrade";
+    if (!canOnlyReject) {
+      cancelAutoReject();
       return;
     }
-    tradeResultMessage = "Auto-rejected: you don't have the resources to accept.";
-    void selectAction(legalActions[0].index);
+    if (autoRejectTimeout !== null) return; // already counting down
+    const rejectIndex = legalActions[0].index;
+    tradeResultMessage = "Auto-rejecting: you don't have the resources to accept...";
+    autoRejectTimeout = setTimeout(() => {
+      autoRejectTimeout = null;
+      void selectAction(rejectIndex);
+    }, AUTO_REJECT_DELAY_MS);
   });
+
+  onDestroy(cancelAutoReject);
 </script>
 
 <main>
