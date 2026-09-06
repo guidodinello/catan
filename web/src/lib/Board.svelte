@@ -135,14 +135,33 @@
     }
   }
 
+  // Port labels ("2:1 LUMBER") are anchored below their edge-midpoint
+  // marker (see the port <text> below, y = mid.y + SIZE * 0.35) and can be
+  // fairly wide -- well outside the hex-corner vertices alone, which is
+  // why a viewBox padded only around vertex positions clipped labels on
+  // boundary ports. Pad around each port label's actual anchor point
+  // instead of guessing a single global margin.
+  const portLabelPoints = $derived.by(() =>
+    geometry.port_locations.flatMap((portEdgeId) => {
+      const edge = edgeById.get(portEdgeId);
+      if (!edge) return [];
+      const [p1, p2] = edgeEndpoints(edge, pixelsByVertexId);
+      return [{ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 + SIZE * 0.35 }];
+    }),
+  );
+
   const viewBox = $derived.by(() => {
-    const xs = pixelsByVertexId.map((p) => p.x);
-    const ys = pixelsByVertexId.map((p) => p.y);
+    const xs = [...pixelsByVertexId.map((p) => p.x), ...portLabelPoints.map((p) => p.x)];
+    const ys = [...pixelsByVertexId.map((p) => p.y), ...portLabelPoints.map((p) => p.y)];
     const margin = SIZE;
-    const minX = Math.min(...xs) - margin;
-    const maxX = Math.max(...xs) + margin;
+    // Port label text extends roughly this far past its anchor point
+    // (longest label is "2:1 LUMBER" at font-size SIZE * 0.14).
+    const labelHalfWidth = SIZE * 0.55;
+    const labelHeight = SIZE * 0.2;
+    const minX = Math.min(...xs) - margin - labelHalfWidth;
+    const maxX = Math.max(...xs) + margin + labelHalfWidth;
     const minY = Math.min(...ys) - margin;
-    const maxY = Math.max(...ys) + margin;
+    const maxY = Math.max(...ys) + margin + labelHeight;
     return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
   });
 </script>

@@ -13,6 +13,7 @@
   import ActionPanel from "./lib/ActionPanel.svelte";
   import TradeForm from "./lib/TradeForm.svelte";
   import GameSetup, { type NewGameConfig } from "./lib/GameSetup.svelte";
+  import HandSummary from "./lib/HandSummary.svelte";
 
   // Duplicated from Board.svelte's PLAYER_COLOR (4 entries -- not worth a
   // shared module for this repo's "extract only past 3 repeats" rule).
@@ -222,6 +223,10 @@
           />
         </div>
         <div class="panel-column">
+          <HandSummary
+            diceRoll={gameState.dice_roll}
+            resources={viewer !== undefined ? gameState.players[viewer].resources : undefined}
+          />
           <ActionPanel
             legalActions={isBusy ? [] : legalActions}
             onSelect={(index) => selectAction(index)}
