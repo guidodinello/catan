@@ -20,6 +20,27 @@ and built.
   unaffected. The glyph choice itself is intentionally a placeholder —
   the point of the map-based indirection is that swapping in real art
   later means editing the icon files, never touching `Board.svelte`.
+- **Visible, paced bot turns.** `server/bots.py`'s `step_bots` resolves
+  every consecutive bot action synchronously inside one HTTP response
+  (`server/app.py`'s `post_action`), so from a human's perspective an
+  entire multi-action bot turn (roll, build, trade, end turn, repeated for
+  every bot seat) completes instantly between one click and the next --
+  too fast to actually follow what happened. Raised during play; explicitly
+  not scoped yet, needs a real design pass rather than a quick patch:
+  - A flat artificial delay (e.g. `time.sleep` between actions in
+    `step_bots`) only makes the response take longer -- the client still
+    only ever sees the before/after state, not each intermediate action, so
+    it doesn't actually solve "hard to see what happened."
+  - Genuinely showing each bot action needs the backend to expose an
+    action log or intermediate states per response (or a streaming
+    mechanism), which the frontend then replays with a pause between
+    steps -- likely via animation (a build/trade/dice-roll transition
+    rather than an instant redraw), which is probably the right shape for
+    this rather than a plain delay. This is real architecture work: what
+    the wire format for a turn's action log looks like, how it interacts
+    with the existing polling loop (`App.svelte`'s `POLL_INTERVAL_MS`) and
+    the `isBusy`/"applying your move" state, and whether it's built once as
+    a generic "replay this turn" capability or specific to bot turns.
 - **Resume a game by ID.** `GameSetup.svelte` always starts a new game;
   there's no "rejoin an existing `game_id`" flow. Came up when switching
   from the rebuild-and-restart workflow to the Vite dev server — a hard
