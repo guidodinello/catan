@@ -12,6 +12,7 @@
   import Board from "./lib/Board.svelte";
   import ActionPanel from "./lib/ActionPanel.svelte";
   import TradeForm from "./lib/TradeForm.svelte";
+  import TradeOfferBanner from "./lib/TradeOfferBanner.svelte";
   import DevCardResourceForm from "./lib/DevCardResourceForm.svelte";
   import GameSetup, { type NewGameConfig } from "./lib/GameSetup.svelte";
   import HandSummary from "./lib/HandSummary.svelte";
@@ -297,6 +298,9 @@
             : "now pick the second road."}
           <button onclick={cancelRoadBuilding}>Cancel</button>
         </p>
+      {/if}
+      {#if gameState.trade_offer}
+        <TradeOfferBanner offer={gameState.trade_offer} {viewer} />
       {/if}
       <div class="layout" class:busy={isBusy}>
         <div class="board-column">
