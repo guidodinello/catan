@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SeatKind } from "./api";
+  import { loadLastGame } from "./lastGame";
 
   const SEAT_KIND_OPTIONS: { value: SeatKind; label: string }[] = [
     { value: "human", label: "Human (this browser)" },
@@ -16,9 +17,22 @@
 
   interface Props {
     onCreate: (config: NewGameConfig) => void;
+    onResume: (gameId: string, viewer: number | undefined) => void;
   }
 
-  const { onCreate }: Props = $props();
+  const { onCreate, onResume }: Props = $props();
+
+  // Prefilled from whatever was last persisted (see lib/lastGame.ts) so a
+  // hard page reload can reconnect without retyping the game id.
+  const lastGame = loadLastGame();
+  let resumeGameId = $state(lastGame.gameId);
+  let resumeViewer: number | undefined = $state(lastGame.viewer);
+
+  function submitResume() {
+    const trimmed = resumeGameId.trim();
+    if (!trimmed) return;
+    onResume(trimmed, resumeViewer);
+  }
 
   // engine/game.py's CatanGame fills non-human seats with a real opponent by
   // default (cli.py does the same with HeuristicAgent) -- default new bot
@@ -90,9 +104,11 @@
   </div>
 
   <p class="hint">
-    At most one "Human" seat is playable from this browser tab -- the first
-    one, if there are several. A lineup with no human seat runs entirely as
-    a bot-vs-bot spectator game.
+    Multiple "Human" seats are all playable from this browser tab -- a
+    "Viewing as" switcher appears once the game starts, letting you hot-seat
+    between them (pass-and-play style; nothing hides a seat's view from
+    someone standing at the same screen). A lineup with no human seat runs
+    entirely as a bot-vs-bot spectator game.
   </p>
 
   <label>
@@ -101,6 +117,33 @@
   </label>
 
   <button onclick={submit}>Start game</button>
+
+  <hr />
+
+  <h3>Resume a game</h3>
+  <label>
+    Game ID:
+    <input type="text" bind:value={resumeGameId} placeholder="e.g. AbC123-xyz" />
+  </label>
+  <label>
+    Your seat (leave blank to spectate):
+    <input
+      type="number"
+      min="0"
+      value={resumeViewer ?? ""}
+      oninput={(e) => {
+        const v = e.currentTarget.value;
+        resumeViewer = v === "" ? undefined : Number(v);
+      }}
+    />
+  </label>
+  <p class="hint">
+    Reconnects to a game already running on the server (e.g. after a page
+    reload) instead of starting a new one. Only works if this browser has
+    created or resumed at least one game before, since resuming reuses this
+    browser's cached board layout rather than fetching it again.
+  </p>
+  <button onclick={submitResume} disabled={!resumeGameId.trim()}>Resume game</button>
 </div>
 
 <style>

@@ -41,13 +41,30 @@ and built.
     with the existing polling loop (`App.svelte`'s `POLL_INTERVAL_MS`) and
     the `isBusy`/"applying your move" state, and whether it's built once as
     a generic "replay this turn" capability or specific to bot turns.
-- **Resume a game by ID.** `GameSetup.svelte` always starts a new game;
-  there's no "rejoin an existing `game_id`" flow. Came up when switching
-  from the rebuild-and-restart workflow to the Vite dev server — a hard
-  page reload has no way to reconnect to the game already running
-  server-side. Would need `game_id` persisted somewhere client-side
-  (e.g. the URL or `localStorage`) and a `GameSetup.svelte` path that
-  calls `getState`/`getLegalActions` instead of `createGame`.
+  - Design thought (not scoped, not started): the smallest version of "an
+    action log per response" wouldn't need full intermediate `GameState`
+    snapshots to start being useful -- `post_action` already loops inside
+    `step_bots` applying one `Action` at a time, so it could cheaply collect
+    a `[{player_id, action_kind}, ...]` trail alongside the final state
+    (no new redaction concerns, since `kind`/`player_id` are already public
+    knowledge, same as any of today's `LegalAction.kind`s) and let the
+    frontend render it as a scrolling "Player 2 rolled 8, Player 2 built a
+    road, ..." log during `isBusy`, animated or not. That's a real
+    `server/`+`App.svelte` change either way (not attempted here per this
+    item's own stop condition), but it's a narrower first slice than full
+    action replay/animation if this gets picked up later.
+- ~~**Resume a game by ID.**~~ Done — `GameSetup.svelte` has a "Resume a
+  game" section (game id + optional viewer seat, prefilled from
+  `localStorage` via `web/src/lib/lastGame.ts`); `App.svelte`'s
+  `resumeGame` calls `getState`/`getLegalActions` directly instead of
+  `createGame`. One real constraint: `server/app.py` has no endpoint that
+  returns board geometry alone (only `POST /api/games` does), so resuming
+  reuses a *cached* geometry from any earlier game in this browser rather
+  than re-fetching it — valid because `serialize_geometry()` is RNG-free
+  and identical for every game, but it does mean resume only works once
+  this browser has created/resumed at least one game before. A dedicated
+  `GET /api/geometry` endpoint would remove that restriction, but that's a
+  `server/` change, out of scope for this frontend-only pass.
 
 ## Engine
 
@@ -66,20 +83,45 @@ and built.
   currently handles `ProposeTrade`/`AcceptTrade`/`RejectTrade`
   (`agents/random_agent.py`, `agents/heuristic.py`, `agents/human.py`,
   `server/bots.py`).
+  - Design thought (not scoped, not started): a smaller first cut than open
+    negotiation might be "one counter-offer, then the original proposer's
+    turn ends" (bounded, so it can't loop indefinitely and doesn't need an
+    expiry mechanism) rather than jumping straight to real multi-round
+    negotiation -- but even that bounded version still needs a real
+    `CounterTrade` action, new `state` fields for who's countering whom
+    with what, and every agent above updated to at least reject it
+    sanely. Worth deciding the bounded-vs-open-ended shape explicitly
+    before writing any of it, since they imply different state shapes.
 
 ## Known gaps from the GUI build (`docs/plans/gui-web-frontend.md`)
 
 - ~~**`web/src/lib/geometry.test.ts` (Vitest) still isn't runnable.**~~
   Resolved — `npm install` succeeded on a later attempt (the network stall
   was transient after all, not permanent); all 8 geometry tests pass.
-- **Only one human seat is playable per browser tab.** No in-tab hot-seat
-  switching between multiple human seats — `GameSetup.svelte` states this
-  directly in its UI copy rather than silently under-delivering, but true
-  multi-human local play (as `cli.py` already supports) isn't built for the
-  web GUI yet.
+- ~~**Only one human seat is playable per browser tab.**~~ Done —
+  `App.svelte` now tracks every seat `GameSetup.svelte`'s chosen
+  `seat_kinds` marked `"human"` (`humanSeats`), and a "Viewing as" switcher
+  appears whenever there's more than one. Switching re-fetches that seat's
+  own redacted `state`/`legal_actions` and clears any UI state scoped to
+  the previous viewer (open trade/dev-card forms, an in-progress
+  road-building pick), so nothing stale leaks across the switch. It's
+  pass-and-play, not per-seat secrecy within one screen — the UI copy says
+  so. One known residual gap: after "Resume a game" (see above), only the
+  single seat typed into the resume form is known, since a resumed game's
+  full `seat_kinds` isn't available to the client — switching among a
+  resumed game's *other* human seats would need a server-side way to learn
+  the lineup, which is a `server/` change out of scope here.
 - **No bit-identity cross-check between the HTTP path and
   `experiments/rollout.run_game`.** Deferred during step 3 as real design
   work beyond what the phased plan called for (needs a `driver_seed` exposed
   through the API, plus reconciling `server/bots.py`'s per-seat agent shape
   with `rollout.py`'s `AgentFactory` shape). Would be a strong addition to
-  the verification story if ever revisited.
+  the verification story if ever revisited. Sharpening the first piece:
+  `server/app.py`'s `create_game` already generates a `driver_seed =
+  secrets.randbits(63)` per game (used to build each seat's `Agent` via
+  `build_agents`) -- it's just discarded after use rather than returned in
+  `CreateGameResponse`, so exposing it is a small, additive API change (a
+  new response field), not a redesign. The harder half is still
+  `rollout.py`'s `AgentFactory` shape vs. `server/bots.py`'s per-seat
+  `Agent | None` list: reconciling those (or writing a small adapter
+  between them) is the real work, not the seed plumbing.

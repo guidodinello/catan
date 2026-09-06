@@ -19,6 +19,7 @@
   import Scoreboard from "./lib/Scoreboard.svelte";
   import { firstEdgeCandidates, secondEdgeCandidates } from "./lib/roadBuilding";
   import { PLAYER_COLOR } from "./lib/playerColor";
+  import { loadCachedGeometry, saveCachedGeometry, saveLastGame } from "./lib/lastGame";
 
   const POLL_INTERVAL_MS = 2000;
 
@@ -69,6 +70,38 @@
   // view), and since step_bots never stops for a spectator, such a game
   // finishes entirely inside createGame's own response.
   let viewer: number | undefined = $state(undefined);
+
+  // Every seat this browser tab could switch to viewing, in seat order --
+  // populated from GameSetup.svelte's chosen seat_kinds on create (there
+  // can legitimately be more than one "human" seat: server/bots.py only
+  // auto-steps bot seats, so multiple human seats already worked
+  // server-side, just not from one browser tab's fixed `viewer` before
+  // this). Left empty after a Resume, since a resumed game's seat_kinds
+  // aren't known to the client -- see resumeGame.
+  let humanSeats: number[] = $state([]);
+
+  // Hot-seat switch: re-fetches this seat's own redacted view and clears
+  // any UI state that was scoped to the *previous* viewer (open forms
+  // reference gameState.players[viewer], which would otherwise silently
+  // point at the wrong seat's hand).
+  async function switchViewer(newViewer: number) {
+    if (!gameId || newViewer === viewer || isBusy) return;
+    viewer = newViewer;
+    showTradeForm = false;
+    showMonopolyForm = false;
+    showYearOfPlentyForm = false;
+    cancelRoadBuilding();
+    cancelAutoReject();
+    tradeResultMessage = "";
+    errorMessage = "";
+    try {
+      gameState = await getState(gameId, viewer);
+      await refreshLegalActions();
+      saveLastGame(gameId, viewer);
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err);
+    }
+  }
 
   // Set only while an action HTTP request is in flight. server/app.py's
   // post_action calls server/bots.py's step_bots synchronously before
@@ -122,12 +155,13 @@
   async function startGame(config: NewGameConfig) {
     status = "loading";
     errorMessage = "";
-    const humanSeat = config.seat_kinds.indexOf("human");
-    viewer = humanSeat === -1 ? undefined : humanSeat;
+    humanSeats = config.seat_kinds.flatMap((kind, i) => (kind === "human" ? [i] : []));
+    viewer = humanSeats.length > 0 ? humanSeats[0] : undefined;
     try {
       const created = await createGame(config);
       gameId = created.game_id;
       geometry = created.geometry;
+      saveCachedGeometry(geometry);
       // createGame's own response is a spectator view (viewer=None) --
       // fetch the properly redacted view for our seat instead, so another
       // seat's hand is never briefly shown before the first action.
@@ -135,9 +169,45 @@
       status = "ok";
       await refreshLegalActions();
       if (!isGameOver) startPolling();
+      saveLastGame(gameId, viewer);
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
       status = "error";
+    }
+  }
+
+  // "Resume a game" (docs/backlog.md) -- reconnects to a game_id already
+  // running server-side (e.g. after a hard page reload, which loses all of
+  // this component's state) instead of creating a new one. server/app.py
+  // has no endpoint that returns geometry alone (only POST /api/games
+  // does), so this relies on a previously-cached copy (see lib/lastGame.ts
+  // for why that's valid for any game_id, not just the one it came from).
+  async function resumeGame(resumeGameId: string, resumeViewer: number | undefined) {
+    status = "loading";
+    errorMessage = "";
+    const cachedGeometry = loadCachedGeometry();
+    if (!cachedGeometry) {
+      errorMessage =
+        "Can't resume yet -- this browser has no cached board layout. " +
+        "Create a game once first; after that, resuming (including after a reload) will work.";
+      status = "error";
+      return;
+    }
+    viewer = resumeViewer;
+    humanSeats = resumeViewer !== undefined ? [resumeViewer] : [];
+    geometry = cachedGeometry;
+    try {
+      gameId = resumeGameId;
+      gameState = await getState(gameId, viewer);
+      status = "ok";
+      await refreshLegalActions();
+      if (!isGameOver) startPolling();
+      saveLastGame(gameId, viewer);
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err);
+      status = "error";
+      gameId = null;
+      geometry = null;
     }
   }
 
@@ -155,6 +225,7 @@
     showYearOfPlentyForm = false;
     cancelRoadBuilding();
     viewer = undefined;
+    humanSeats = [];
   }
 
   // Re-syncs state/legal_actions after a rejected action -- mirrors
@@ -287,7 +358,7 @@
   <h1>Catan</h1>
 
   {#if status === "setup"}
-    <GameSetup onCreate={startGame} />
+    <GameSetup onCreate={startGame} onResume={resumeGame} />
   {:else if status === "loading"}
     <p>Loading...</p>
   {:else if status === "error"}
@@ -326,6 +397,21 @@
           <em>-- applying your move (any bot turns resolve automatically)...</em>
         {/if}
       </p>
+      {#if humanSeats.length > 1}
+        <p class="viewer-switch">
+          Viewing as:
+          <select
+            value={viewer}
+            disabled={isBusy || roadBuildingActive}
+            onchange={(e) => switchViewer(Number(e.currentTarget.value))}
+          >
+            {#each humanSeats as seat (seat)}
+              <option value={seat}>Player {seat}</option>
+            {/each}
+          </select>
+          <span class="hint">(pass-and-play -- this doesn't hide the view from anyone else at this screen)</span>
+        </p>
+      {/if}
       {#if errorMessage}
         <p class="error">
           {errorMessage}
@@ -476,5 +562,14 @@
   .trade-result {
     color: #1d3557;
     font-weight: bold;
+  }
+
+  .viewer-switch {
+    margin: 0 0 0.75rem;
+  }
+
+  .viewer-switch .hint {
+    color: #666;
+    font-size: 0.8rem;
   }
 </style>
