@@ -1,11 +1,12 @@
-"""Rollout driver: play out full games against a policy, recording a
+"""Rollout driver: play out full games against per-seat agents, recording a
 ``GameRecord`` per game for downstream Monte Carlo analysis.
 
-``Policy`` is a **plain callable alias**, not a class and not the Phase-3
-``Agent`` protocol (no ``reset()``, no registry). Keeping it a bare callable
-is deliberate: it prevents Phase 3 material (agents/, RL) from creeping into
-Phase 2 under another name. ``make_random_policy``/``make_stratified_policy``
-are the only two policies Phase 2 needs.
+Seats are heterogeneous as of Phase 3: ``run_game``/``run_many`` take an
+``AgentFactory`` -- a module-level callable, not a list of constructed
+agents, so results stay picklable across ``ProcessPoolExecutor`` workers --
+that builds one ``agents.Agent`` per player id. RNG ownership lives in the
+agents themselves; this driver derives no per-seat streams and holds no
+policy RNG of its own.
 
 Turn/production/VP bookkeeping is derived only from actions this module
 itself chooses to apply and from public ``GameState``/``victory_points``
@@ -15,20 +16,20 @@ reads -- no private engine internals are touched.
 from __future__ import annotations
 
 import random
-from collections import defaultdict
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
+from agents import Agent, StratifiedRandomAgent
 from engine.actions import Action, EndTurn, PlaceSettlement, ProposeTrade, RollDice
 from engine.board import Cube, Resource
-from engine.game import CatanGame, victory_points
-from engine.state import WINNING_VICTORY_POINTS, GameState, Phase, acting_player
+from engine.game import CatanGame, IllegalActionError, victory_points
+from engine.state import WINNING_VICTORY_POINTS, Phase, acting_player
 
 STEP_BUDGET_DEFAULT = 20_000
-MAX_TRADE_OFFER_SIDE = 4
 
-Policy = Callable[[GameState, list[Action]], Action]
+AgentFactory = Callable[[int, int, int], list[Agent]]
+#   (num_players, engine_seed, driver_seed) -> one agent per PLAYER ID
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,95 +73,33 @@ class GameRecord:
     max_vp_observed_by: int
     non_winner_exceeded_ten: bool
     first_settlement_vertex: tuple[int, ...]  # indexed by seat, first-round pick
+    agent_names: tuple[str, ...] = ()  # indexed by player id
     treatment_seat: int | None = None
     treatment_vertex: int | None = None
 
 
-def _resolve_trade_sentinel(
-    rng: random.Random, state: GameState, action: Action
-) -> Action:
-    """Resolve the ``ProposeTrade`` sentinel (empty give/receive -- see
-    ``engine/game.py``'s ``_propose_trade_actions`` docstring) into a real
-    multi-resource bundle, mirroring what an interactive builder (the CLI)
-    or a test driver would construct.
+def default_agent_factory(
+    num_players: int, engine_seed: int, driver_seed: int
+) -> list[Agent]:
+    """Phase 2's default: ``num_players`` ``StratifiedRandomAgent``s sharing
+    **one** ``random.Random`` instance, no seat rotation.
+
+    Reproduces Phase 2's exact draw sequence -- the old code called
+    ``make_stratified_policy(driver_rng)`` once and used it for every actor,
+    i.e. all seats already shared a single stream. Handing the same
+    ``random.Random`` to every agent here is what keeps
+    ``experiments/results/`` replayable from its recorded
+    ``(engine_seed, driver_seed)`` pair.
     """
-    if not (
-        isinstance(action, ProposeTrade) and not action.give and not action.receive
-    ):
-        return action
-    return build_random_trade_offer(rng, state)
-
-
-def build_random_trade_offer(rng: random.Random, state: GameState) -> ProposeTrade:
-    """Construct a real multi-resource bundle for the ``ProposeTrade``
-    sentinel: a give side drawn from the proposer's actual hand (1..
-    ``MAX_TRADE_OFFER_SIDE`` cards across however many resource types the
-    random draw picks), and a receive side of any resource types not
-    already on the give side.
-
-    This is the single canonical sentinel resolver for the repo --
-    ``tests/test_engine.py`` imports it rather than keeping its own copy.
-    """
-    player = state.players[state.current_player]
-    available = [r for r in Resource if player.resources[r] > 0]
-    rng.shuffle(available)
-    give: dict[Resource, int] = {}
-    remaining = min(MAX_TRADE_OFFER_SIDE, player.resource_card_count())
-    for r in available:
-        if remaining <= 0:
-            break
-        take = rng.randint(1, min(player.resources[r], remaining))
-        give[r] = take
-        remaining -= take
-
-    receive_pool = [r for r in Resource if r not in give]
-    rng.shuffle(receive_pool)
-    receive: dict[Resource, int] = {}
-    remaining = MAX_TRADE_OFFER_SIDE
-    for r in receive_pool:
-        if remaining <= 0:
-            break
-        take = rng.randint(1, remaining)
-        receive[r] = take
-        remaining -= take
-        if rng.random() < 0.5:
-            break
-    return ProposeTrade(give=give, receive=receive)
-
-
-def make_random_policy(rng: random.Random) -> Policy:
-    """Flat-uniform policy: sample one action uniformly from all legal
-    actions. TradeBank/TradePort/PlaceSettlement etc. dominate whenever they
-    have many members for a state -- see ``make_stratified_policy`` for a
-    policy that avoids this."""
-
-    def policy(state: GameState, actions: list[Action]) -> Action:
-        return _resolve_trade_sentinel(rng, state, rng.choice(actions))
-
-    return policy
-
-
-def make_stratified_policy(rng: random.Random) -> Policy:
-    """Sample the action *type* uniformly first, then a member of that type.
-
-    Prevents a numerous action type (a huge TradeBank/TradePort/placement
-    list for one state) from dominating every step."""
-
-    def policy(state: GameState, actions: list[Action]) -> Action:
-        by_type: dict[type, list[Action]] = defaultdict(list)
-        for a in actions:
-            by_type[type(a)].append(a)
-        action_type = rng.choice(list(by_type.keys()))
-        return _resolve_trade_sentinel(rng, state, rng.choice(by_type[action_type]))
-
-    return policy
+    rng = random.Random(driver_seed)
+    return [StratifiedRandomAgent(rng) for _ in range(num_players)]
 
 
 def run_game(
     num_players: int,
     engine_seed: int,
     driver_seed: int,
-    policy_factory: Callable[[random.Random], Policy] = make_stratified_policy,
+    agent_factory: AgentFactory = default_agent_factory,
     scripted_setup: ScriptedSetup | None = None,
     step_budget: int = STEP_BUDGET_DEFAULT,
 ) -> GameRecord:
@@ -168,15 +107,13 @@ def run_game(
 
     ``engine_seed`` drives ``GameState.rng`` (board, dev-deck order, dice,
     steals -- everything ``reset``/``apply_action`` touch internally).
-    ``driver_seed`` drives only the policy's own choices among legal
-    actions, via a separate RNG -- so holding ``engine_seed`` fixed across
-    two calls with different ``driver_seed``s isolates the board/dice/deck
-    from the policy, and vice versa.
+    ``driver_seed`` is passed to ``agent_factory``, which derives whatever
+    per-seat RNG streams its agents need -- this driver holds no policy RNG
+    of its own, so agents own all of their own randomness.
     """
     game = CatanGame(num_players=num_players)
     state = game.reset(seed=engine_seed)
-    driver_rng = random.Random(driver_seed)
-    policy = policy_factory(driver_rng)
+    agent_list = agent_factory(num_players, engine_seed, driver_seed)
     seat_order = tuple(state.setup_sequence[:num_players])
 
     def snapshot_vp() -> tuple[int, ...]:
@@ -208,7 +145,18 @@ def run_game(
                     f"seat {scripted_setup.seat} on engine_seed={engine_seed}"
                 )
         else:
-            action = policy(state, legal)
+            action = agent_list[actor].choose_action(state, legal, actor)
+            if (
+                isinstance(action, ProposeTrade)
+                and not action.give
+                and not action.receive
+            ):
+                raise IllegalActionError(
+                    f"agent {agent_list[actor].name!r} (player {actor}) returned "
+                    "the unresolved ProposeTrade sentinel -- agents must resolve "
+                    "it themselves (build_random_trade_offer) or never offer it "
+                    "(filter it out of legal_actions)"
+                )
 
         pre_phase = state.phase
         pre_setup_position = state.setup_position
@@ -284,6 +232,7 @@ def run_game(
         first_settlement_vertex=tuple(
             v if v is not None else -1 for v in first_settlement_vertex
         ),
+        agent_names=tuple(a.name for a in agent_list),
         treatment_seat=scripted_setup.seat if scripted_setup is not None else None,
         treatment_vertex=(
             scripted_setup.vertex_id if scripted_setup is not None else None
@@ -294,7 +243,7 @@ def run_game(
 def run_many(
     num_players: int,
     seed_pairs: Sequence[tuple[int, int]],
-    policy_factory: Callable[[random.Random], Policy] = make_stratified_policy,
+    agent_factory: AgentFactory = default_agent_factory,
     scripted_setup: ScriptedSetup | None = None,
     step_budget: int = STEP_BUDGET_DEFAULT,
     workers: int = 1,
@@ -302,18 +251,19 @@ def run_many(
     """Run one game per ``(engine_seed, driver_seed)`` pair.
 
     Returned records are always ordered by ``seed_pairs``, never by
-    completion order -- output is bit-identical regardless of ``workers``.
+    completion order -- output is bit-identical regardless of ``workers``,
+    and independent of which seats hold which agent (given per-seat RNGs).
     """
     if workers <= 1:
         return [
-            run_game(num_players, e, d, policy_factory, scripted_setup, step_budget)
+            run_game(num_players, e, d, agent_factory, scripted_setup, step_budget)
             for e, d in seed_pairs
         ]
 
     with ProcessPoolExecutor(max_workers=workers) as pool:
         futures = {
             pool.submit(
-                run_game, num_players, e, d, policy_factory, scripted_setup, step_budget
+                run_game, num_players, e, d, agent_factory, scripted_setup, step_budget
             ): (e, d)
             for e, d in seed_pairs
         }

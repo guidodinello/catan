@@ -1,0 +1,66 @@
+{
+  "git_commit": "c51e4bd47284c3bc5e7f5e3c4009fc8e8016502c",
+  "generated_at": "2026-09-06T18:44:14.587622+00:00",
+  "experiment": "benchmark",
+  "mode": "heuristic_vs_heuristic",
+  "num_players": 3,
+  "n_games": 3999,
+  "engine_seed_base": 1,
+  "driver_seed_base": 1,
+  "by_role": {
+    "heuristic": {
+      "n_seat_occupancies": 11997,
+      "wins": 3999,
+      "win_rate": 0.3333333333333333,
+      "win_rate_wilson_ci": [
+        0.32495246807548506,
+        0.3418208982986944
+      ],
+      "mean_resources_through_turn_10": 5.6004001000250065,
+      "seat_occupancy_counts": {
+        "0": 3999,
+        "1": 3999,
+        "2": 3999
+      }
+    }
+  },
+  "by_seat": {
+    "0": {
+      "n_games": 3999,
+      "wins": 1337,
+      "win_rate": 0.33433358339584895,
+      "win_rate_wilson_ci": [
+        0.31987726442663145,
+        0.34910787684589645
+      ],
+      "expected_under_null": 0.3333333333333333
+    },
+    "1": {
+      "n_games": 3999,
+      "wins": 1285,
+      "win_rate": 0.3213303325831458,
+      "win_rate_wilson_ci": [
+        0.3070340992863215,
+        0.335969498357786
+      ],
+      "expected_under_null": 0.3333333333333333
+    },
+    "2": {
+      "n_games": 3999,
+      "wins": 1377,
+      "win_rate": 0.34433608402100524,
+      "win_rate_wilson_ci": [
+        0.3297651208444373,
+        0.3592058232191832
+      ],
+      "expected_under_null": 0.3333333333333333
+    }
+  },
+  "comparisons": {},
+  "known_biases": [
+    "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- every agent reveals VP cards immediately.",
+    "Bank shortage (_produce) skips a resource when the bank cannot cover all claimants; heuristic agents produce more, so they hit this more often than random agents did in Phase 2.",
+    "HeuristicAgent is hand-tuned against Phase 2's random-play results; a rule that helps against random opponents need not help against a good one. heuristic_vs_heuristic is the check."
+  ],
+  "non_winner_exceeded_ten_rate": 0.0015003750937734434
+}

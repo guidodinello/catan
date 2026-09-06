@@ -14,6 +14,8 @@ manual, per the Phase 2 plan: ``uv run python -m experiments.exp_placement``.
 import random
 import statistics
 
+from agents.base import Agent
+from agents.random_agent import RandomAgent
 from engine.actions import PlaceSettlement
 from engine.board import GEOMETRY, TERRAIN_RESOURCE
 from engine.game import CatanGame, _produce
@@ -27,7 +29,7 @@ from experiments.mcstats import (
     two_proportion_test,
     wilson_interval,
 )
-from experiments.rollout import ScriptedSetup, make_random_policy, run_game, run_many
+from experiments.rollout import ScriptedSetup, run_game, run_many
 
 STEP_BUDGET = 20_000
 
@@ -101,9 +103,16 @@ def test_run_many_is_deterministic_regardless_of_worker_count() -> None:
         assert a.final_vp == b.final_vp
 
 
+def _random_agent_factory(
+    num_players: int, engine_seed: int, driver_seed: int
+) -> list[Agent]:
+    rng = random.Random(driver_seed)
+    return [RandomAgent(rng) for _ in range(num_players)]
+
+
 def test_random_policy_also_terminates() -> None:
     record = run_game(
-        3, engine_seed=7, driver_seed=7, policy_factory=make_random_policy
+        3, engine_seed=7, driver_seed=7, agent_factory=_random_agent_factory
     )
     assert record.winner is not None
 

@@ -1,0 +1,77 @@
+{
+  "git_commit": "c51e4bd47284c3bc5e7f5e3c4009fc8e8016502c",
+  "generated_at": "2026-09-06T18:43:29.489963+00:00",
+  "experiment": "benchmark",
+  "mode": "heuristic_vs_heuristic",
+  "num_players": 4,
+  "n_games": 4000,
+  "engine_seed_base": 1,
+  "driver_seed_base": 1,
+  "by_role": {
+    "heuristic": {
+      "n_seat_occupancies": 16000,
+      "wins": 4000,
+      "win_rate": 0.25,
+      "win_rate_wilson_ci": [
+        0.2433510672668314,
+        0.25676894950634704
+      ],
+      "mean_resources_through_turn_10": 5.310875,
+      "seat_occupancy_counts": {
+        "0": 4000,
+        "1": 4000,
+        "2": 4000,
+        "3": 4000
+      }
+    }
+  },
+  "by_seat": {
+    "0": {
+      "n_games": 4000,
+      "wins": 992,
+      "win_rate": 0.248,
+      "win_rate_wilson_ci": [
+        0.23486303562804356,
+        0.26162052378996603
+      ],
+      "expected_under_null": 0.25
+    },
+    "1": {
+      "n_games": 4000,
+      "wins": 1035,
+      "win_rate": 0.25875,
+      "win_rate_wilson_ci": [
+        0.2454141041151339,
+        0.2725488272721471
+      ],
+      "expected_under_null": 0.25
+    },
+    "2": {
+      "n_games": 4000,
+      "wins": 982,
+      "win_rate": 0.2455,
+      "win_rate_wilson_ci": [
+        0.23241087176029468,
+        0.2590774848741634
+      ],
+      "expected_under_null": 0.25
+    },
+    "3": {
+      "n_games": 4000,
+      "wins": 991,
+      "win_rate": 0.24775,
+      "win_rate_wilson_ci": [
+        0.23461779213761116,
+        0.26136624700204325
+      ],
+      "expected_under_null": 0.25
+    }
+  },
+  "comparisons": {},
+  "known_biases": [
+    "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- every agent reveals VP cards immediately.",
+    "Bank shortage (_produce) skips a resource when the bank cannot cover all claimants; heuristic agents produce more, so they hit this more often than random agents did in Phase 2.",
+    "HeuristicAgent is hand-tuned against Phase 2's random-play results; a rule that helps against random opponents need not help against a good one. heuristic_vs_heuristic is the check."
+  ],
+  "non_winner_exceeded_ten_rate": 0.00125
+}

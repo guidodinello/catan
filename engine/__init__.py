@@ -28,6 +28,10 @@ from .board import PortType as PortType
 from .board import Resource as Resource
 from .board import Terrain as Terrain
 from .board import generate_board as generate_board
+from .game import CITY_COST as CITY_COST
+from .game import DEV_CARD_COST as DEV_CARD_COST
+from .game import ROAD_COST as ROAD_COST
+from .game import SETTLEMENT_COST as SETTLEMENT_COST
 from .game import CatanGame as CatanGame
 from .game import IllegalActionError as IllegalActionError
 from .game import victory_points as victory_points

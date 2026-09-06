@@ -24,7 +24,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["engine", "experiments"]
+packages = ["engine", "experiments", "agents"]
 include = ["main.py", "cli.py"]
 
 [tool.ruff]
@@ -36,7 +36,7 @@ extend-exclude = ["docs"]
 select = ["E", "F", "B", "I", "N", "W", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["engine", "experiments"]
+known-first-party = ["engine", "experiments", "agents"]
 
 [tool.ruff.format]
 quote-style = "double"
