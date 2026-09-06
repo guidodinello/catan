@@ -74,7 +74,8 @@ catan/
 
 Resolved while building Phase 1. Full sourcing (official rules citations,
 catanatron/prior-art comparisons) lives in `docs/research/rules-review.md` and
-`docs/research/engineering-review.md`.
+`docs/research/engineering-review.md`. The implementation plan approved for
+each phase before it was built is kept in `docs/plans/`.
 
 1. **Action space.** Structured, phase-dependent frozen dataclasses forming a
    tagged union (`engine/actions.py`), not a flat `IntEnum`. `legal_actions(state)`
@@ -140,12 +141,50 @@ catanatron/prior-art comparisons) lives in `docs/research/rules-review.md` and
     level deeper: it governs not only *how* actions are encoded, but *what a
     legal action is allowed to represent* in the first place.
 
+Resolved while building Phase 2 (full sourcing in the Phase 2 plan; results
+in `experiments/results/`):
+
+11. **Win rate is not the primary ranking metric.** Every rollout number is
+    conditional on the policy that produced it (`experiments/rollout.py`'s
+    `stratified`/`random` policies — deliberately *not* the Phase-3 `Agent`
+    protocol). Every placement arm also records policy-insensitive
+    intermediate metrics (cumulative resources produced, turns to 5 VP)
+    alongside a Wilson-CI win rate, so a null result can't be misread as "no
+    effect" when it might just be "random play can't express the effect."
+    In practice the harness resolved cleanly even under random play (see
+    `experiments/results/a1_seed1_seat0_p4.md`).
+12. **Seat, not player id, is the unit of analysis for placement
+    experiments.** `winner()` returns a player index and the starting
+    player is randomized per game, so player-id win rates are ≈ uniform by
+    construction. The treatment player is pinned to a setup-order **seat**
+    (`ScriptedSetup` in `experiments/rollout.py`); "best first settlement"
+    is only well-posed per seat, and seat 0 (first picker, full board) is
+    the default.
+13. **A local, stdlib-only `experiments/mcstats.py`**, not a dependency on
+    the sibling `mmo-utils` package — see `docs/shared-ml-package.md`'s own
+    verdict that this layer (`mc_tables.py`'s analog) should be rebuilt per
+    game, not extracted. Revisit at Phase 4.
+14. **Found while building Phase 2, fixed in Phase 1 territory (engine
+    correctness, not scope creep):** `_bank_trade_actions`/`_port_trade_
+    actions` listed a `TradeBank`/`TradePort` as legal without checking the
+    bank actually held the requested `receive` resource, so a long random
+    game could crash on an "illegal" action that `legal_actions()` itself
+    had offered. Fixed with a one-line bank-availability check in each;
+    regression tests added in `tests/test_trading.py`.
+15. **Engine finding, recorded not fixed:** `_check_win` only evaluates the
+    turn player, so a settlement build that transfers Longest Road to a
+    third player can push their VP to >=10 undetected until their own next
+    turn (self-resolves within a round, not a hang). Observed in 0.22% of
+    10,000 4-player games — see `experiments/results/tables.md`. Left for
+    Phase 3 to decide whether it's worth closing.
+
 ## Proposed Roadmap
 
 - [x] **Phase 1 — Engine**: board generation, game state, legal actions,
       full rule enforcement, CLI playable game (human vs humans).
-- [ ] **Phase 2 — Monte Carlo analysis**: starting placement win-probability
-      experiments, resource/VP probability tables.
+- [x] **Phase 2 — Monte Carlo analysis**: starting placement win-probability
+      experiments, resource/VP probability tables. See `experiments/` and
+      `experiments/results/`.
 - [ ] **Phase 3 — Agents**: RandomAgent, heuristic agents (settlement
       placement heuristics, build-order policies), benchmark harness.
 - [ ] **Phase 4 — Shared ML package extraction**: generic `Agent` protocol
@@ -160,4 +199,15 @@ catanatron/prior-art comparisons) lives in `docs/research/rules-review.md` and
 Phase 1 complete: full base-game rules engine (`engine/`), a hot-seat CLI
 (`cli.py`), and a test suite (`tests/`) covering board geometry, state
 copy/determinism, every rule cluster, and a cross-cutting random-game +
-property-based invariant check. Phase 2+ (Monte Carlo, agents, RL) not started.
+property-based invariant check.
+
+Phase 2 complete: a rollout driver and MC statistics utilities
+(`experiments/rollout.py`, `experiments/mcstats.py`, `experiments/
+features.py`), two starting-placement experiments (`experiments/
+exp_placement.py`: per-vertex ranking on a fixed board, and feature-bucketed
+win rate across random boards) and four resource/VP tables
+(`experiments/exp_tables.py`), plus `tests/test_experiments.py` (including a
+deterministic analytic-vs-engine cross-check). Full-scale results (800-
+10,000 games per arm, 3- and 4-player) are committed under
+`experiments/results/` with hand-written summaries. Phase 3+ (agents, shared
+ML package, RL) not started.

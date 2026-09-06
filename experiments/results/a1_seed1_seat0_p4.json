@@ -1,0 +1,1310 @@
+{
+  "git_commit": "9ce94c7f3714d9c41870c6267a203394ea96bbc4",
+  "generated_at": "2026-09-06T04:23:46.330311+00:00",
+  "experiment": "A1_fixed_board_vertex_ranking",
+  "engine_seed": 1,
+  "seat": 0,
+  "num_players": 4,
+  "n_games_per_arm": 800,
+  "policy": "stratified",
+  "arms": {
+    "0": {
+      "n_games": 800,
+      "wins": 163,
+      "win_rate": 0.20375,
+      "win_rate_wilson_ci": [
+        0.1772854661259009,
+        0.23304601802596217
+      ],
+      "mean_resources_through_turn_10": 2.205,
+      "mean_resources_through_turn_20": 4.53,
+      "mean_turns_to_5vp": 169.798828125,
+      "turns_to_5vp_reached_fraction": 0.64,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 0,
+        "pip_sum": 4,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.WOOL",
+        "port_rate": 2
+      }
+    },
+    "1": {
+      "n_games": 800,
+      "wins": 147,
+      "win_rate": 0.18375,
+      "win_rate_wilson_ci": [
+        0.15844624333988422,
+        0.2120763958602059
+      ],
+      "mean_resources_through_turn_10": 2.16125,
+      "mean_resources_through_turn_20": 4.4125,
+      "mean_turns_to_5vp": 167.98073217726397,
+      "turns_to_5vp_reached_fraction": 0.64875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 1,
+        "pip_sum": 4,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "2": {
+      "n_games": 800,
+      "wins": 119,
+      "win_rate": 0.14875,
+      "win_rate_wilson_ci": [
+        0.1257722349528376,
+        0.17508492558164984
+      ],
+      "mean_resources_through_turn_10": 3.5275,
+      "mean_resources_through_turn_20": 6.31375,
+      "mean_turns_to_5vp": 188.7443946188341,
+      "turns_to_5vp_reached_fraction": 0.5575,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 2,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "3": {
+      "n_games": 800,
+      "wins": 247,
+      "win_rate": 0.30875,
+      "win_rate_wilson_ci": [
+        0.277714632847932,
+        0.3416132873007392
+      ],
+      "mean_resources_through_turn_10": 4.52625,
+      "mean_resources_through_turn_20": 8.1875,
+      "mean_turns_to_5vp": 147.40575079872204,
+      "turns_to_5vp_reached_fraction": 0.7825,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 3,
+        "pip_sum": 7,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": "PortType.WOOL",
+        "port_rate": 2
+      }
+    },
+    "4": {
+      "n_games": 800,
+      "wins": 105,
+      "win_rate": 0.13125,
+      "win_rate_wilson_ci": [
+        0.10960261260002593,
+        0.1564218086016602
+      ],
+      "mean_resources_through_turn_10": 1.25375,
+      "mean_resources_through_turn_20": 3.86875,
+      "mean_turns_to_5vp": 175.8190476190476,
+      "turns_to_5vp_reached_fraction": 0.525,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 4,
+        "pip_sum": 2,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "5": {
+      "n_games": 800,
+      "wins": 191,
+      "win_rate": 0.23875,
+      "win_rate_wilson_ci": [
+        0.21050082066731987,
+        0.26949614215014595
+      ],
+      "mean_resources_through_turn_10": 3.65375,
+      "mean_resources_through_turn_20": 7.56125,
+      "mean_turns_to_5vp": 167.5142857142857,
+      "turns_to_5vp_reached_fraction": 0.7,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 5,
+        "pip_sum": 5,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "6": {
+      "n_games": 800,
+      "wins": 115,
+      "win_rate": 0.14375,
+      "win_rate_wilson_ci": [
+        0.12113970273925098,
+        0.16976524655729322
+      ],
+      "mean_resources_through_turn_10": 1.32375,
+      "mean_resources_through_turn_20": 3.8575,
+      "mean_turns_to_5vp": 183.98669623059868,
+      "turns_to_5vp_reached_fraction": 0.56375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 6,
+        "pip_sum": 2,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "7": {
+      "n_games": 800,
+      "wins": 148,
+      "win_rate": 0.185,
+      "win_rate_wilson_ci": [
+        0.1596203850320632,
+        0.21339030697751277
+      ],
+      "mean_resources_through_turn_10": 2.26125,
+      "mean_resources_through_turn_20": 4.725,
+      "mean_turns_to_5vp": 177.08453608247422,
+      "turns_to_5vp_reached_fraction": 0.60625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 7,
+        "pip_sum": 4,
+        "distinct_resources": 1,
+        "num_hexes": 2,
+        "touches_desert": true,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "8": {
+      "n_games": 800,
+      "wins": 49,
+      "win_rate": 0.06125,
+      "win_rate_wilson_ci": [
+        0.04663822513060467,
+        0.08005523873987606
+      ],
+      "mean_resources_through_turn_10": 1.2675,
+      "mean_resources_through_turn_20": 2.74875,
+      "mean_turns_to_5vp": 212.44274809160305,
+      "turns_to_5vp_reached_fraction": 0.3275,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 8,
+        "pip_sum": 0,
+        "distinct_resources": 0,
+        "num_hexes": 1,
+        "touches_desert": true,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "9": {
+      "n_games": 800,
+      "wins": 307,
+      "win_rate": 0.38375,
+      "win_rate_wilson_ci": [
+        0.3506834437518619,
+        0.4179276449659578
+      ],
+      "mean_resources_through_turn_10": 4.5375,
+      "mean_resources_through_turn_20": 9.18875,
+      "mean_turns_to_5vp": 142.51010886469675,
+      "turns_to_5vp_reached_fraction": 0.80375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 9,
+        "pip_sum": 9,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "10": {
+      "n_games": 800,
+      "wins": 211,
+      "win_rate": 0.26375,
+      "win_rate_wilson_ci": [
+        0.23439515773491118,
+        0.2953628612722708
+      ],
+      "mean_resources_through_turn_10": 2.22875,
+      "mean_resources_through_turn_20": 5.6725,
+      "mean_turns_to_5vp": 168.92644483362523,
+      "turns_to_5vp_reached_fraction": 0.71375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 10,
+        "pip_sum": 6,
+        "distinct_resources": 1,
+        "num_hexes": 3,
+        "touches_desert": true,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "11": {
+      "n_games": 800,
+      "wins": 290,
+      "win_rate": 0.3625,
+      "win_rate_wilson_ci": [
+        0.3299185606486129,
+        0.39639563030794805
+      ],
+      "mean_resources_through_turn_10": 4.11875,
+      "mean_resources_through_turn_20": 8.1775,
+      "mean_turns_to_5vp": 152.63870967741934,
+      "turns_to_5vp_reached_fraction": 0.775,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 11,
+        "pip_sum": 9,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "12": {
+      "n_games": 800,
+      "wins": 295,
+      "win_rate": 0.36875,
+      "win_rate_wilson_ci": [
+        0.33601873748638694,
+        0.4027357175176031
+      ],
+      "mean_resources_through_turn_10": 4.12,
+      "mean_resources_through_turn_20": 8.10375,
+      "mean_turns_to_5vp": 159.71475409836066,
+      "turns_to_5vp_reached_fraction": 0.7625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 12,
+        "pip_sum": 9,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "13": {
+      "n_games": 800,
+      "wins": 114,
+      "win_rate": 0.1425,
+      "win_rate_wilson_ci": [
+        0.11998309788985745,
+        0.16843379859720095
+      ],
+      "mean_resources_through_turn_10": 1.40625,
+      "mean_resources_through_turn_20": 4.77375,
+      "mean_turns_to_5vp": 187.80400890868597,
+      "turns_to_5vp_reached_fraction": 0.56125,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 13,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": "PortType.GRAIN",
+        "port_rate": 2
+      }
+    },
+    "14": {
+      "n_games": 800,
+      "wins": 239,
+      "win_rate": 0.29875,
+      "win_rate_wilson_ci": [
+        0.26805591116118055,
+        0.33136758651160414
+      ],
+      "mean_resources_through_turn_10": 1.7175,
+      "mean_resources_through_turn_20": 5.26125,
+      "mean_turns_to_5vp": 162.1182608695652,
+      "turns_to_5vp_reached_fraction": 0.71875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 14,
+        "pip_sum": 7,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "15": {
+      "n_games": 800,
+      "wins": 75,
+      "win_rate": 0.09375,
+      "win_rate_wilson_ci": [
+        0.07544822433653307,
+        0.11593461258057873
+      ],
+      "mean_resources_through_turn_10": 1.3425,
+      "mean_resources_through_turn_20": 3.70875,
+      "mean_turns_to_5vp": 206.49577464788732,
+      "turns_to_5vp_reached_fraction": 0.44375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 15,
+        "pip_sum": 1,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.GRAIN",
+        "port_rate": 2
+      }
+    },
+    "16": {
+      "n_games": 800,
+      "wins": 118,
+      "win_rate": 0.1475,
+      "win_rate_wilson_ci": [
+        0.12461319784369018,
+        0.17375590988131145
+      ],
+      "mean_resources_through_turn_10": 2.16875,
+      "mean_resources_through_turn_20": 5.5175,
+      "mean_turns_to_5vp": 194.62302483069976,
+      "turns_to_5vp_reached_fraction": 0.55375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 16,
+        "pip_sum": 5,
+        "distinct_resources": 1,
+        "num_hexes": 2,
+        "touches_desert": true,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "17": {
+      "n_games": 800,
+      "wins": 113,
+      "win_rate": 0.14125,
+      "win_rate_wilson_ci": [
+        0.11882711753619818,
+        0.1671017261413744
+      ],
+      "mean_resources_through_turn_10": 2.21125,
+      "mean_resources_through_turn_20": 5.5675,
+      "mean_turns_to_5vp": 185.04424778761063,
+      "turns_to_5vp_reached_fraction": 0.565,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 17,
+        "pip_sum": 5,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "18": {
+      "n_games": 800,
+      "wins": 332,
+      "win_rate": 0.415,
+      "win_rate_wilson_ci": [
+        0.3813421960094451,
+        0.44947021294551986
+      ],
+      "mean_resources_through_turn_10": 2.28375,
+      "mean_resources_through_turn_20": 5.645,
+      "mean_turns_to_5vp": 138.4088888888889,
+      "turns_to_5vp_reached_fraction": 0.84375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 18,
+        "pip_sum": 6,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": true,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "19": {
+      "n_games": 800,
+      "wins": 323,
+      "win_rate": 0.40375,
+      "win_rate_wilson_ci": [
+        0.37028860464134994,
+        0.43813132902824276
+      ],
+      "mean_resources_through_turn_10": 3.1125,
+      "mean_resources_through_turn_20": 7.46875,
+      "mean_turns_to_5vp": 149.4920634920635,
+      "turns_to_5vp_reached_fraction": 0.7875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 19,
+        "pip_sum": 9,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": true,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "20": {
+      "n_games": 800,
+      "wins": 354,
+      "win_rate": 0.4425,
+      "win_rate_wilson_ci": [
+        0.4084382975158542,
+        0.4771112732477986
+      ],
+      "mean_resources_through_turn_10": 2.3825,
+      "mean_resources_through_turn_20": 5.815,
+      "mean_turns_to_5vp": 160.26976744186047,
+      "turns_to_5vp_reached_fraction": 0.80625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 20,
+        "pip_sum": 11,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "21": {
+      "n_games": 800,
+      "wins": 486,
+      "win_rate": 0.6075,
+      "win_rate_wilson_ci": [
+        0.573225982287944,
+        0.6407465593278358
+      ],
+      "mean_resources_through_turn_10": 2.87125,
+      "mean_resources_through_turn_20": 6.9125,
+      "mean_turns_to_5vp": 122.26315789473684,
+      "turns_to_5vp_reached_fraction": 0.95,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 21,
+        "pip_sum": 11,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "22": {
+      "n_games": 800,
+      "wins": 307,
+      "win_rate": 0.38375,
+      "win_rate_wilson_ci": [
+        0.3506834437518619,
+        0.4179276449659578
+      ],
+      "mean_resources_through_turn_10": 2.14375,
+      "mean_resources_through_turn_20": 5.02875,
+      "mean_turns_to_5vp": 167.20983606557377,
+      "turns_to_5vp_reached_fraction": 0.7625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 22,
+        "pip_sum": 9,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "23": {
+      "n_games": 800,
+      "wins": 371,
+      "win_rate": 0.46375,
+      "win_rate_wilson_ci": [
+        0.4294490508854028,
+        0.49839741763950873
+      ],
+      "mean_resources_through_turn_10": 2.80375,
+      "mean_resources_through_turn_20": 5.48375,
+      "mean_turns_to_5vp": 154.31824817518248,
+      "turns_to_5vp_reached_fraction": 0.85625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 23,
+        "pip_sum": 13,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "24": {
+      "n_games": 800,
+      "wins": 199,
+      "win_rate": 0.24875,
+      "win_rate_wilson_ci": [
+        0.22004272235824932,
+        0.2798586629351029
+      ],
+      "mean_resources_through_turn_10": 1.84375,
+      "mean_resources_through_turn_20": 4.58625,
+      "mean_turns_to_5vp": 149.89637305699483,
+      "turns_to_5vp_reached_fraction": 0.72375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 24,
+        "pip_sum": 4,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "25": {
+      "n_games": 800,
+      "wins": 339,
+      "win_rate": 0.42375,
+      "win_rate_wilson_ci": [
+        0.3899520248426139,
+        0.4582767537787519
+      ],
+      "mean_resources_through_turn_10": 2.17875,
+      "mean_resources_through_turn_20": 5.30625,
+      "mean_turns_to_5vp": 135.2231884057971,
+      "turns_to_5vp_reached_fraction": 0.8625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 25,
+        "pip_sum": 8,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "26": {
+      "n_games": 800,
+      "wins": 150,
+      "win_rate": 0.1875,
+      "win_rate_wilson_ci": [
+        0.1619700355525158,
+        0.2160167620760318
+      ],
+      "mean_resources_through_turn_10": 1.7975,
+      "mean_resources_through_turn_20": 3.77125,
+      "mean_turns_to_5vp": 160.66423357664235,
+      "turns_to_5vp_reached_fraction": 0.685,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 26,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "27": {
+      "n_games": 800,
+      "wins": 121,
+      "win_rate": 0.15125,
+      "win_rate_wilson_ci": [
+        0.12809208007527476,
+        0.17774118607818432
+      ],
+      "mean_resources_through_turn_10": 2.16125,
+      "mean_resources_through_turn_20": 5.5025,
+      "mean_turns_to_5vp": 176.26315789473685,
+      "turns_to_5vp_reached_fraction": 0.5225,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 27,
+        "pip_sum": 5,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "28": {
+      "n_games": 800,
+      "wins": 360,
+      "win_rate": 0.45,
+      "win_rate_wilson_ci": [
+        0.4158466633530462,
+        0.4846312242675215
+      ],
+      "mean_resources_through_turn_10": 3.09625,
+      "mean_resources_through_turn_20": 7.4475,
+      "mean_turns_to_5vp": 147.97629629629628,
+      "turns_to_5vp_reached_fraction": 0.84375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 28,
+        "pip_sum": 10,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "29": {
+      "n_games": 800,
+      "wins": 155,
+      "win_rate": 0.19375,
+      "win_rate_wilson_ci": [
+        0.16785197651812486,
+        0.22257508515785177
+      ],
+      "mean_resources_through_turn_10": 2.11375,
+      "mean_resources_through_turn_20": 5.5275,
+      "mean_turns_to_5vp": 200.4559686888454,
+      "turns_to_5vp_reached_fraction": 0.63875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 29,
+        "pip_sum": 6,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "30": {
+      "n_games": 800,
+      "wins": 498,
+      "win_rate": 0.6225,
+      "win_rate_wilson_ci": [
+        0.5883981924535089,
+        0.6554309828761006
+      ],
+      "mean_resources_through_turn_10": 2.86625,
+      "mean_resources_through_turn_20": 6.05625,
+      "mean_turns_to_5vp": 127.20547945205479,
+      "turns_to_5vp_reached_fraction": 0.9125,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 30,
+        "pip_sum": 11,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "31": {
+      "n_games": 800,
+      "wins": 340,
+      "win_rate": 0.425,
+      "win_rate_wilson_ci": [
+        0.3911828932675224,
+        0.45953393816332905
+      ],
+      "mean_resources_through_turn_10": 2.18875,
+      "mean_resources_through_turn_20": 4.78125,
+      "mean_turns_to_5vp": 146.15733736762482,
+      "turns_to_5vp_reached_fraction": 0.82625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 31,
+        "pip_sum": 7,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "32": {
+      "n_games": 800,
+      "wins": 328,
+      "win_rate": 0.41,
+      "win_rate_wilson_ci": [
+        0.3764272292857656,
+        0.4444329684312561
+      ],
+      "mean_resources_through_turn_10": 2.365,
+      "mean_resources_through_turn_20": 4.825,
+      "mean_turns_to_5vp": 159.48829953198128,
+      "turns_to_5vp_reached_fraction": 0.80125,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 32,
+        "pip_sum": 11,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "33": {
+      "n_games": 800,
+      "wins": 308,
+      "win_rate": 0.385,
+      "win_rate_wilson_ci": [
+        0.35190703159635445,
+        0.41919210993095113
+      ],
+      "mean_resources_through_turn_10": 2.00875,
+      "mean_resources_through_turn_20": 4.21375,
+      "mean_turns_to_5vp": 164.95252679938744,
+      "turns_to_5vp_reached_fraction": 0.81625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 33,
+        "pip_sum": 9,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "34": {
+      "n_games": 800,
+      "wins": 432,
+      "win_rate": 0.54,
+      "win_rate_wilson_ci": [
+        0.5053543911069885,
+        0.5742632987965575
+      ],
+      "mean_resources_through_turn_10": 2.89875,
+      "mean_resources_through_turn_20": 5.89125,
+      "mean_turns_to_5vp": 122.608,
+      "turns_to_5vp_reached_fraction": 0.9375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 34,
+        "pip_sum": 12,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "35": {
+      "n_games": 800,
+      "wins": 342,
+      "win_rate": 0.4275,
+      "win_rate_wilson_ci": [
+        0.39364529714436264,
+        0.46204763990546044
+      ],
+      "mean_resources_through_turn_10": 2.43625,
+      "mean_resources_through_turn_20": 4.9625,
+      "mean_turns_to_5vp": 159.81222056631893,
+      "turns_to_5vp_reached_fraction": 0.83875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 35,
+        "pip_sum": 11,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "36": {
+      "n_games": 800,
+      "wins": 136,
+      "win_rate": 0.17,
+      "win_rate_wilson_ci": [
+        0.1455619094373254,
+        0.19759214885842086
+      ],
+      "mean_resources_through_turn_10": 1.76125,
+      "mean_resources_through_turn_20": 3.685,
+      "mean_turns_to_5vp": 158.43930635838151,
+      "turns_to_5vp_reached_fraction": 0.64875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 36,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "37": {
+      "n_games": 800,
+      "wins": 280,
+      "win_rate": 0.35,
+      "win_rate_wilson_ci": [
+        0.31773641020716853,
+        0.3836972526545343
+      ],
+      "mean_resources_through_turn_10": 2.5375,
+      "mean_resources_through_turn_20": 5.14375,
+      "mean_turns_to_5vp": 133.64935064935065,
+      "turns_to_5vp_reached_fraction": 0.86625,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 37,
+        "pip_sum": 8,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "38": {
+      "n_games": 800,
+      "wins": 91,
+      "win_rate": 0.11375,
+      "win_rate_wilson_ci": [
+        0.09356926336901233,
+        0.13762241849987245
+      ],
+      "mean_resources_through_turn_10": 1.30875,
+      "mean_resources_through_turn_20": 2.84375,
+      "mean_turns_to_5vp": 216.58953168044079,
+      "turns_to_5vp_reached_fraction": 0.45375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 38,
+        "pip_sum": 1,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "39": {
+      "n_games": 800,
+      "wins": 239,
+      "win_rate": 0.29875,
+      "win_rate_wilson_ci": [
+        0.26805591116118055,
+        0.33136758651160414
+      ],
+      "mean_resources_through_turn_10": 3.6575,
+      "mean_resources_through_turn_20": 6.33625,
+      "mean_turns_to_5vp": 165.92436974789916,
+      "turns_to_5vp_reached_fraction": 0.74375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 39,
+        "pip_sum": 6,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "40": {
+      "n_games": 800,
+      "wins": 136,
+      "win_rate": 0.17,
+      "win_rate_wilson_ci": [
+        0.1455619094373254,
+        0.19759214885842086
+      ],
+      "mean_resources_through_turn_10": 3.685,
+      "mean_resources_through_turn_20": 6.5625,
+      "mean_turns_to_5vp": 189.73741794310723,
+      "turns_to_5vp_reached_fraction": 0.57125,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 40,
+        "pip_sum": 4,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": "PortType.GENERIC",
+        "port_rate": 3
+      }
+    },
+    "41": {
+      "n_games": 800,
+      "wins": 309,
+      "win_rate": 0.38625,
+      "win_rate_wilson_ci": [
+        0.3531308526071527,
+        0.42045634172963864
+      ],
+      "mean_resources_through_turn_10": 2.0725,
+      "mean_resources_through_turn_20": 5.45375,
+      "mean_turns_to_5vp": 153.45398773006136,
+      "turns_to_5vp_reached_fraction": 0.815,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 41,
+        "pip_sum": 9,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "42": {
+      "n_games": 800,
+      "wins": 303,
+      "win_rate": 0.37875,
+      "win_rate_wilson_ci": [
+        0.34579143263559686,
+        0.4128674448442796
+      ],
+      "mean_resources_through_turn_10": 4.50375,
+      "mean_resources_through_turn_20": 9.02875,
+      "mean_turns_to_5vp": 149.59643916913947,
+      "turns_to_5vp_reached_fraction": 0.8425,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 42,
+        "pip_sum": 10,
+        "distinct_resources": 3,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "43": {
+      "n_games": 800,
+      "wins": 254,
+      "win_rate": 0.3175,
+      "win_rate_wilson_ci": [
+        0.28618032541044236,
+        0.35056396440462945
+      ],
+      "mean_resources_through_turn_10": 2.50375,
+      "mean_resources_through_turn_20": 5.0075,
+      "mean_turns_to_5vp": 164.75435816164818,
+      "turns_to_5vp_reached_fraction": 0.78875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 43,
+        "pip_sum": 10,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "44": {
+      "n_games": 800,
+      "wins": 234,
+      "win_rate": 0.2925,
+      "win_rate_wilson_ci": [
+        0.26202827518004834,
+        0.32495495844530725
+      ],
+      "mean_resources_through_turn_10": 2.6475,
+      "mean_resources_through_turn_20": 6.515,
+      "mean_turns_to_5vp": 164.04700162074553,
+      "turns_to_5vp_reached_fraction": 0.77125,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 44,
+        "pip_sum": 10,
+        "distinct_resources": 2,
+        "num_hexes": 3,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "45": {
+      "n_games": 800,
+      "wins": 141,
+      "win_rate": 0.17625,
+      "win_rate_wilson_ci": [
+        0.15141119274500936,
+        0.2041831295981659
+      ],
+      "mean_resources_through_turn_10": 2.085,
+      "mean_resources_through_turn_20": 4.29625,
+      "mean_turns_to_5vp": 198.32719836400818,
+      "turns_to_5vp_reached_fraction": 0.61125,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 45,
+        "pip_sum": 5,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.BRICK",
+        "port_rate": 2
+      }
+    },
+    "46": {
+      "n_games": 800,
+      "wins": 199,
+      "win_rate": 0.24875,
+      "win_rate_wilson_ci": [
+        0.22004272235824932,
+        0.2798586629351029
+      ],
+      "mean_resources_through_turn_10": 2.54875,
+      "mean_resources_through_turn_20": 5.16375,
+      "mean_turns_to_5vp": 165.90175438596492,
+      "turns_to_5vp_reached_fraction": 0.7125,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 46,
+        "pip_sum": 8,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": "PortType.BRICK",
+        "port_rate": 2
+      }
+    },
+    "47": {
+      "n_games": 800,
+      "wins": 106,
+      "win_rate": 0.1325,
+      "win_rate_wilson_ci": [
+        0.11075333675293707,
+        0.15775913725823487
+      ],
+      "mean_resources_through_turn_10": 3.7175,
+      "mean_resources_through_turn_20": 6.56625,
+      "mean_turns_to_5vp": 186.00454545454545,
+      "turns_to_5vp_reached_fraction": 0.55,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 47,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.ORE",
+        "port_rate": 2
+      }
+    },
+    "48": {
+      "n_games": 800,
+      "wins": 215,
+      "win_rate": 0.26875,
+      "win_rate_wilson_ci": [
+        0.23918945910870032,
+        0.3005207711364249
+      ],
+      "mean_resources_through_turn_10": 4.52875,
+      "mean_resources_through_turn_20": 9.17375,
+      "mean_turns_to_5vp": 164.10858143607706,
+      "turns_to_5vp_reached_fraction": 0.71375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 48,
+        "pip_sum": 8,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "49": {
+      "n_games": 800,
+      "wins": 117,
+      "win_rate": 0.14625,
+      "win_rate_wilson_ci": [
+        0.12345475921735782,
+        0.17242629569815798
+      ],
+      "mean_resources_through_turn_10": 3.6625,
+      "mean_resources_through_turn_20": 6.59125,
+      "mean_turns_to_5vp": 189.87583148558758,
+      "turns_to_5vp_reached_fraction": 0.56375,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 49,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.ORE",
+        "port_rate": 2
+      }
+    },
+    "50": {
+      "n_games": 800,
+      "wins": 195,
+      "win_rate": 0.24375,
+      "win_rate_wilson_ci": [
+        0.21526906163329085,
+        0.2746801124221182
+      ],
+      "mean_resources_through_turn_10": 2.71625,
+      "mean_resources_through_turn_20": 6.56,
+      "mean_turns_to_5vp": 168.92307692307693,
+      "turns_to_5vp_reached_fraction": 0.715,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 50,
+        "pip_sum": 8,
+        "distinct_resources": 2,
+        "num_hexes": 2,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "51": {
+      "n_games": 800,
+      "wins": 146,
+      "win_rate": 0.1825,
+      "win_rate_wilson_ci": [
+        0.15727256211512325,
+        0.21076202427548107
+      ],
+      "mean_resources_through_turn_10": 2.185,
+      "mean_resources_through_turn_20": 5.62125,
+      "mean_turns_to_5vp": 186.9777777777778,
+      "turns_to_5vp_reached_fraction": 0.61875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 51,
+        "pip_sum": 5,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": null,
+        "port_rate": null
+      }
+    },
+    "52": {
+      "n_games": 800,
+      "wins": 140,
+      "win_rate": 0.175,
+      "win_rate_wilson_ci": [
+        0.15024035308572142,
+        0.20286591644796803
+      ],
+      "mean_resources_through_turn_10": 1.8525,
+      "mean_resources_through_turn_20": 3.89875,
+      "mean_turns_to_5vp": 171.45379876796716,
+      "turns_to_5vp_reached_fraction": 0.60875,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 52,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.LUMBER",
+        "port_rate": 2
+      }
+    },
+    "53": {
+      "n_games": 800,
+      "wins": 125,
+      "win_rate": 0.15625,
+      "win_rate_wilson_ci": [
+        0.13273868901788394,
+        0.18304678837351837
+      ],
+      "mean_resources_through_turn_10": 1.8325,
+      "mean_resources_through_turn_20": 3.9225,
+      "mean_turns_to_5vp": 170.3360655737705,
+      "turns_to_5vp_reached_fraction": 0.61,
+      "skipped_illegal": 0,
+      "vertex_features": {
+        "vertex_id": 53,
+        "pip_sum": 3,
+        "distinct_resources": 1,
+        "num_hexes": 1,
+        "touches_desert": false,
+        "port_type": "PortType.LUMBER",
+        "port_rate": 2
+      }
+    }
+  },
+  "ranked_vertices": [
+    30,
+    21,
+    34,
+    23,
+    28,
+    20,
+    35,
+    31,
+    25,
+    18,
+    32,
+    19,
+    41,
+    33,
+    9,
+    22,
+    42,
+    12,
+    11,
+    37,
+    43,
+    3,
+    14,
+    39,
+    44,
+    48,
+    10,
+    24,
+    46,
+    50,
+    5,
+    0,
+    29,
+    26,
+    7,
+    1,
+    51,
+    45,
+    52,
+    36,
+    40,
+    53,
+    27,
+    2,
+    16,
+    49,
+    6,
+    13,
+    17,
+    47,
+    4,
+    38,
+    15,
+    8
+  ]
+}

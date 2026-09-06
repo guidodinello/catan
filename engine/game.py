@@ -201,7 +201,11 @@ def _pay(state: GameState, player: PlayerState, cost: dict[Resource, int]) -> No
         state.bank[r] += c
 
 
-def _victory_points(state: GameState, player_idx: int) -> int:
+def victory_points(state: GameState, player_idx: int) -> int:
+    """Public victory-point tally for ``player_idx``, matching the engine's
+    own win condition exactly: revealed VP dev cards only, not unrevealed
+    cards still sitting in ``dev_hand`` (see ``PlayerState.revealed_vp_cards``).
+    """
     player = state.players[player_idx]
     vp = len(player.settlement_vertices) + 2 * len(player.city_vertices)
     vp += player.revealed_vp_cards
@@ -215,7 +219,7 @@ def _victory_points(state: GameState, player_idx: int) -> int:
 def _check_win(state: GameState) -> None:
     if state.phase == Phase.GAME_OVER:
         return
-    if _victory_points(state, state.current_player) >= WINNING_VICTORY_POINTS:
+    if victory_points(state, state.current_player) >= WINNING_VICTORY_POINTS:
         state.winner = state.current_player
         state.phase = Phase.GAME_OVER
 
@@ -886,7 +890,7 @@ def _bank_trade_actions(state: GameState, player_idx: int) -> list[Action]:
             actions += [
                 TradeBank(give={give_r: 4}, receive={receive_r: 1})
                 for receive_r in Resource
-                if receive_r != give_r
+                if receive_r != give_r and state.bank[receive_r] >= 1
             ]
     return actions
 
@@ -900,7 +904,7 @@ def _port_trade_actions(state: GameState, player_idx: int) -> list[Action]:
             actions += [
                 TradePort(give={give_r: rate}, receive={receive_r: 1})
                 for receive_r in Resource
-                if receive_r != give_r
+                if receive_r != give_r and state.bank[receive_r] >= 1
             ]
     return actions
 
