@@ -28,6 +28,7 @@ from server.sessions import (
     delete_session,
     get_session,
 )
+from server.static import mount_static
 
 app = FastAPI(title="Catan")
 
@@ -162,3 +163,9 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
 def delete_game(game_id: str) -> dict[str, bool]:
     delete_session(game_id)
     return {"deleted": True}
+
+
+# Must come after every /api/... route above: Starlette matches routes in
+# registration order, so mounting the frontend's catch-all StaticFiles
+# first would shadow the API routes instead of falling through to them.
+mount_static(app)

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy } from "svelte";
   import {
     createGame,
     getLegalActions,
@@ -12,12 +12,7 @@
   import Board from "./lib/Board.svelte";
   import ActionPanel from "./lib/ActionPanel.svelte";
   import TradeForm from "./lib/TradeForm.svelte";
-
-  // seat_kinds below always makes player 0 the human seat (seat_kinds[i]
-  // fixes player i's kind -- see server/bots.py's build_agents -- it is not
-  // about turn order, which the engine randomizes independently). A real
-  // seat picker is step 8 (GameSetup.svelte) territory; hardcoded here.
-  const VIEWER = 0;
+  import GameSetup, { type NewGameConfig } from "./lib/GameSetup.svelte";
 
   // Duplicated from Board.svelte's PLAYER_COLOR (4 entries -- not worth a
   // shared module for this repo's "extract only past 3 repeats" rule).
@@ -25,13 +20,22 @@
 
   const POLL_INTERVAL_MS = 2000;
 
-  let status: "loading" | "ok" | "error" = $state("loading");
+  let status: "setup" | "loading" | "ok" | "error" = $state("setup");
   let gameId: string | null = $state(null);
   let geometry: Geometry | null = $state(null);
   let gameState: GameStateView | null = $state(null);
   let legalActions: LegalAction[] = $state([]);
   let errorMessage = $state("");
   let showTradeForm = $state(false);
+
+  // Index of the one human seat this browser tab plays, per
+  // GameSetup.svelte's chosen seat_kinds (server/bots.py's build_agents
+  // indexes agents by player id, not by turn order). `undefined` -- no
+  // "human" seat chosen -- means a bot-vs-bot spectator game: getState/
+  // getLegalActions are called with no viewer (the spectator/full-reveal
+  // view), and since step_bots never stops for a spectator, such a game
+  // finishes entirely inside createGame's own response.
+  let viewer: number | undefined = $state(undefined);
 
   // Set only while an action HTTP request is in flight. server/app.py's
   // post_action calls server/bots.py's step_bots synchronously before
@@ -56,7 +60,7 @@
 
   async function refreshLegalActions() {
     if (!gameId || isGameOver) return;
-    legalActions = await getLegalActions(gameId, VIEWER);
+    legalActions = await getLegalActions(gameId, viewer);
   }
 
   // Periodic background refresh, per the plan doc's documented design
@@ -71,7 +75,7 @@
     pollHandle = setInterval(async () => {
       if (!gameId || isBusy || isGameOver) return;
       try {
-        gameState = await getState(gameId, VIEWER);
+        gameState = await getState(gameId, viewer);
         await refreshLegalActions();
         if (gameState.phase === "GAME_OVER") stopPolling();
       } catch (err) {
@@ -80,19 +84,21 @@
     }, POLL_INTERVAL_MS);
   }
 
-  onMount(async () => {
+  onDestroy(stopPolling);
+
+  async function startGame(config: NewGameConfig) {
+    status = "loading";
+    errorMessage = "";
+    const humanSeat = config.seat_kinds.indexOf("human");
+    viewer = humanSeat === -1 ? undefined : humanSeat;
     try {
-      const created = await createGame({
-        num_players: 3,
-        seat_kinds: ["human", "heuristic", "heuristic"],
-        seed: 1,
-      });
+      const created = await createGame(config);
       gameId = created.game_id;
       geometry = created.geometry;
       // createGame's own response is a spectator view (viewer=None) --
       // fetch the properly redacted view for our seat instead, so another
       // seat's hand is never briefly shown before the first action.
-      gameState = await getState(gameId, VIEWER);
+      gameState = await getState(gameId, viewer);
       status = "ok";
       await refreshLegalActions();
       if (!isGameOver) startPolling();
@@ -100,9 +106,36 @@
       errorMessage = err instanceof Error ? err.message : String(err);
       status = "error";
     }
-  });
+  }
 
-  onDestroy(stopPolling);
+  function playAgain() {
+    stopPolling();
+    status = "setup";
+    gameId = null;
+    geometry = null;
+    gameState = null;
+    legalActions = [];
+    errorMessage = "";
+    showTradeForm = false;
+    viewer = undefined;
+  }
+
+  // Re-syncs state/legal_actions after a rejected action -- mirrors
+  // cli.py:124's "print the error and keep going" pattern, but a race
+  // (this tab's `legalActions` going stale against the real server state,
+  // e.g. from a second tab or a future multi-client viewer) means the
+  // index that was just rejected may no longer even be the same action by
+  // the time the error is shown, so re-fetching is what actually lets the
+  // human recover instead of clicking the same now-wrong control again.
+  async function resyncAfterError() {
+    if (!gameId) return;
+    try {
+      gameState = await getState(gameId, viewer);
+      await refreshLegalActions();
+    } catch (err) {
+      console.error("failed to resync after a rejected action", err);
+    }
+  }
 
   async function selectAction(
     index: number,
@@ -123,6 +156,7 @@
       }
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
+      await resyncAfterError();
     } finally {
       isBusy = false;
     }
@@ -138,10 +172,15 @@
 <main>
   <h1>Catan</h1>
 
-  {#if status === "loading"}
+  {#if status === "setup"}
+    <GameSetup onCreate={startGame} />
+  {:else if status === "loading"}
     <p>Loading...</p>
   {:else if status === "error"}
-    <p style="color: red">Error: {errorMessage}</p>
+    <p class="error">
+      Error: {errorMessage}
+      <button onclick={playAgain}>Back to setup</button>
+    </p>
   {:else if geometry && gameState}
     {#if isGameOver}
       <div class="game-over">
@@ -157,6 +196,7 @@
         {:else}
           <p>Game over.</p>
         {/if}
+        <button onclick={playAgain}>New game</button>
       </div>
       <Board {geometry} state={gameState} />
     {:else}
@@ -167,7 +207,10 @@
         {/if}
       </p>
       {#if errorMessage}
-        <p style="color: red">{errorMessage}</p>
+        <p class="error">
+          {errorMessage}
+          <button onclick={() => (errorMessage = "")}>&times;</button>
+        </p>
       {/if}
       <div class="layout" class:busy={isBusy}>
         <div class="board-column">
@@ -186,7 +229,9 @@
           />
           {#if showTradeForm}
             <TradeForm
-              humanResources={gameState.players[VIEWER].resources}
+              humanResources={viewer !== undefined
+                ? gameState.players[viewer].resources
+                : undefined}
               onSubmit={submitTrade}
               onCancel={() => (showTradeForm = false)}
             />
@@ -232,5 +277,9 @@
     border-radius: 50%;
     border: 1px solid #000;
     vertical-align: middle;
+  }
+
+  .error {
+    color: #d90429;
   }
 </style>
