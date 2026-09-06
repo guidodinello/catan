@@ -7,7 +7,14 @@
     pointsAttribute,
     vertexPixels,
   } from "./geometry";
-  import { TERRAIN_ICON } from "./icons";
+  import {
+    TERRAIN_ICON,
+    PORT_ICON,
+    SettlementIcon,
+    CityIcon,
+    RoadIcon,
+    RobberIcon,
+  } from "./icons";
 
   interface Props {
     geometry: Geometry;
@@ -203,7 +210,15 @@
       </text>
     {/if}
     {#if key === robberKey}
-      <circle cx={center.x} cy={center.y - SIZE * 0.05} r={SIZE * 0.18} fill="#222222" />
+      {@const robberScale = SIZE * 0.016}
+      <g
+        class="board-glyph"
+        transform="translate({center.x - 12 * robberScale}, {center.y -
+          SIZE * 0.05 -
+          12 * robberScale}) scale({robberScale})"
+      >
+        <RobberIcon />
+      </g>
     {/if}
     {#if robberIndex !== undefined}
       <polygon
@@ -223,7 +238,17 @@
       {@const [p1, p2] = edgeEndpoints(edge, pixelsByVertexId)}
       {@const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }}
       {@const portType = portByEdgeId.get(portEdgeId)}
+      {@const PortIcon = portType ? PORT_ICON[portType] : undefined}
       <circle cx={mid.x} cy={mid.y} r={SIZE * 0.15} fill="#a8dadc" stroke="#1d3557" />
+      {#if PortIcon}
+        {@const portScale = SIZE * 0.011}
+        <g
+          class="board-glyph"
+          transform="translate({mid.x - 12 * portScale}, {mid.y - 12 * portScale}) scale({portScale})"
+        >
+          <PortIcon />
+        </g>
+      {/if}
       <text
         x={mid.x}
         y={mid.y + SIZE * 0.35}
@@ -241,15 +266,20 @@
     {@const roadIndex = roadSites.get(edge.edge_id)}
     {@const [p1, p2] = edgeEndpoints(edge, pixelsByVertexId)}
     {#if color}
-      <line
-        x1={p1.x}
-        y1={p1.y}
-        x2={p2.x}
-        y2={p2.y}
-        stroke={color}
-        stroke-width={SIZE * 0.12}
-        stroke-linecap="round"
-      />
+      {@const dx = p2.x - p1.x}
+      {@const dy = p2.y - p1.y}
+      {@const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI}
+      {@const roadLength = Math.hypot(dx, dy)}
+      {@const roadMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }}
+      {@const lengthScale = roadLength / 24}
+      {@const thicknessScale = (SIZE * 0.12) / 8}
+      <g
+        class="board-glyph"
+        style="color: {color}"
+        transform="translate({roadMid.x}, {roadMid.y}) rotate({angleDeg}) scale({lengthScale}, {thicknessScale}) translate(-12, -4)"
+      >
+        <RoadIcon />
+      </g>
     {/if}
     {#if roadIndex !== undefined}
       <line
@@ -274,13 +304,19 @@
     {@const cityIndex = citySites.get(vertexId)}
     {@const stealIndex = stealTargetVertices.get(vertexId)}
     {#if owner}
-      <circle
-        cx={point.x}
-        cy={point.y}
-        r={owner.city ? SIZE * 0.22 : SIZE * 0.14}
-        fill={owner.color}
-        stroke="#000000"
-      />
+      {@const buildingScale = owner.city ? SIZE * 0.0183 : SIZE * 0.0117}
+      <g
+        class="board-glyph"
+        style="color: {owner.color}"
+        transform="translate({point.x - 12 * buildingScale}, {point.y -
+          12 * buildingScale}) scale({buildingScale})"
+      >
+        {#if owner.city}
+          <CityIcon />
+        {:else}
+          <SettlementIcon />
+        {/if}
+      </g>
     {/if}
     {#if settlementIndex !== undefined}
       <circle
@@ -328,7 +364,8 @@
     max-height: 80vh;
   }
 
-  .terrain-icon {
+  .terrain-icon,
+  .board-glyph {
     pointer-events: none;
   }
 

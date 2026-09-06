@@ -7,28 +7,32 @@ and built.
 
 ## GUI / UX
 
-- **Terrain and resource iconography.** `Board.svelte` currently renders
-  hexes as flat colored polygons. Real pictorial icons for each terrain type
-  (forest, hills, mountains, fields, pasture) — and for resource cards
-  wherever they're listed (`HandSummary.svelte`, `TradeForm.svelte`) — would
-  read faster than a color legend, especially for anyone unfamiliar with
-  which color maps to which resource.
-- **Port, settlement, and road iconography.** Same idea extended to the rest
-  of the board: a real port icon instead of a plain circle + text label, and
-  distinct settlement/city/road glyphs instead of plain SVG shapes colored by
-  owner.
+- ~~**Terrain and resource iconography.**~~ Done — hand-authored SVG icons
+  per terrain/resource, in `web/src/lib/icons/`, looked up via
+  `TERRAIN_ICON`/`RESOURCE_ICON` maps (`web/src/lib/resources.ts` is the
+  single source of truth for the resource list).
+- ~~**Port, settlement, and road iconography.**~~ Done — same map-based
+  pattern extended to `PORT_ICON`, plus `SettlementIcon`/`CityIcon`/
+  `RoadIcon`/`RobberIcon`. Settlement/city/road glyphs use `currentColor`
+  so `Board.svelte` recolors them per owner; the robber glyph is fixed/
+  neutral. All glyphs are `pointer-events: none` and layered on top of the
+  existing invisible click/highlight targets, so click-to-select is
+  unaffected. The glyph choice itself is intentionally a placeholder —
+  the point of the map-based indirection is that swapping in real art
+  later means editing the icon files, never touching `Board.svelte`.
+- **Resume a game by ID.** `GameSetup.svelte` always starts a new game;
+  there's no "rejoin an existing `game_id`" flow. Came up when switching
+  from the rebuild-and-restart workflow to the Vite dev server — a hard
+  page reload has no way to reconnect to the game already running
+  server-side. Would need `game_id` persisted somewhere client-side
+  (e.g. the URL or `localStorage`) and a `GameSetup.svelte` path that
+  calls `getState`/`getLegalActions` instead of `createGame`.
 
 ## Known gaps from the GUI build (`docs/plans/gui-web-frontend.md`)
 
-- **`web/src/lib/geometry.test.ts` (Vitest) still isn't runnable.**
-  `npm install` for `vitest` hit a persistent network stall in the dev
-  environment (confirmed independently in two separate sessions, 40+
-  minutes, zero output, even though `curl` reached the registry fine) — not
-  a one-off fluke. The geometry math it would check was cross-verified
-  against the real engine via an equivalent Python script instead, so
-  nothing is un-verified, but the actual test suite needs a working
-  `npm install` in an environment with better registry access before it can
-  run in CI.
+- ~~**`web/src/lib/geometry.test.ts` (Vitest) still isn't runnable.**~~
+  Resolved — `npm install` succeeded on a later attempt (the network stall
+  was transient after all, not permanent); all 8 geometry tests pass.
 - **Only one human seat is playable per browser tab.** No in-tab hot-seat
   switching between multiple human seats — `GameSetup.svelte` states this
   directly in its UI copy rather than silently under-delivering, but true
