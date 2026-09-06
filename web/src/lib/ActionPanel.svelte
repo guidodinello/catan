@@ -15,9 +15,30 @@
     legalActions: LegalAction[];
     onSelect: (index: number) => void;
     onProposeTrade: () => void;
+    onPlayRoadBuilding: () => void;
+    onPlayYearOfPlenty: () => void;
+    onPlayMonopoly: () => void;
   }
 
-  const { legalActions, onSelect, onProposeTrade }: Props = $props();
+  const {
+    legalActions,
+    onSelect,
+    onProposeTrade,
+    onPlayRoadBuilding,
+    onPlayYearOfPlenty,
+    onPlayMonopoly,
+  }: Props = $props();
+
+  // Kinds routed to a dedicated form/board-picking flow instead of the
+  // generic expandable instance list below -- ProposeTrade already
+  // established this precedent; PlayRoadBuilding/PlayYearOfPlenty/
+  // PlayMonopoly extend it rather than growing formatAction's raw text.
+  const SPECIAL_KIND_HANDLERS: Record<string, () => void> = {
+    ProposeTrade: () => onProposeTrade(),
+    PlayRoadBuilding: () => onPlayRoadBuilding(),
+    PlayYearOfPlenty: () => onPlayYearOfPlenty(),
+    PlayMonopoly: () => onPlayMonopoly(),
+  };
 
   const panelActions = $derived(
     legalActions.filter((a) => !SPATIAL_KINDS.has(a.kind)),
@@ -52,8 +73,9 @@
   }
 
   function chooseKind(kind: string) {
-    if (kind === "ProposeTrade") {
-      onProposeTrade();
+    const specialHandler = SPECIAL_KIND_HANDLERS[kind];
+    if (specialHandler) {
+      specialHandler();
       return;
     }
     const options = byKind.get(kind) ?? [];

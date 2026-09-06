@@ -12,12 +12,12 @@
   import Board from "./lib/Board.svelte";
   import ActionPanel from "./lib/ActionPanel.svelte";
   import TradeForm from "./lib/TradeForm.svelte";
+  import DevCardResourceForm from "./lib/DevCardResourceForm.svelte";
   import GameSetup, { type NewGameConfig } from "./lib/GameSetup.svelte";
   import HandSummary from "./lib/HandSummary.svelte";
-
-  // Duplicated from Board.svelte's PLAYER_COLOR (4 entries -- not worth a
-  // shared module for this repo's "extract only past 3 repeats" rule).
-  const PLAYER_COLOR = ["#e63946", "#457b9d", "#2a9d8f", "#f4a261"];
+  import Scoreboard from "./lib/Scoreboard.svelte";
+  import { firstEdgeCandidates, secondEdgeCandidates } from "./lib/roadBuilding";
+  import { PLAYER_COLOR } from "./lib/playerColor";
 
   const POLL_INTERVAL_MS = 2000;
 
@@ -29,6 +29,36 @@
   let errorMessage = $state("");
   let tradeResultMessage = $state("");
   let showTradeForm = $state(false);
+  let showMonopolyForm = $state(false);
+  let showYearOfPlentyForm = $state(false);
+
+  // PlayRoadBuilding's two-click board pick (see lib/roadBuilding.ts):
+  // roadBuildingFirstEdge is null while awaiting the first click, set once
+  // the first edge is chosen, and reset (along with roadBuildingActive)
+  // whenever the flow completes, is cancelled, or an action successfully
+  // posts.
+  let roadBuildingActive = $state(false);
+  let roadBuildingFirstEdge: number | null = $state(null);
+
+  function cancelRoadBuilding() {
+    roadBuildingActive = false;
+    roadBuildingFirstEdge = null;
+  }
+
+  const edgePickHandlers = $derived.by(() => {
+    if (!roadBuildingActive) return undefined;
+    const map = new Map<number, () => void>();
+    if (roadBuildingFirstEdge === null) {
+      for (const edgeId of firstEdgeCandidates(legalActions)) {
+        map.set(edgeId, () => (roadBuildingFirstEdge = edgeId));
+      }
+    } else {
+      for (const [edgeId, index] of secondEdgeCandidates(legalActions, roadBuildingFirstEdge)) {
+        map.set(edgeId, () => selectAction(index));
+      }
+    }
+    return map;
+  });
 
   // Index of the one human seat this browser tab plays, per
   // GameSetup.svelte's chosen seat_kinds (server/bots.py's build_agents
@@ -119,6 +149,9 @@
     legalActions = [];
     errorMessage = "";
     showTradeForm = false;
+    showMonopolyForm = false;
+    showYearOfPlentyForm = false;
+    cancelRoadBuilding();
     viewer = undefined;
   }
 
@@ -158,6 +191,9 @@
       gameState = await postAction(gameId, { index, give, receive });
       errorMessage = "";
       showTradeForm = false;
+      showMonopolyForm = false;
+      showYearOfPlentyForm = false;
+      cancelRoadBuilding();
       tradeResultMessage = isTrade
         ? describeTradeOutcome(priorResources, give, receive)
         : "";
@@ -253,24 +289,41 @@
           <button onclick={() => (tradeResultMessage = "")}>&times;</button>
         </p>
       {/if}
+      {#if roadBuildingActive}
+        <p class="road-building-banner">
+          Play Road Building:
+          {roadBuildingFirstEdge === null
+            ? "pick the first road on the board."
+            : "now pick the second road."}
+          <button onclick={cancelRoadBuilding}>Cancel</button>
+        </p>
+      {/if}
       <div class="layout" class:busy={isBusy}>
         <div class="board-column">
           <Board
             {geometry}
             state={gameState}
-            legalActions={isBusy ? [] : legalActions}
+            legalActions={isBusy || roadBuildingActive ? [] : legalActions}
             onSelect={(index) => selectAction(index)}
+            {edgePickHandlers}
           />
         </div>
-        <div class="panel-column">
+        <div class="panel-column" class:disabled={roadBuildingActive}>
+          <Scoreboard state={gameState} {viewer} />
           <HandSummary
             diceRoll={gameState.dice_roll}
             resources={viewer !== undefined ? gameState.players[viewer].resources : undefined}
           />
           <ActionPanel
-            legalActions={isBusy ? [] : legalActions}
+            legalActions={isBusy || roadBuildingActive ? [] : legalActions}
             onSelect={(index) => selectAction(index)}
             onProposeTrade={() => (showTradeForm = true)}
+            onPlayRoadBuilding={() => {
+              roadBuildingActive = true;
+              roadBuildingFirstEdge = null;
+            }}
+            onPlayYearOfPlenty={() => (showYearOfPlentyForm = true)}
+            onPlayMonopoly={() => (showMonopolyForm = true)}
           />
           {#if showTradeForm}
             <TradeForm
@@ -279,6 +332,24 @@
                 : undefined}
               onSubmit={submitTrade}
               onCancel={() => (showTradeForm = false)}
+            />
+          {/if}
+          {#if showMonopolyForm}
+            <DevCardResourceForm
+              title="Play Monopoly"
+              count={1}
+              legalActions={legalActions.filter((a) => a.kind === "PlayMonopoly")}
+              onSubmit={(index) => selectAction(index)}
+              onCancel={() => (showMonopolyForm = false)}
+            />
+          {/if}
+          {#if showYearOfPlentyForm}
+            <DevCardResourceForm
+              title="Play Year of Plenty"
+              count={2}
+              legalActions={legalActions.filter((a) => a.kind === "PlayYearOfPlenty")}
+              onSubmit={(index) => selectAction(index)}
+              onCancel={() => (showYearOfPlentyForm = false)}
             />
           {/if}
         </div>
@@ -306,6 +377,19 @@
 
   .panel-column {
     flex: 0 0 auto;
+  }
+
+  .panel-column.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  .road-building-banner {
+    background: #fff3cd;
+    border: 1px solid #ffd60a;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
   }
 
   .game-over {

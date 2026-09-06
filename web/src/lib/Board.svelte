@@ -15,15 +15,22 @@
     RoadIcon,
     RobberIcon,
   } from "./icons";
+  import { PLAYER_COLOR } from "./playerColor";
 
   interface Props {
     geometry: Geometry;
     state: GameStateView;
     legalActions?: LegalAction[];
     onSelect?: (index: number) => void;
+    // Generic edge-picking hook for a multi-step spatial flow (currently
+    // PlayRoadBuilding's two-click pick) that has no single action index
+    // for its earlier click(s) -- unlike roadSites below, the caller
+    // decides what an edge click means, this component just renders the
+    // highlight and forwards the click. Not PlayRoadBuilding-specific.
+    edgePickHandlers?: Map<number, () => void>;
   }
 
-  const { geometry, state, legalActions = [], onSelect }: Props = $props();
+  const { geometry, state, legalActions = [], onSelect, edgePickHandlers }: Props = $props();
 
   const SIZE = 50;
 
@@ -37,9 +44,6 @@
     MOUNTAIN: "#6c757d",
     DESERT: "#e0d8b0",
   };
-
-  // Up to 4 players (engine/game.py's MIN_PLAYERS..MAX_PLAYERS).
-  const PLAYER_COLOR = ["#e63946", "#457b9d", "#2a9d8f", "#f4a261"];
 
   const pixelsByVertexId = $derived(vertexPixels(geometry, SIZE));
   const edgeById = $derived(new Map(geometry.edges.map((e) => [e.edge_id, e])));
@@ -140,6 +144,13 @@
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       onSelect?.(index);
+    }
+  }
+
+  function activateHandlerOnKey(handler: () => void, event: KeyboardEvent) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handler();
     }
   }
 
@@ -264,6 +275,7 @@
   {#each geometry.edges as edge (edge.edge_id)}
     {@const color = ownerOfEdge.get(edge.edge_id)}
     {@const roadIndex = roadSites.get(edge.edge_id)}
+    {@const pickHandler = edgePickHandlers?.get(edge.edge_id)}
     {@const [p1, p2] = edgeEndpoints(edge, pixelsByVertexId)}
     {#if color}
       {@const dx = p2.x - p1.x}
@@ -294,6 +306,21 @@
         tabindex="0"
         onclick={() => onSelect?.(roadIndex)}
         onkeydown={(e) => activateOnKey(roadIndex, e)}
+      />
+    {/if}
+    {#if pickHandler}
+      <line
+        x1={p1.x}
+        y1={p1.y}
+        x2={p2.x}
+        y2={p2.y}
+        class="highlight-edge"
+        stroke-width={SIZE * 0.12}
+        stroke-linecap="round"
+        role="button"
+        tabindex="0"
+        onclick={pickHandler}
+        onkeydown={(e) => activateHandlerOnKey(pickHandler, e)}
       />
     {/if}
   {/each}
