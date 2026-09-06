@@ -441,15 +441,18 @@
 
   /* Invisible, solid (no dasharray) companion to .highlight-edge -- the
      real click/keyboard target for a road edge, continuous along its full
-     length so there's no dead zone between dashes. stroke: transparent
-     (not `none`) is deliberate: SVG's default visiblePainted hit-testing
-     only counts a stroke that's actually painted, and transparent still
-     counts as painted (just invisible), whereas `none` would opt the
-     stroke back out of hit-testing entirely. */
+     length so there's no dead zone between dashes. A fully transparent
+     stroke turned out unreliable for hit-testing in practice (default
+     `pointer-events: visiblePainted` hit-testing does not consistently
+     treat a zero-alpha stroke as "painted" across engines -- it broke
+     clicks everywhere, not just between dashes), so pointer-events: all
+     forces this element to be hit-testable regardless of paint/visibility,
+     which is what an invisible click-catcher actually needs. */
   .edge-hit-target {
     cursor: pointer;
     fill: none;
     stroke: transparent;
+    pointer-events: all;
   }
 
   .highlight-vertex.steal {
