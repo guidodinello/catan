@@ -28,6 +28,24 @@ and built.
   (e.g. the URL or `localStorage`) and a `GameSetup.svelte` path that
   calls `getState`/`getLegalActions` instead of `createGame`.
 
+## Engine
+
+- **Counter-trades / free trade negotiation.** README decision 5
+  deliberately scoped domestic trade down to propose → each other player
+  accepts or rejects in turn, first accept wins, no counter-offers — "a
+  documented scope simplification, not a rules claim (the real game allows
+  free negotiation)." Surfaced again from actual play: an offer that gets
+  rejected outright today might have been accepted with a different
+  bundle, but there's no way to propose one back. This is a real engine
+  gap, not a UI one — there's no `CounterTrade` action in `engine/actions.py`,
+  and adding one means new negotiation state (who's countering whom, with
+  what bundle, and how/when the original offer expires), not just a new
+  action variant. Worth scoping properly before starting, since it touches
+  `state.trade_offer`/`state.trade_responders` and every agent that
+  currently handles `ProposeTrade`/`AcceptTrade`/`RejectTrade`
+  (`agents/random_agent.py`, `agents/heuristic.py`, `agents/human.py`,
+  `server/bots.py`).
+
 ## Known gaps from the GUI build (`docs/plans/gui-web-frontend.md`)
 
 - ~~**`web/src/lib/geometry.test.ts` (Vitest) still isn't runnable.**~~

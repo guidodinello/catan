@@ -239,6 +239,26 @@
     if (!sentinel) return;
     void selectAction(sentinel.index, give, receive);
   }
+
+  // engine/game.py's _trade_response_legal only offers AcceptTrade when the
+  // responder actually holds the requested resources -- so if RejectTrade
+  // is the *only* legal action, there is no real decision on the table,
+  // just a forced outcome. Requiring a click for that is pure friction (the
+  // same reasoning step_bots already applies to bot turns), so auto-submit
+  // it -- but only in that exact case, never a reject the viewer could have
+  // turned down deliberately.
+  $effect(() => {
+    if (
+      isBusy ||
+      gameState?.phase !== "AWAIT_TRADE_RESPONSE" ||
+      legalActions.length !== 1 ||
+      legalActions[0].kind !== "RejectTrade"
+    ) {
+      return;
+    }
+    tradeResultMessage = "Auto-rejected: you don't have the resources to accept.";
+    void selectAction(legalActions[0].index);
+  });
 </script>
 
 <main>
