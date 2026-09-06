@@ -294,13 +294,16 @@
       </g>
     {/if}
     {#if roadIndex !== undefined}
+      <!-- Deliberately wider than the visible road glyph's SIZE * 0.12 --
+           this is the click/hit target, not a drawn road, so it can be
+           easier to hit without changing how any road looks. -->
       <line
         x1={p1.x}
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
         class="highlight-edge"
-        stroke-width={SIZE * 0.12}
+        stroke-width={SIZE * 0.32}
         stroke-linecap="round"
         role="button"
         tabindex="0"
@@ -309,13 +312,15 @@
       />
     {/if}
     {#if pickHandler}
+      <!-- Same widened hit target as roadIndex above, for road-building's
+           two-click edge pick. -->
       <line
         x1={p1.x}
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
         class="highlight-edge"
-        stroke-width={SIZE * 0.12}
+        stroke-width={SIZE * 0.32}
         stroke-linecap="round"
         role="button"
         tabindex="0"
