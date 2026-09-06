@@ -22,4 +22,4 @@ repos:
             # The hook's isolated env otherwise lacks hypothesis, so mypy
             # can't type tests/test_engine.py's @rule()/@invariant()
             # decorators ("Untyped decorator makes function ... untyped").
-            additional_dependencies: ["hypothesis>=6.112"]
+            additional_dependencies: ["hypothesis>=6.167.1"]
