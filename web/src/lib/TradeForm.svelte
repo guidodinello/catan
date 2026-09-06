@@ -1,6 +1,6 @@
 <script lang="ts">
-  // engine/board.py's Resource enum, in its declared order.
-  const RESOURCES = ["LUMBER", "WOOL", "GRAIN", "BRICK", "ORE"] as const;
+  import { RESOURCES } from "./resources";
+  import { RESOURCE_ICON } from "./icons";
 
   // engine/game.py's MAX_TRADE_OFFER_SIDE. A UI convenience cap only --
   // mirrors agents/human.py's _prompt_resource_bundle, exactly as the plan
@@ -55,7 +55,11 @@
       <h4>You give</h4>
       {#each RESOURCES as r (r)}
         {@const cap = Math.min(humanResources[r] ?? 0, MAX_TRADE_OFFER_SIDE)}
+        {@const Icon = RESOURCE_ICON[r]}
         <label>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <Icon />
+          </svg>
           {r} (have {humanResources[r] ?? 0})
           <input type="number" min="0" max={cap} bind:value={give[r]} />
         </label>
@@ -64,7 +68,11 @@
     <div>
       <h4>You receive</h4>
       {#each RESOURCES as r (r)}
+        {@const Icon = RESOURCE_ICON[r]}
         <label>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <Icon />
+          </svg>
           {r}
           <input type="number" min="0" max={MAX_TRADE_OFFER_SIDE} bind:value={receive[r]} />
         </label>
@@ -92,7 +100,9 @@
   }
 
   label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
     margin-bottom: 0.3rem;
   }
 
