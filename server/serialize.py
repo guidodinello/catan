@@ -16,7 +16,7 @@ from typing import Any
 from engine.actions import Action
 from engine.board import GEOMETRY, Board, Cube, Resource
 from engine.game import victory_points
-from engine.state import GameState, PlayerState, acting_player
+from engine.state import GameState, PlayerState, TradeOffer, acting_player
 from server.bots import TrailEntry
 
 
@@ -113,6 +113,18 @@ def _serialize_player(
     return entry
 
 
+def _serialize_trade_offer(offer: TradeOffer) -> dict[str, Any]:
+    # A domestic trade offer is announced to every player by the real rules
+    # (decision 5) -- unlike a hand, it is never hidden information, so it's
+    # never redacted by viewer, whether it's the live offer on `state`
+    # (player_view) or one already resolved (serialize_trail_entry).
+    return {
+        "proposer": offer.proposer,
+        "give": {r.name: c for r, c in offer.give.items()},
+        "receive": {r.name: c for r, c in offer.receive.items()},
+    }
+
+
 def player_view(state: GameState, viewer: int | None) -> dict[str, Any]:
     """JSON-safe projection of ``state`` for one viewing seat.
 
@@ -124,16 +136,11 @@ def player_view(state: GameState, viewer: int | None) -> dict[str, Any]:
         _serialize_player(p, state, reveal=viewer is None or p.player_id == viewer)
         for p in state.players
     ]
-    trade_offer = None
-    if state.trade_offer is not None:
-        # A domestic trade offer is announced to every player by the real
-        # rules (decision 5) -- unlike a hand, it is never hidden information,
-        # so it is not redacted by viewer.
-        trade_offer = {
-            "proposer": state.trade_offer.proposer,
-            "give": {r.name: c for r, c in state.trade_offer.give.items()},
-            "receive": {r.name: c for r, c in state.trade_offer.receive.items()},
-        }
+    trade_offer = (
+        _serialize_trade_offer(state.trade_offer)
+        if state.trade_offer is not None
+        else None
+    )
     return {
         "phase": state.phase.name,
         "current_player": state.current_player,
@@ -219,8 +226,13 @@ _TRAIL_REDACTED_FIELDS: dict[str, frozenset[str]] = {
 def serialize_trail_entry(entry: TrailEntry) -> dict[str, Any]:
     """One already-applied action (``server/bots.py``'s ``TrailEntry``) as a
     public record: who acted, what kind of action, its (possibly redacted)
-    fields, and -- only for ``RollDice`` -- the actual roll, since
-    ``RollDice`` itself carries no fields to serialize.
+    fields, and -- only for ``RollDice`` -- the actual roll plus who gained
+    which resources from it, since ``RollDice`` itself carries no fields to
+    serialize. ``production``'s player-id keys become strings, since JSON
+    object keys always are. ``trade_offer`` is set only for ``AcceptTrade``/
+    ``RejectTrade`` -- neither carries fields of its own, so the deal (or
+    rejected offer) they were responding to is otherwise invisible; it's the
+    live ``state.trade_offer`` from just before this response cleared it.
     """
     kind = type(entry.action).__name__
     exclude = _TRAIL_REDACTED_FIELDS.get(kind, frozenset())
@@ -228,6 +240,13 @@ def serialize_trail_entry(entry: TrailEntry) -> dict[str, Any]:
     result: dict[str, Any] = {"player_id": entry.player_id, "kind": kind, **fields}
     if entry.dice_roll is not None:
         result["dice_roll"] = list(entry.dice_roll)
+    if entry.production:
+        result["production"] = {
+            str(player_id): {r.name: amount for r, amount in gains.items()}
+            for player_id, gains in entry.production.items()
+        }
+    if entry.trade_offer is not None:
+        result["trade_offer"] = _serialize_trade_offer(entry.trade_offer)
     return result
 
 

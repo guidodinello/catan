@@ -12,7 +12,14 @@ empty-give/receive affordance) with ``open_ended: True``.
 
 import json
 
-from engine.actions import Discard, PlaceSettlement, ProposeTrade, RollDice
+from engine.actions import (
+    AcceptTrade,
+    Discard,
+    PlaceSettlement,
+    ProposeTrade,
+    RejectTrade,
+    RollDice,
+)
 from engine.board import (
     GEOMETRY,
     NUM_EDGES,
@@ -22,7 +29,7 @@ from engine.board import (
     Resource,
 )
 from engine.game import CatanGame, victory_points
-from engine.state import Phase
+from engine.state import Phase, TradeOffer
 from server.bots import TrailEntry
 from server.serialize import (
     player_view,
@@ -165,6 +172,57 @@ def test_serialize_trail_entry_includes_dice_roll_only_for_roll_dice() -> None:
 
     non_roll_entry = TrailEntry(player_id=0, action=PlaceSettlement(vertex_id=1))
     assert "dice_roll" not in serialize_trail(entries=[non_roll_entry])[0]
+
+
+def test_serialize_trail_entry_includes_production_with_string_player_id_keys() -> None:
+    entry = TrailEntry(
+        player_id=0,
+        action=RollDice(),
+        dice_roll=(3, 4),
+        production={0: {Resource.WOOL: 1}, 2: {Resource.ORE: 2, Resource.BRICK: 1}},
+    )
+    result = serialize_trail(entries=[entry])[0]
+    assert result["production"] == {
+        "0": {"WOOL": 1},
+        "2": {"ORE": 2, "BRICK": 1},
+    }
+
+
+def test_serialize_trail_entry_omits_production_when_nothing_was_gained() -> None:
+    # apply_and_record always sets `production` to a dict (possibly empty)
+    # for a RollDice entry, e.g. a 7 or a roll matching no settled hex --
+    # the wire format should omit the key entirely rather than send `{}`.
+    entry = TrailEntry(player_id=0, action=RollDice(), dice_roll=(3, 4), production={})
+    result = serialize_trail(entries=[entry])[0]
+    assert "production" not in result
+
+
+def test_serialize_trail_entry_includes_trade_offer_for_accept_trade() -> None:
+    offer = TradeOffer(proposer=1, give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    entry = TrailEntry(player_id=0, action=AcceptTrade(), trade_offer=offer)
+    result = serialize_trail(entries=[entry])[0]
+    assert result == {
+        "player_id": 0,
+        "kind": "AcceptTrade",
+        "trade_offer": {
+            "proposer": 1,
+            "give": {"LUMBER": 1},
+            "receive": {"ORE": 1},
+        },
+    }
+
+
+def test_serialize_trail_entry_includes_trade_offer_for_reject_trade() -> None:
+    offer = TradeOffer(proposer=1, give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    entry = TrailEntry(player_id=2, action=RejectTrade(), trade_offer=offer)
+    result = serialize_trail(entries=[entry])[0]
+    assert result["trade_offer"]["proposer"] == 1
+
+
+def test_serialize_trail_entry_omits_trade_offer_for_unrelated_kinds() -> None:
+    entry = TrailEntry(player_id=0, action=PlaceSettlement(vertex_id=1))
+    result = serialize_trail(entries=[entry])[0]
+    assert "trade_offer" not in result
 
 
 def test_serialize_trail_redacts_discards_specific_resources() -> None:

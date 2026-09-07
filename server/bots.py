@@ -18,8 +18,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from agents import Agent, HeuristicAgent, RandomAgent, StratifiedRandomAgent
-from engine.actions import Action, RollDice
-from engine.state import acting_player
+from engine.actions import AcceptTrade, Action, RejectTrade, RollDice
+from engine.board import Resource
+from engine.game import CatanGame
+from engine.state import GameState, TradeOffer, acting_player
 
 if TYPE_CHECKING:
     from .sessions import GameSession
@@ -63,17 +65,84 @@ class TrailEntry:
     that triggered them) -- everything ``server/serialize.py``'s
     ``serialize_trail`` needs to describe it publicly.
 
-    ``dice_roll`` is only ever set when ``action`` is a ``RollDice`` --
-    ``RollDice`` itself carries no fields, so the actual roll is otherwise
-    invisible from the action alone; it's captured from ``state.dice_roll``
-    at the moment this specific action was applied (not at the end of a
-    whole bot-turn batch), so multiple bot rolls within one batch each keep
-    their own correct value.
+    ``dice_roll`` and ``production`` are only ever set when ``action`` is a
+    ``RollDice`` -- ``RollDice`` itself carries no fields, so neither the
+    actual roll nor who gained what from it is otherwise visible from the
+    action alone. Both are captured at the moment this specific action was
+    applied (not at the end of a whole bot-turn batch), so multiple bot
+    rolls within one batch each keep their own correct values. Exposing
+    ``production`` isn't a new redaction concern: who gains which resources
+    from a roll is fully determined by public information already (the
+    board, everyone's settlements/cities) -- any player at the table could
+    compute it themselves, same as the dice roll itself.
+
+    ``trade_offer`` is only ever set when ``action`` is ``AcceptTrade`` or
+    ``RejectTrade`` -- neither carries fields either, so the deal (or
+    rejected offer) being responded to would otherwise be invisible. Also
+    not a new redaction concern: a domestic trade offer is already public
+    once proposed (``player_view``'s own docstring).
     """
 
     player_id: int
     action: Action
     dice_roll: tuple[int, int] | None = None
+    production: dict[int, dict[Resource, int]] | None = None
+    trade_offer: TradeOffer | None = None
+
+
+def _production_diff(
+    resources_before: dict[int, dict[Resource, int]], state: GameState
+) -> dict[int, dict[Resource, int]]:
+    """Per-player resource gains from a just-applied ``RollDice``, found by
+    diffing hands before/after -- ``engine.game``'s ``_produce`` computes
+    this internally but doesn't return it, so this reconstructs it from the
+    outside rather than requiring an ``engine/`` change.
+    """
+    result: dict[int, dict[Resource, int]] = {}
+    for player in state.players:
+        before = resources_before[player.player_id]
+        gained = {
+            r: player.resources[r] - before.get(r, 0)
+            for r in Resource
+            if player.resources[r] - before.get(r, 0) > 0
+        }
+        if gained:
+            result[player.player_id] = gained
+    return result
+
+
+def apply_and_record(
+    state: GameState, game: CatanGame, actor: int, action: Action
+) -> TrailEntry:
+    """Apply ``action`` to ``state`` and return the ``TrailEntry`` describing
+    it -- shared by ``step_bots`` (for bot actions) and ``server/app.py``'s
+    ``post_action`` (for the human's own action), so the two never diverge
+    on how ``dice_roll``/``production``/``trade_offer`` get captured.
+    """
+    resources_before = (
+        {p.player_id: dict(p.resources) for p in state.players}
+        if isinstance(action, RollDice)
+        else None
+    )
+    # AcceptTrade/RejectTrade both clear (or partially clear) state.trade_offer
+    # as a side effect -- snapshot it beforehand so the caller can still see
+    # what deal was being responded to.
+    trade_offer_before = (
+        state.trade_offer if isinstance(action, AcceptTrade | RejectTrade) else None
+    )
+    game.apply_action(state, action)
+    if resources_before is not None:
+        return TrailEntry(
+            player_id=actor,
+            action=action,
+            dice_roll=state.dice_roll,
+            production=_production_diff(resources_before, state),
+        )
+    if trade_offer_before is not None:
+        return TrailEntry(
+            player_id=actor, action=action, trade_offer=trade_offer_before
+        )
+    return TrailEntry(player_id=actor, action=action)
 
 
 def step_bots(session: GameSession) -> list[TrailEntry]:
@@ -97,12 +166,5 @@ def step_bots(session: GameSession) -> list[TrailEntry]:
             return trail
         legal = game.legal_actions(state)
         action = agent.choose_action(state, legal, actor)
-        game.apply_action(state, action)
-        trail.append(
-            TrailEntry(
-                player_id=actor,
-                action=action,
-                dice_roll=state.dice_roll if isinstance(action, RollDice) else None,
-            )
-        )
+        trail.append(apply_and_record(state, game, actor, action))
     return trail

@@ -53,6 +53,39 @@ and built.
   the *text log* is paced. A fuller "animate the board turn by turn"
   version (settlements fading in, a dice-roll animation, etc.) remains a
   distinct, larger follow-up if ever wanted, not something this delivers.
+  **Follow-on, same session:** each `RollDice` `TrailEntry` also carries
+  `production: dict[int, dict[Resource, int]] | None` — who gained which
+  resources from that roll. No `engine/` change needed here either:
+  `engine.game._produce` computes and applies the gain but never returns
+  it, so `server/bots.py`'s new `apply_and_record` (now shared by
+  `step_bots` and `post_action`, replacing each building its own
+  `TrailEntry` separately) reconstructs it by diffing every player's hand
+  immediately before/after applying the roll. Not a new redaction concern:
+  who gains what from a roll is fully determined by public information
+  already (the board, everyone's settlements/cities) — any player at the
+  table could work it out themselves, same as the roll itself. Rendered
+  inline in `ActivityLog`'s line for that roll via `actionLog.ts`'s new
+  `describeProduction` ("Player 1 +1 LUMBER, +1 GRAIN; Player 2 +1 GRAIN"),
+  omitted entirely when a roll produced nothing (a 7, or no settled hex
+  matches the number).
+  **Second follow-on, same session — deal logging + reject collapsing:**
+  `TrailEntry` also gained `trade_offer: TradeOffer | None`, set only for
+  `AcceptTrade`/`RejectTrade` (neither carries fields of its own either, so
+  the deal/offer being responded to would otherwise be invisible) —
+  snapshotted from `state.trade_offer` in `apply_and_record` immediately
+  before it applies the response and the engine clears it. Not a new
+  redaction concern: a domestic trade offer is already public once
+  proposed. `serialize_trail_entry` reuses a new shared
+  `_serialize_trade_offer` helper (factored out of `player_view`'s
+  existing inline dict, so the two shapes can't drift). `ActivityLog`'s
+  `AcceptTrade` line now reads as an actual deal ("Player 2 traded with
+  Player 0: gave 1 BRICK for 1 WOOL") instead of just "accepted the
+  trade". Separately, `actionLog.ts`'s new `groupActivityEntries` collapses
+  a run of consecutive `RejectTrade` entries that killed a trade outright
+  (nobody accepted) into one "Everyone rejected the trade" line — a purely
+  frontend, display-only grouping over the already-complete trail, no
+  entries dropped; a run that's instead followed by an eventual
+  `AcceptTrade` is left as individual lines, since someone did say yes.
 - ~~**Resume a game by ID.**~~ Done — `GameSetup.svelte` has a "Resume a
   game" section (game id + optional viewer seat, prefilled from
   `localStorage` via `web/src/lib/lastGame.ts`); `App.svelte`'s
@@ -65,9 +98,51 @@ and built.
   this browser has created/resumed at least one game before. A dedicated
   `GET /api/geometry` endpoint would remove that restriction, but that's a
   `server/` change, out of scope for this frontend-only pass.
+- **A build-costs reference table.** Came up during play — no on-screen
+  reminder of what a settlement/city/road/dev card actually costs, so it's
+  guesswork or an alt-tab to the rulebook. The real numbers already live
+  as named constants in `engine/game.py` (re-exported from
+  `engine/__init__.py`): `ROAD_COST` (1 BRICK, 1 LUMBER), `SETTLEMENT_COST`
+  (1 BRICK, 1 LUMBER, 1 WOOL, 1 GRAIN), `CITY_COST` (2 GRAIN, 3 ORE),
+  `DEV_CARD_COST` (1 ORE, 1 WOOL, 1 GRAIN) — frontend-only, hot-reload:
+  either a small static reference table/panel (reusing `RESOURCE_ICON`
+  glyphs) with these four rows hand-copied into a `web/src/lib/`
+  constant, or, to avoid a second source of truth that could drift from
+  `engine/game.py` if a cost ever changes, a tiny dedicated
+  `GET /api/build_costs`-style endpoint (a `server/` change, needing
+  go-ahead + restart) that serializes the real constants directly. Worth
+  deciding which before starting: hand-copied numbers are simpler and
+  ship immediately, but they're a second source of truth for values that
+  currently only exist once, in `engine/game.py`.
 
 ## Engine
 
+- **Bug: hidden Victory Point cards don't trigger an automatic win.** Real
+  rule: the instant a player's *true* total (public score plus any VP dev
+  cards still sitting in hand, revealed or not) reaches 10, they win
+  immediately and automatically, mid-turn, the moment whatever action
+  crossed the threshold happens (e.g. stealing longest road via a road
+  build) — revealing is just showing proof, not a distinct game action
+  with its own timing. This engine doesn't do that: `_check_win`
+  (`engine/game.py:219`) is called after every state-changing action
+  (including `_build_road`, which is what flips `longest_road_owner`), but
+  it only ever calls `victory_points()`, which counts
+  `player.revealed_vp_cards` — never the raw VP cards still in `dev_hand`.
+  So a player sitting on 9 public points plus 1 hidden VP card does *not*
+  auto-win; they must separately submit `PlayVictoryPoint` before
+  `_check_win` recognizes it. (One thing that isn't as bad as it could be:
+  `PlayVictoryPoint` is legal in both ROLL and MAIN phase, so this can
+  still be done in the very same turn right after the qualifying action —
+  it's not "wait until next turn," just "one more explicit action," which
+  is still wrong per the real rule but a smaller gap than it first looks.)
+  Raised during play. Likely fix shape: have `_check_win` count a player's
+  full VP total (public score plus every VP card in `dev_hand`, revealed
+  or not) rather than only `revealed_vp_cards` — but check
+  `server/serialize.py`'s redaction story stays correct doing this (an
+  opponent's hand should still look redacted right up until the game
+  actually ends, not leak "they secretly had a VP card" one instant before
+  the reveal). `engine/` + likely `server/serialize.py` change — needs
+  go-ahead and a `:8000` restart, not attempted here.
 - **Counter-trades / free trade negotiation.** README decision 5
   deliberately scoped domestic trade down to propose → each other player
   accepts or rejects in turn, first accept wins, no counter-offers — "a
@@ -92,6 +167,57 @@ and built.
     with what, and every agent above updated to at least reject it
     sanely. Worth deciding the bounded-vs-open-ended shape explicitly
     before writing any of it, since they imply different state shapes.
+
+## Server / infrastructure
+
+- **Sessions don't survive a backend restart.** `server/sessions.py` keeps
+  every game in an in-memory `dict[str, GameSession]` on the one running
+  `uvicorn` process — restarting it (needed for any `server/`/`engine/`
+  code change) loses every game in progress, "Resume a game by ID"
+  included (that feature only reconnects the *browser* to a game still
+  running server-side; it has nothing to reconnect to once the process
+  restarts). Raised during play.
+  - **Games are pickle-friendly essentially for free.** `engine.state.GameState`
+    (`board`, `players`, `dev_deck`, `bank`, `trade_offer`, etc., plus
+    `rng: random.Random`) is plain dataclasses/dicts/lists/Enums — no
+    exotic types blocking a round trip, and `random.Random` pickles its
+    *exact* stream position, not just a reseed. `CatanGame` itself is
+    stateless (`num_players` only), so it doesn't need persisting, just
+    reconstructing fresh. `server/serialize.py` is **not** reusable for
+    this — it's a one-way, lossy, per-viewer-*redacted* JSON projection
+    built for the browser, never meant to round-trip back into a live game.
+  - **The real catch:** pickle round-trips are tied to the *exact* class
+    shape at dump time. If the very code change that triggered the
+    restart reshapes `engine/state.py`'s dataclasses (add/remove/rename a
+    field), the old pickle can fail to load, or worse, silently load into
+    a stale-shaped object missing the new field. So this would reliably
+    survive restarts for changes that don't reshape engine state (most
+    `server/app.py` routes, `web/` changes, non-structural engine bug
+    fixes) but not, e.g., the hidden-VP win-condition fix above (which
+    does reshape state). Also needs a decision on *when* to persist
+    (every action = safest, extra I/O per request; only on a graceful
+    shutdown hook = simpler, loses the game on a crash/kill) and whether
+    bot `Agent` RNG streams are worth persisting too (skippable — losing
+    them just means bots reseed fresh post-restart, not a correctness
+    issue, only perfect reproducibility). Not attempted here; would need
+    a real plan first given the fragility, same as other backend-touching
+    items.
+  - **Bigger picture, if this ever goes properly online (multiplayer over
+    the internet, not just local dev):** pickle-to-disk stops being the
+    right answer entirely, for two separate reasons, not one. (1) A
+    single in-memory dict only works because there's one process — real
+    online play needs multiple app instances behind a load balancer, so
+    game state has to live somewhere shared (a DB, Redis, etc.), not
+    process memory. (2) Pickle's fragility becomes a production risk
+    rather than a dev inconvenience: locally, "pickled by yesterday's
+    code" is a rare, self-inflicted event; in a real deployment, rows
+    written across months of deploys can't all be assumed to match the
+    current code's exact class shapes. A genuine online version would
+    need `server/sessions.py`'s in-memory dict replaced by a real
+    datastore with a *versioned/migratable* schema (JSON with a schema
+    version field, or similar) — not raw Python pickle. That's a
+    materially bigger rewrite than the local-restart pickle idea above,
+    not an extension of it.
 
 ## Known gaps from the GUI build (`docs/plans/gui-web-frontend.md`)
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { TrailEntry } from "./api";
-  import { describeTrailEntry } from "./actionLog";
+  import { groupActivityEntries } from "./actionLog";
   import { PLAYER_COLOR } from "./playerColor";
 
   interface Props {
@@ -11,18 +11,36 @@
   }
 
   const { entries }: Props = $props();
+
+  // A run of consecutive RejectTrade entries that killed the trade outright
+  // collapses into one "everyone rejected" line -- see groupActivityEntries.
+  const lines = $derived(groupActivityEntries(entries));
+
+  let listEl: HTMLUListElement | undefined = $state();
+
+  // Scroll to the newest (bottom) entry whenever the list changes -- entries
+  // is a new array each time App.svelte reveals one (see pushToLog), so this
+  // re-runs on every reveal, not just once.
+  $effect(() => {
+    entries;
+    listEl?.scrollTo({ top: listEl.scrollHeight });
+  });
 </script>
 
 <div class="activity-log">
   <p class="activity-log-label">Recent activity</p>
-  {#if entries.length === 0}
+  {#if lines.length === 0}
     <p class="empty">Nothing yet.</p>
   {:else}
-    <ul>
-      {#each entries as entry, i (i)}
+    <ul bind:this={listEl}>
+      {#each lines as line (line.key)}
         <li>
-          <span class="swatch" style="background: {PLAYER_COLOR[entry.player_id]}"></span>
-          {describeTrailEntry(entry)}
+          <span class="swatches">
+            {#each line.playerIds as playerId (playerId)}
+              <span class="swatch" style="background: {PLAYER_COLOR[playerId]}"></span>
+            {/each}
+          </span>
+          {line.text}
         </li>
       {/each}
     </ul>
@@ -64,6 +82,12 @@
     align-items: center;
     gap: 0.4rem;
     font-size: 0.9rem;
+  }
+
+  .swatches {
+    flex: none;
+    display: inline-flex;
+    gap: 0.15rem;
   }
 
   .swatch {

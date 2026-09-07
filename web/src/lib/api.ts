@@ -130,12 +130,19 @@ export interface GameStateView {
 // (the human's own, or a bot's, in application order) -- player_id + kind +
 // that kind's own fields, loosely typed like LegalAction since the field
 // shape varies per kind. Unlike LegalAction, never has `index` (a trail
-// entry isn't a selectable option) and `dice_roll` is present only on a
-// RollDice entry (RollDice itself carries no fields of its own).
+// entry isn't a selectable option) and `dice_roll`/`production` are present
+// only on a RollDice entry (RollDice itself carries no fields of its own).
+// `production`'s keys are player_id as a *string* -- JSON object keys
+// always are -- and it's present only when it's non-empty (a 7, or a roll
+// matching no settled hex, produces nothing). `trade_offer` is present only
+// on AcceptTrade/RejectTrade -- neither carries fields either, so the deal
+// (or rejected offer) being responded to would otherwise be invisible.
 export interface TrailEntry {
   player_id: number;
   kind: string;
   dice_roll?: [number, number];
+  production?: Record<string, Record<string, number>>;
+  trade_offer?: TradeOfferView;
   [field: string]: unknown;
 }
 

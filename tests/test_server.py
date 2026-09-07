@@ -230,6 +230,35 @@ def test_post_action_trail_dice_roll_is_captured() -> None:
     assert 1 <= d1 <= 6 and 1 <= d2 <= 6
 
 
+def test_post_action_trail_roll_dice_can_include_production() -> None:
+    body = _create_game(3, ["human", "heuristic", "heuristic"], seed=1)
+    game_id = body["game_id"]
+
+    found_production = False
+    for _ in range(300):
+        state = client.get(f"/api/games/{game_id}/state").json()
+        if state["phase"] == "GAME_OVER":
+            break
+        legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+        if not legal:
+            continue
+        response = client.post(f"/api/games/{game_id}/action", json={"index": 0})
+        assert response.status_code == 200, response.text
+        for entry in response.json()["action_trail"]:
+            if entry["kind"] != "RollDice":
+                continue
+            if "production" not in entry:
+                continue  # a real roll that happened to produce nothing
+            found_production = True
+            for player_id, gains in entry["production"].items():
+                assert int(player_id) in (0, 1, 2)
+                assert gains, "an entry present in production must be non-empty"
+                for resource, amount in gains.items():
+                    assert resource in ("LUMBER", "WOOL", "GRAIN", "BRICK", "ORE")
+                    assert amount > 0
+    assert found_production, "never observed a RollDice entry with production"
+
+
 def test_post_action_out_of_range_index_returns_400() -> None:
     body = _create_game(3, ["human", "human", "human"], seed=1)
     response = client.post(
@@ -295,6 +324,66 @@ def test_post_action_propose_trade_with_a_bundle_succeeds() -> None:
     new_state = response.json()
     assert new_state["trade_offer"] == {
         "proposer": actor,
+        "give": {"LUMBER": 2},
+        "receive": {"ORE": 1},
+    }
+
+
+def test_post_action_trail_reject_trade_includes_the_offer() -> None:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    session = get_session(game_id)
+    session.state.phase = Phase.MAIN
+    proposer = session.state.current_player
+    session.state.players[proposer].resources[Resource.LUMBER] = 2
+
+    legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    trade_index = next(a["index"] for a in legal if a["kind"] == "ProposeTrade")
+    client.post(
+        f"/api/games/{game_id}/action",
+        json={"index": trade_index, "give": {"LUMBER": 2}, "receive": {"ORE": 1}},
+    )
+
+    responder_legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    reject_index = next(
+        a["index"] for a in responder_legal if a["kind"] == "RejectTrade"
+    )
+    response = client.post(f"/api/games/{game_id}/action", json={"index": reject_index})
+    reject_entry = response.json()["action_trail"][0]
+    assert reject_entry["kind"] == "RejectTrade"
+    assert reject_entry["trade_offer"] == {
+        "proposer": proposer,
+        "give": {"LUMBER": 2},
+        "receive": {"ORE": 1},
+    }
+
+
+def test_post_action_trail_accept_trade_includes_the_offer() -> None:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    session = get_session(game_id)
+    session.state.phase = Phase.MAIN
+    proposer = session.state.current_player
+    session.state.players[proposer].resources[Resource.LUMBER] = 2
+
+    legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    trade_index = next(a["index"] for a in legal if a["kind"] == "ProposeTrade")
+    client.post(
+        f"/api/games/{game_id}/action",
+        json={"index": trade_index, "give": {"LUMBER": 2}, "receive": {"ORE": 1}},
+    )
+
+    responder = session.state.trade_responders[0]
+    session.state.players[responder].resources[Resource.ORE] = 1
+    responder_legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    accept_index = next(
+        a["index"] for a in responder_legal if a["kind"] == "AcceptTrade"
+    )
+    response = client.post(f"/api/games/{game_id}/action", json={"index": accept_index})
+    accept_entry = response.json()["action_trail"][0]
+    assert accept_entry["kind"] == "AcceptTrade"
+    assert accept_entry["trade_offer"] == {
+        "proposer": proposer,
         "give": {"LUMBER": 2},
         "receive": {"ORE": 1},
     }

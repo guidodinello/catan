@@ -21,7 +21,8 @@ export function describeTrailEntry(entry: TrailEntry): string {
     case "RollDice": {
       if (!entry.dice_roll) return `${p} rolled the dice`;
       const [d1, d2] = entry.dice_roll;
-      return `${p} rolled ${d1} + ${d2} = ${d1 + d2}`;
+      const base = `${p} rolled ${d1} + ${d2} = ${d1 + d2}`;
+      return entry.production ? `${base} (${describeProduction(entry.production)})` : base;
     }
     case "Discard":
       // resources deliberately redacted server-side -- see
@@ -49,8 +50,14 @@ export function describeTrailEntry(entry: TrailEntry): string {
       return `${p} traded at a port`;
     case "ProposeTrade":
       return `${p} proposed a trade`;
-    case "AcceptTrade":
-      return `${p} accepted the trade`;
+    case "AcceptTrade": {
+      if (!entry.trade_offer) return `${p} accepted the trade`;
+      const { proposer, give, receive } = entry.trade_offer;
+      // give/receive are from the *proposer*'s perspective (same convention
+      // as TradeOfferBanner.svelte) -- the responder (p) is who actually
+      // gave `receive` and got `give` in return.
+      return `${p} traded with Player ${proposer}: gave ${formatBundle(receive)} for ${formatBundle(give)}`;
+    }
     case "RejectTrade":
       return `${p} rejected the trade`;
     case "EndTurn":
@@ -62,4 +69,73 @@ export function describeTrailEntry(entry: TrailEntry): string {
 
 export function recentRolls(entries: TrailEntry[], n = 5): TrailEntry[] {
   return entries.filter((e) => e.kind === "RollDice").slice(-n);
+}
+
+// "1 WOOL, 2 GRAIN" -- a resource bundle (TradeOfferView's give/receive,
+// same shape everywhere a bundle appears on the wire) as a short line.
+function formatBundle(bundle: Record<string, number>): string {
+  return Object.entries(bundle)
+    .filter(([, count]) => count > 0)
+    .map(([resource, count]) => `${count} ${resource}`)
+    .join(", ");
+}
+
+export interface ActivityLine {
+  key: string;
+  text: string;
+  playerIds: number[];
+}
+
+// Collapses a run of consecutive RejectTrade entries that ends the trade
+// outright (nobody accepted) into one "everyone rejected" line -- a run
+// that's instead followed by an AcceptTrade is left as individual lines,
+// since someone did eventually say yes and each rejection leading up to
+// that is more informative on its own. A run of exactly one RejectTrade
+// (nothing to collapse) is also left alone. This is purely a display
+// concern over an already-complete, correct trail -- no entries are
+// dropped, only merged for readability.
+export function groupActivityEntries(entries: TrailEntry[]): ActivityLine[] {
+  const lines: ActivityLine[] = [];
+  let i = 0;
+  let key = 0;
+  while (i < entries.length) {
+    if (entries[i].kind !== "RejectTrade") {
+      lines.push({ key: `${key++}`, text: describeTrailEntry(entries[i]), playerIds: [entries[i].player_id] });
+      i++;
+      continue;
+    }
+    const runStart = i;
+    while (i < entries.length && entries[i].kind === "RejectTrade") i++;
+    const run = entries.slice(runStart, i);
+    const followedByAccept = i < entries.length && entries[i].kind === "AcceptTrade";
+    if (run.length > 1 && !followedByAccept) {
+      lines.push({
+        key: `${key++}`,
+        text: `Everyone rejected the trade (${run.map((e) => `Player ${e.player_id}`).join(", ")})`,
+        playerIds: run.map((e) => e.player_id),
+      });
+    } else {
+      for (const entry of run) {
+        lines.push({ key: `${key++}`, text: describeTrailEntry(entry), playerIds: [entry.player_id] });
+      }
+    }
+  }
+  return lines;
+}
+
+// "Player 0 +1 WOOL, +1 GRAIN; Player 2 +1 GRAIN" -- who gained what from a
+// roll (server/serialize.py's serialize_trail_entry's `production`, itself
+// derived from server/bots.py's apply_and_record diffing hands before/
+// after). Not new redaction exposure: this is fully derivable by any
+// player from public information (the board, everyone's buildings), same
+// as the dice roll itself.
+function describeProduction(production: Record<string, Record<string, number>>): string {
+  return Object.entries(production)
+    .map(([playerId, gains]) => {
+      const gainsText = Object.entries(gains)
+        .map(([resource, amount]) => `+${amount} ${resource}`)
+        .join(", ");
+      return `Player ${playerId} ${gainsText}`;
+    })
+    .join("; ");
 }

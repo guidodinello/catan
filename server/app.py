@@ -15,11 +15,11 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from engine.actions import ProposeTrade, RollDice
+from engine.actions import ProposeTrade
 from engine.board import Resource
 from engine.game import IllegalActionError
 from engine.state import acting_player
-from server.bots import SeatKind, TrailEntry, build_agents, step_bots
+from server.bots import SeatKind, apply_and_record, build_agents, step_bots
 from server.serialize import (
     player_view,
     serialize_geometry,
@@ -157,21 +157,19 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
             receive=_resource_bundle_from_wire(request.receive),
         )
 
+    # The human's own action belongs in the trail too, not just the bot
+    # actions that follow it -- otherwise a human's own dice rolls (and the
+    # resulting production) could never appear in a client-side "recent
+    # rolls" view built from this trail, only bots'. Captured after
+    # ProposeTrade's sentinel was already resolved above, so this reflects
+    # the real give/receive bundle. apply_and_record is the same helper
+    # step_bots uses for bot actions, so dice_roll/production are captured
+    # identically either way.
     try:
-        game.apply_action(state, action)
+        human_entry = apply_and_record(state, game, actor, action)
     except IllegalActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    # The human's own action belongs in the trail too, not just the bot
-    # actions that follow it -- otherwise a human's own dice rolls could
-    # never appear in a client-side "recent rolls" view built from this
-    # trail, only bots'. Captured after ProposeTrade's sentinel was already
-    # resolved above, so this reflects the real give/receive bundle.
-    human_entry = TrailEntry(
-        player_id=actor,
-        action=action,
-        dice_roll=state.dice_roll if isinstance(action, RollDice) else None,
-    )
     trail = [human_entry, *step_bots(session)]
     response = player_view(state, viewer=actor)
     response["action_trail"] = serialize_trail(trail)

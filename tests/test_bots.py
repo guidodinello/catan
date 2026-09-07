@@ -13,9 +13,11 @@ import random
 import pytest
 
 from agents import HeuristicAgent, RandomAgent, StratifiedRandomAgent
-from engine.actions import RollDice
-from engine.state import acting_player
-from server.bots import build_agent, build_agents, step_bots
+from engine.actions import AcceptTrade, ProposeTrade, RejectTrade, RollDice
+from engine.board import Resource
+from engine.game import CatanGame
+from engine.state import GameState, Phase, acting_player
+from server.bots import apply_and_record, build_agent, build_agents, step_bots
 from server.sessions import create_session
 
 
@@ -109,3 +111,97 @@ def test_step_bots_trail_dice_roll_is_set_only_on_roll_dice_entries() -> None:
             assert 1 <= entry.dice_roll[1] <= 6
         else:
             assert entry.dice_roll is None
+
+
+def test_step_bots_trail_production_is_set_only_on_roll_dice_entries() -> None:
+    agents = build_agents(["heuristic", "heuristic", "heuristic"], driver_seed=1)
+    _, session = create_session(3, agents, seed=1)
+    trail = step_bots(session)
+    for entry in trail:
+        if not isinstance(entry.action, RollDice):
+            assert entry.production is None
+
+
+def test_apply_and_record_production_matches_the_actual_resource_gain() -> None:
+    # Drive a real game to the ROLL phase (deterministic given seed=1 and
+    # always picking legal_actions()[0] through setup), then independently
+    # snapshot resources before/after applying RollDice via apply_and_record
+    # -- and compare that hand-computed diff against what it reports, as a
+    # check on apply_and_record/_production_diff's own logic, not a re-test
+    # of engine.game._produce itself.
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    while state.phase != Phase.ROLL:
+        legal = game.legal_actions(state)
+        game.apply_action(state, legal[0])
+
+    actor = acting_player(state)
+    before = {p.player_id: dict(p.resources) for p in state.players}
+    entry = apply_and_record(state, game, actor, RollDice())
+    assert entry.dice_roll == state.dice_roll
+
+    after = {p.player_id: dict(p.resources) for p in state.players}
+    expected_production = {
+        pid: {
+            r: after[pid][r] - before[pid].get(r, 0)
+            for r in Resource
+            if after[pid][r] - before[pid].get(r, 0) > 0
+        }
+        for pid in before
+    }
+    expected_production = {pid: g for pid, g in expected_production.items() if g}
+    assert entry.production == expected_production
+
+
+def _drive_to_main_with_a_pending_trade(
+    proposer_resources: dict[Resource, int],
+) -> tuple[CatanGame, GameState, int, int]:
+    """A real game state in AWAIT_TRADE_RESPONSE, awaiting the *first*
+    responder -- shared setup for the AcceptTrade/RejectTrade tests below.
+    """
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    while state.phase != Phase.MAIN:
+        legal = game.legal_actions(state)
+        game.apply_action(state, legal[0])
+    proposer = state.current_player
+    state.players[proposer].resources.update(proposer_resources)
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    assert state.phase == Phase.AWAIT_TRADE_RESPONSE
+    responder = state.trade_responders[0]
+    return game, state, proposer, responder
+
+
+def test_apply_and_record_accept_trade_captures_the_resolved_offer() -> None:
+    game, state, proposer, responder = _drive_to_main_with_a_pending_trade(
+        {Resource.LUMBER: 1}
+    )
+    state.players[responder].resources[Resource.ORE] = 1
+
+    entry = apply_and_record(state, game, responder, AcceptTrade())
+    assert state.trade_offer is None  # confirms it really was cleared by apply
+    assert entry.trade_offer is not None
+    assert entry.trade_offer.proposer == proposer
+    assert entry.trade_offer.give == {Resource.LUMBER: 1}
+    assert entry.trade_offer.receive == {Resource.ORE: 1}
+
+
+def test_apply_and_record_reject_trade_captures_the_offer_too() -> None:
+    game, state, proposer, responder = _drive_to_main_with_a_pending_trade(
+        {Resource.LUMBER: 1}
+    )
+    entry = apply_and_record(state, game, responder, RejectTrade())
+    assert entry.trade_offer is not None
+    assert entry.trade_offer.proposer == proposer
+    assert entry.trade_offer.give == {Resource.LUMBER: 1}
+
+
+def test_apply_and_record_trade_offer_is_none_for_unrelated_actions() -> None:
+    agents = build_agents(["heuristic", "heuristic", "heuristic"], driver_seed=1)
+    _, session = create_session(3, agents, seed=1)
+    trail = step_bots(session)
+    for entry in trail:
+        if not isinstance(entry.action, AcceptTrade | RejectTrade):
+            assert entry.trade_offer is None
