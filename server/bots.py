@@ -14,9 +14,11 @@ arm to be fair against, so ``seat_kinds`` is just per-seat ground truth.
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from agents import Agent, HeuristicAgent, RandomAgent, StratifiedRandomAgent
+from engine.actions import Action, RollDice
 from engine.state import acting_player
 
 if TYPE_CHECKING:
@@ -55,20 +57,52 @@ def build_agents(seat_kinds: list[SeatKind], driver_seed: int) -> list[Agent | N
     return agents
 
 
-def step_bots(session: GameSession) -> None:
+@dataclass(frozen=True, slots=True)
+class TrailEntry:
+    """One action applied while advancing bot turns (or the human action
+    that triggered them) -- everything ``server/serialize.py``'s
+    ``serialize_trail`` needs to describe it publicly.
+
+    ``dice_roll`` is only ever set when ``action`` is a ``RollDice`` --
+    ``RollDice`` itself carries no fields, so the actual roll is otherwise
+    invisible from the action alone; it's captured from ``state.dice_roll``
+    at the moment this specific action was applied (not at the end of a
+    whole bot-turn batch), so multiple bot rolls within one batch each keep
+    their own correct value.
+    """
+
+    player_id: int
+    action: Action
+    dice_roll: tuple[int, int] | None = None
+
+
+def step_bots(session: GameSession) -> list[TrailEntry]:
     """Advance ``session.state`` through consecutive bot turns, in place.
 
     Stops the moment ``acting_player`` is a human seat (``None`` in
     ``session.agents``) or the game ends -- the server's own request/
-    response loop takes over from there.
+    response loop takes over from there. Returns every action applied along
+    the way, in order, for ``server/app.py`` to fold into the response's
+    action trail (see ``docs/plans`` discussion -- this only ever captures
+    *bot* actions; the human action that triggered this call is the
+    caller's own responsibility to record).
     """
     game = session.game
     state = session.state
+    trail: list[TrailEntry] = []
     while not game.is_terminal(state):
         actor = acting_player(state)
         agent = session.agents[actor]
         if agent is None:
-            return
+            return trail
         legal = game.legal_actions(state)
         action = agent.choose_action(state, legal, actor)
         game.apply_action(state, action)
+        trail.append(
+            TrailEntry(
+                player_id=actor,
+                action=action,
+                dice_roll=state.dice_roll if isinstance(action, RollDice) else None,
+            )
+        )
+    return trail

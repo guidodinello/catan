@@ -13,6 +13,7 @@ import random
 import pytest
 
 from agents import HeuristicAgent, RandomAgent, StratifiedRandomAgent
+from engine.actions import RollDice
 from engine.state import acting_player
 from server.bots import build_agent, build_agents, step_bots
 from server.sessions import create_session
@@ -77,3 +78,34 @@ def test_step_bots_runs_an_all_bot_game_to_completion() -> None:
     step_bots(session)
     assert session.game.is_terminal(session.state)
     assert session.game.winner(session.state) is not None
+
+
+def test_step_bots_returns_an_empty_trail_when_the_acting_seat_is_human() -> None:
+    _, session = create_session(3, [None, None, None], seed=1)
+    assert step_bots(session) == []
+
+
+def test_step_bots_trail_has_one_entry_per_applied_action_all_from_bot_seats() -> None:
+    # Bot seat first, so it's the acting seat from the very start of setup --
+    # human at seat 0 would leave step_bots nothing to do before returning.
+    agents = build_agents(["heuristic", "human", "human"], driver_seed=1)
+    _, session = create_session(3, agents, seed=1)
+    trail = step_bots(session)
+    assert len(trail) > 0
+    for entry in trail:
+        assert session.agents[entry.player_id] is not None  # never a human seat
+
+
+def test_step_bots_trail_dice_roll_is_set_only_on_roll_dice_entries() -> None:
+    agents = build_agents(["heuristic", "heuristic", "heuristic"], driver_seed=1)
+    _, session = create_session(3, agents, seed=1)
+    trail = step_bots(session)
+    roll_entries = [e for e in trail if isinstance(e.action, RollDice)]
+    assert roll_entries  # a full game has at least one roll
+    for entry in trail:
+        if isinstance(entry.action, RollDice):
+            assert entry.dice_roll is not None
+            assert 1 <= entry.dice_roll[0] <= 6
+            assert 1 <= entry.dice_roll[1] <= 6
+        else:
+            assert entry.dice_roll is None

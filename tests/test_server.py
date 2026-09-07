@@ -70,6 +70,20 @@ def test_create_game_with_a_leading_bot_seat_auto_steps_it() -> None:
     assert body["state"]["winner"] is not None
 
 
+def test_create_game_action_trail_is_empty_when_seat_0_is_human() -> None:
+    body = _create_game(3, ["human", "heuristic", "heuristic"], seed=1)
+    assert body["action_trail"] == []
+
+
+def test_create_game_with_a_leading_bot_seat_returns_a_non_empty_trail() -> None:
+    body = _create_game(3, ["heuristic", "human", "human"], seed=1)
+    assert len(body["action_trail"]) > 0
+    for entry in body["action_trail"]:
+        assert "player_id" in entry
+        assert "kind" in entry
+        assert "index" not in entry  # trail entries aren't legal-action selectors
+
+
 def test_get_state_redacts_non_viewer_hands() -> None:
     body = _create_game(4, ["human", "human", "human", "human"], seed=1)
     game_id = body["game_id"]
@@ -137,6 +151,83 @@ def test_post_action_applies_it_and_advances_the_state() -> None:
     assert response.status_code == 200
     new_state = response.json()
     assert placed_vertex in new_state["players"][actor]["settlement_vertices"]
+
+
+def test_post_action_trail_includes_the_humans_own_action_first() -> None:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    actor = body["state"]["acting_player"]
+    legal = client.get(
+        f"/api/games/{game_id}/legal_actions", params={"viewer": actor}
+    ).json()
+    placed_vertex = legal[0]["vertex_id"]
+
+    response = client.post(f"/api/games/{game_id}/action", json={"index": 0})
+    trail = response.json()["action_trail"]
+    assert trail[0] == {
+        "player_id": actor,
+        "kind": "PlaceSettlement",
+        "vertex_id": placed_vertex,
+    }
+
+
+def test_post_action_trail_includes_bot_actions_that_follow() -> None:
+    # A human seat's very first action (a setup placement) doesn't hand off
+    # to any bot yet -- setup visits every seat once each before MAIN. Drive
+    # through both setup rounds so at least one human action is immediately
+    # followed by consecutive bot turns, and check that response's trail.
+    body = _create_game(3, ["human", "heuristic", "heuristic"], seed=1)
+    game_id = body["game_id"]
+
+    trail_kinds_seen: list[str] = []
+    for _ in range(50):
+        state = client.get(f"/api/games/{game_id}/state").json()
+        if state["phase"] not in ("SETUP_SETTLEMENT", "SETUP_ROAD"):
+            break
+        legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+        if not legal:
+            break
+        response = client.post(f"/api/games/{game_id}/action", json={"index": 0})
+        assert response.status_code == 200, response.text
+        trail = response.json()["action_trail"]
+        trail_kinds_seen += [e["kind"] for e in trail]
+        if len(trail) > 1:
+            # Found a response whose trail has more than just the human's
+            # own entry -- i.e. bot actions were folded in too.
+            assert any(e["player_id"] != 0 for e in trail), (
+                f"expected a bot entry in {trail!r}"
+            )
+            return
+    raise AssertionError(
+        f"never saw a multi-entry trail; kinds seen: {trail_kinds_seen!r}"
+    )
+
+
+def test_post_action_trail_dice_roll_is_captured() -> None:
+    body = _create_game(3, ["human", "heuristic", "heuristic"], seed=1)
+    game_id = body["game_id"]
+
+    # Drive through setup (2 rounds x settlement+road) to reach ROLL.
+    for _ in range(20):
+        state = client.get(f"/api/games/{game_id}/state").json()
+        if state["phase"] == "ROLL" and state["acting_player"] == 0:
+            break
+        legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+        if not legal:
+            continue
+        client.post(f"/api/games/{game_id}/action", json={"index": 0})
+    else:
+        raise AssertionError("never reached seat 0's ROLL phase")
+
+    legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    roll_index = next(a["index"] for a in legal if a["kind"] == "RollDice")
+    response = client.post(f"/api/games/{game_id}/action", json={"index": roll_index})
+    trail = response.json()["action_trail"]
+    human_roll = trail[0]
+    assert human_roll["kind"] == "RollDice"
+    assert "dice_roll" in human_roll
+    d1, d2 = human_roll["dice_roll"]
+    assert 1 <= d1 <= 6 and 1 <= d2 <= 6
 
 
 def test_post_action_out_of_range_index_returns_400() -> None:

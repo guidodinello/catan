@@ -15,12 +15,17 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from engine.actions import ProposeTrade
+from engine.actions import ProposeTrade, RollDice
 from engine.board import Resource
 from engine.game import IllegalActionError
 from engine.state import acting_player
-from server.bots import SeatKind, build_agents, step_bots
-from server.serialize import player_view, serialize_geometry, serialize_legal_actions
+from server.bots import SeatKind, TrailEntry, build_agents, step_bots
+from server.serialize import (
+    player_view,
+    serialize_geometry,
+    serialize_legal_actions,
+    serialize_trail,
+)
 from server.sessions import (
     GameSession,
     SessionNotFoundError,
@@ -43,6 +48,7 @@ class CreateGameResponse(BaseModel):
     game_id: str
     geometry: dict[str, Any]
     state: dict[str, Any]
+    action_trail: list[dict[str, Any]]
 
 
 class ActionRequest(BaseModel):
@@ -94,11 +100,12 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    step_bots(session)
+    initial_trail = step_bots(session)
     return CreateGameResponse(
         game_id=game_id,
         geometry=serialize_geometry(),
         state=player_view(session.state, viewer=None),
+        action_trail=serialize_trail(initial_trail),
     )
 
 
@@ -155,8 +162,20 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
     except IllegalActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    step_bots(session)
-    return player_view(state, viewer=actor)
+    # The human's own action belongs in the trail too, not just the bot
+    # actions that follow it -- otherwise a human's own dice rolls could
+    # never appear in a client-side "recent rolls" view built from this
+    # trail, only bots'. Captured after ProposeTrade's sentinel was already
+    # resolved above, so this reflects the real give/receive bundle.
+    human_entry = TrailEntry(
+        player_id=actor,
+        action=action,
+        dice_roll=state.dice_roll if isinstance(action, RollDice) else None,
+    )
+    trail = [human_entry, *step_bots(session)]
+    response = player_view(state, viewer=actor)
+    response["action_trail"] = serialize_trail(trail)
+    return response
 
 
 @app.delete("/api/games/{game_id}")

@@ -12,13 +12,23 @@ empty-give/receive affordance) with ``open_ended: True``.
 
 import json
 
-from engine.board import GEOMETRY, NUM_EDGES, NUM_LAND_HEXES, NUM_PORTS, NUM_VERTICES
+from engine.actions import Discard, PlaceSettlement, ProposeTrade, RollDice
+from engine.board import (
+    GEOMETRY,
+    NUM_EDGES,
+    NUM_LAND_HEXES,
+    NUM_PORTS,
+    NUM_VERTICES,
+    Resource,
+)
 from engine.game import CatanGame, victory_points
 from engine.state import Phase
+from server.bots import TrailEntry
 from server.serialize import (
     player_view,
     serialize_geometry,
     serialize_legal_actions,
+    serialize_trail,
 )
 
 
@@ -136,4 +146,58 @@ def test_serialize_legal_actions_is_json_safe_and_idempotent() -> None:
     game = CatanGame(num_players=4)
     state = game.reset(seed=7)
     serialized = serialize_legal_actions(game.legal_actions(state))
+    assert _json_roundtrip(serialized) == serialized
+
+
+def test_serialize_trail_entry_includes_player_id_kind_and_fields() -> None:
+    entry = TrailEntry(player_id=2, action=PlaceSettlement(vertex_id=17))
+    result = serialize_trail(entries=[entry])[0]
+    assert result == {"player_id": 2, "kind": "PlaceSettlement", "vertex_id": 17}
+    assert (
+        "index" not in result
+    )  # never a legal-action selector, unlike serialize_action
+
+
+def test_serialize_trail_entry_includes_dice_roll_only_for_roll_dice() -> None:
+    roll_entry = TrailEntry(player_id=0, action=RollDice(), dice_roll=(4, 3))
+    result = serialize_trail(entries=[roll_entry])[0]
+    assert result == {"player_id": 0, "kind": "RollDice", "dice_roll": [4, 3]}
+
+    non_roll_entry = TrailEntry(player_id=0, action=PlaceSettlement(vertex_id=1))
+    assert "dice_roll" not in serialize_trail(entries=[non_roll_entry])[0]
+
+
+def test_serialize_trail_redacts_discards_specific_resources() -> None:
+    entry = TrailEntry(
+        player_id=1, action=Discard(resources={Resource.LUMBER: 2, Resource.ORE: 1})
+    )
+    result = serialize_trail(entries=[entry])[0]
+    assert result == {"player_id": 1, "kind": "Discard"}
+
+
+def test_serialize_trail_exposes_a_real_propose_trade_bundle_not_the_sentinel() -> None:
+    # Unlike serialize_action's open_ended sentinel flag, a trail entry only
+    # ever describes an already-applied (thus fully-specified) action.
+    entry = TrailEntry(
+        player_id=0,
+        action=ProposeTrade(give={Resource.LUMBER: 2}, receive={Resource.ORE: 1}),
+    )
+    result = serialize_trail(entries=[entry])[0]
+    assert result == {
+        "player_id": 0,
+        "kind": "ProposeTrade",
+        "give": {"LUMBER": 2},
+        "receive": {"ORE": 1},
+    }
+    assert "open_ended" not in result
+
+
+def test_serialize_trail_preserves_order_and_is_json_safe() -> None:
+    entries = [
+        TrailEntry(player_id=0, action=RollDice(), dice_roll=(2, 5)),
+        TrailEntry(player_id=0, action=PlaceSettlement(vertex_id=3)),
+        TrailEntry(player_id=1, action=RollDice(), dice_roll=(6, 6)),
+    ]
+    serialized = serialize_trail(entries)
+    assert [e["player_id"] for e in serialized] == [0, 0, 1]
     assert _json_roundtrip(serialized) == serialized

@@ -20,79 +20,39 @@ and built.
   unaffected. The glyph choice itself is intentionally a placeholder —
   the point of the map-based indirection is that swapping in real art
   later means editing the icon files, never touching `Board.svelte`.
-- **Visible, paced bot turns.** `server/bots.py`'s `step_bots` resolves
-  every consecutive bot action synchronously inside one HTTP response
-  (`server/app.py`'s `post_action`), so from a human's perspective an
-  entire multi-action bot turn (roll, build, trade, end turn, repeated for
-  every bot seat) completes instantly between one click and the next --
-  too fast to actually follow what happened. Raised during play; explicitly
-  not scoped yet, needs a real design pass rather than a quick patch:
-  - A flat artificial delay (e.g. `time.sleep` between actions in
-    `step_bots`) only makes the response take longer -- the client still
-    only ever sees the before/after state, not each intermediate action, so
-    it doesn't actually solve "hard to see what happened."
-  - Genuinely showing each bot action needs the backend to expose an
-    action log or intermediate states per response (or a streaming
-    mechanism), which the frontend then replays with a pause between
-    steps -- likely via animation (a build/trade/dice-roll transition
-    rather than an instant redraw), which is probably the right shape for
-    this rather than a plain delay. This is real architecture work: what
-    the wire format for a turn's action log looks like, how it interacts
-    with the existing polling loop (`App.svelte`'s `POLL_INTERVAL_MS`) and
-    the `isBusy`/"applying your move" state, and whether it's built once as
-    a generic "replay this turn" capability or specific to bot turns.
-  - Design thought (not scoped, not started): the smallest version of "an
-    action log per response" wouldn't need full intermediate `GameState`
-    snapshots to start being useful -- `post_action` already loops inside
-    `step_bots` applying one `Action` at a time, so it could cheaply collect
-    a `[{player_id, action_kind}, ...]` trail alongside the final state
-    (no new redaction concerns, since `kind`/`player_id` are already public
-    knowledge, same as any of today's `LegalAction.kind`s) and let the
-    frontend render it as a scrolling "Player 2 rolled 8, Player 2 built a
-    road, ..." log during `isBusy`, animated or not. That's a real
-    `server/`+`App.svelte` change either way (not attempted here per this
-    item's own stop condition), but it's a narrower first slice than full
-    action replay/animation if this gets picked up later.
-- **Dice roll history (last 5), not just the latest.** `HandSummary.svelte`
-  only ever shows `state.dice_roll`, the single most recent roll —
-  `engine/state.py`'s `GameState.dice_roll: tuple[int, int] | None` has no
-  history, and neither does `server/serialize.py`'s wire format. Raised
-  during play. Two real options, not a quick fix, and they're not
-  equivalent:
-  1. **Frontend-only rolling buffer.** `App.svelte` appends `dice_roll` to
-     a capped `lastRolls` array each time `gameState` changes (poll tick or
-     action response) and passes it to `HandSummary.svelte` instead of the
-     single value. Hot-reload only, no backend change, doable immediately.
-     **But it has a real, silent gap, not just a cosmetic one**: `step_bots`
-     (`server/bots.py`) resolves every consecutive bot action synchronously
-     inside one HTTP response, so a multi-bot-turn batch between two human
-     turns can contain several actual die rolls, and the client only ever
-     sees the *last* `gameState` in that batch — every roll before the final
-     one in the same batch never reaches the frontend at all. This is the
-     exact same root cause already written up under "Visible, paced bot
-     turns" above. So a frontend-only buffer wouldn't be "the last 5 rolls,"
-     it'd be "the last 5 rolls the client happened to observe" — silently
-     wrong (looks complete, isn't) unless the gap is disclosed in the UI
-     copy itself (e.g. a tooltip/caption noting bot-turn rolls between
-     human turns may be skipped), not just a code comment nobody playing
-     the game would ever see.
-  2. **Server-tracked roll history.** Add an actual list to `GameState`
-     (e.g. `dice_roll_history: list[tuple[int, int]]`, appended to
-     wherever dice are rolled today, capped at some length) and expose it
-     in `server/serialize.py`'s output. Correct and complete — captures
-     every roll including mid-batch bot rolls — but it's an `engine/` +
-     `server/` change, which means restarting the live `uvicorn` on `:8000`
-     and losing the game in progress. Needs explicit go-ahead first, like
-     the other backend-touching items here.
-  - **Recommendation:** don't ship option 1 as a silent fix — the gap is
-    exactly the kind of thing a player would notice and distrust ("wait, I
-    swear there were more rolls than that") without ever being told why.
-    Either (a) do option 2 whenever "Visible, paced bot turns" gets
-    picked up, since both need the same underlying capability (a durable,
-    per-action-or-per-roll record that survives a synchronous bot batch —
-    solving one mostly hands you the other), or (b) if option 1 is wanted
-    sooner as a stopgap, ship it with the gap explicitly disclosed in the
-    UI, not hidden.
+- ~~**Visible, paced bot turns**~~ **+ ~~dice roll history~~.** Done —
+  implemented together per this entry's own analysis that they share one
+  root fix (a durable per-action record surviving a synchronous bot
+  batch). `server/bots.py`'s `step_bots` now returns `list[TrailEntry]`
+  (one entry per action it applied — no `GameState`/`PlayerState` change
+  needed; `engine/state.py`'s `dice_roll` already held what was needed).
+  `server/app.py`'s `post_action`/`create_game` fold the human's own
+  action (if any) plus every bot action that followed into one
+  `action_trail`, serialized via `server/serialize.py`'s new
+  `serialize_trail` (factored out of `serialize_action`'s existing
+  per-kind field extraction, so the two never drift on what a kind's
+  fields are). One redaction call made along the way: `Discard.resources`
+  is stripped from the public trail (nowhere else exposes which specific
+  cards someone discarded, only aggregate amounts owed) — every other
+  kind's fields are already public knowledge in the real game (a rolled
+  die, a placed settlement, an announced `PlayMonopoly`/`PlayYearOfPlenty`
+  resource, a `ProposeTrade` bundle...).
+  `App.svelte` reveals a response's `action_trail` one entry at a time
+  (`REPLAY_DELAY_MS`, capped log `LOG_CAP`) instead of jumping straight to
+  it, reusing `isBusy`/"applying your move" for the whole paced reveal
+  rather than a parallel state machine — a "Skip" button flushes the rest
+  immediately (useful for a long bot batch, e.g. spectating an all-bot
+  game). New `lib/actionLog.ts` (`describeTrailEntry`, `recentRolls` —
+  both vitest-covered) feeds a new `ActivityLog.svelte` (a scrollable
+  "Player 2 rolled 8, ..." feed) and `HandSummary.svelte`'s new "Recent
+  rolls" strip, so dice history and paced bot-turn visibility both read
+  from the exact same revealed-log array, not two parallel mechanisms.
+  Scope note, stated honestly rather than overclaimed: there are no
+  intermediate `GameState` snapshots, only intermediate *actions* — so the
+  board/panel still jump straight to the final state immediately; only
+  the *text log* is paced. A fuller "animate the board turn by turn"
+  version (settlements fading in, a dice-roll animation, etc.) remains a
+  distinct, larger follow-up if ever wanted, not something this delivers.
 - ~~**Resume a game by ID.**~~ Done — `GameSetup.svelte` has a "Resume a
   game" section (game id + optional viewer seat, prefilled from
   `localStorage` via `web/src/lib/lastGame.ts`); `App.svelte`'s

@@ -17,6 +17,7 @@ from engine.actions import Action
 from engine.board import GEOMETRY, Board, Cube, Resource
 from engine.game import victory_points
 from engine.state import GameState, PlayerState, acting_player
+from server.bots import TrailEntry
 
 
 def _cube_to_list(hexagon: Cube) -> list[int]:
@@ -164,6 +165,22 @@ def _serialize_field_value(value: Any) -> Any:
     return value
 
 
+def _action_fields(
+    action: Action, *, exclude: frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """Field name -> JSON-safe value for every dataclass field on ``action``,
+    minus ``exclude`` -- shared by ``serialize_action`` (indexed, for the
+    legal-actions list) and ``serialize_trail_entry`` (unindexed, for a
+    public record of an already-applied action) so the two never drift on
+    what a given action kind's fields actually are.
+    """
+    return {
+        f.name: _serialize_field_value(getattr(action, f.name))
+        for f in dataclasses.fields(action)
+        if f.name not in exclude
+    }
+
+
 def serialize_action(action: Action, index: int) -> dict[str, Any]:
     """One legal action as an indexed, render-hinted dict.
 
@@ -173,10 +190,7 @@ def serialize_action(action: Action, index: int) -> dict[str, Any]:
     with ``open_ended: true`` so the client knows to open a bundle form
     instead of just posting the index back.
     """
-    fields = {
-        f.name: _serialize_field_value(getattr(action, f.name))
-        for f in dataclasses.fields(action)
-    }
+    fields = _action_fields(action)
     kind = type(action).__name__
     result: dict[str, Any] = {"index": index, "kind": kind, **fields}
     if kind == "ProposeTrade" and not fields["give"] and not fields["receive"]:
@@ -186,3 +200,36 @@ def serialize_action(action: Action, index: int) -> dict[str, Any]:
 
 def serialize_legal_actions(actions: list[Action]) -> list[dict[str, Any]]:
     return [serialize_action(a, i) for i, a in enumerate(actions)]
+
+
+# Fields to omit from an already-applied action's public trail entry, for
+# action kinds whose fields would otherwise leak information the rest of
+# the redaction model treats as private. Discard.resources is the one case
+# today: which specific cards a player discarded isn't exposed anywhere
+# else in the wire protocol (only the aggregate discard_amounts -- how many
+# each player *owes*, not what they discarded), so it's redacted here too
+# for consistency, unlike every other action kind's fields (all of which
+# are already public knowledge in the real game -- a placed settlement, a
+# rolled die, a declared Monopoly resource, an announced trade bundle...).
+_TRAIL_REDACTED_FIELDS: dict[str, frozenset[str]] = {
+    "Discard": frozenset({"resources"}),
+}
+
+
+def serialize_trail_entry(entry: TrailEntry) -> dict[str, Any]:
+    """One already-applied action (``server/bots.py``'s ``TrailEntry``) as a
+    public record: who acted, what kind of action, its (possibly redacted)
+    fields, and -- only for ``RollDice`` -- the actual roll, since
+    ``RollDice`` itself carries no fields to serialize.
+    """
+    kind = type(entry.action).__name__
+    exclude = _TRAIL_REDACTED_FIELDS.get(kind, frozenset())
+    fields = _action_fields(entry.action, exclude=exclude)
+    result: dict[str, Any] = {"player_id": entry.player_id, "kind": kind, **fields}
+    if entry.dice_roll is not None:
+        result["dice_roll"] = list(entry.dice_roll)
+    return result
+
+
+def serialize_trail(entries: list[TrailEntry]) -> list[dict[str, Any]]:
+    return [serialize_trail_entry(e) for e in entries]

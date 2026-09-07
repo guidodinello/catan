@@ -126,10 +126,33 @@ export interface GameStateView {
   winner: number | null;
 }
 
+// server/serialize.py's serialize_trail_entry(): one already-applied action
+// (the human's own, or a bot's, in application order) -- player_id + kind +
+// that kind's own fields, loosely typed like LegalAction since the field
+// shape varies per kind. Unlike LegalAction, never has `index` (a trail
+// entry isn't a selectable option) and `dice_roll` is present only on a
+// RollDice entry (RollDice itself carries no fields of its own).
+export interface TrailEntry {
+  player_id: number;
+  kind: string;
+  dice_roll?: [number, number];
+  [field: string]: unknown;
+}
+
 export interface CreateGameResponse {
   game_id: string;
   geometry: Geometry;
   state: GameStateView;
+  action_trail: TrailEntry[];
+}
+
+// server/app.py's post_action(): the redacted state plus the trail of
+// every action applied while producing it (the human's own action first,
+// then any consecutive bot turns server/bots.py's step_bots resolved
+// synchronously -- see lib/actionLog.ts for how the frontend paces
+// revealing these instead of just jumping straight to the final state).
+export interface ActionResponse extends GameStateView {
+  action_trail: TrailEntry[];
 }
 
 // server/serialize.py's serialize_action(): one legal action, indexed and
@@ -198,12 +221,12 @@ export function getLegalActions(
 export function postAction(
   gameId: string,
   request: ActionRequest,
-): Promise<GameStateView> {
+): Promise<ActionResponse> {
   return fetch(`${API_BASE}/games/${gameId}/action`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
-  }).then((r) => parseJsonOrThrow<GameStateView>(r));
+  }).then((r) => parseJsonOrThrow<ActionResponse>(r));
 }
 
 export function deleteGame(gameId: string): Promise<{ deleted: boolean }> {

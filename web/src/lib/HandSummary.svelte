@@ -1,16 +1,24 @@
 <script lang="ts">
   import { RESOURCES } from "./resources";
   import { RESOURCE_ICON } from "./icons";
+  import type { TrailEntry } from "./api";
+  import { PLAYER_COLOR } from "./playerColor";
 
   interface Props {
     diceRoll: [number, number] | null;
+    // Recent RollDice trail entries (see lib/actionLog.ts's recentRolls),
+    // already capped to the last few by the caller -- folded into the same
+    // action-trail mechanism as "visible, paced bot turns" rather than a
+    // separate history buffer, so it also captures bot rolls within a
+    // synchronous batch that a naive poll-based buffer would miss.
+    recentRolls?: TrailEntry[];
     // Undefined when this seat's hand isn't revealed to the viewer (e.g.
     // an all-bot spectator game) -- PlayerView.resources is itself optional
     // for exactly that reason.
     resources?: Record<string, number>;
   }
 
-  const { diceRoll, resources }: Props = $props();
+  const { diceRoll, recentRolls = [], resources }: Props = $props();
 </script>
 
 <div class="hand-summary">
@@ -21,6 +29,18 @@
       Last roll: --
     {/if}
   </p>
+  {#if recentRolls.length > 0}
+    <p class="recent-rolls">
+      Recent rolls:
+      {#each recentRolls as entry, i (i)}
+        {@const [d1, d2] = entry.dice_roll ?? [0, 0]}
+        <span class="roll-chip">
+          <span class="swatch" style="background: {PLAYER_COLOR[entry.player_id]}"></span>
+          {d1 + d2}
+        </span>
+      {/each}
+    </p>
+  {/if}
   {#if resources}
     <p class="hand-label">Your hand</p>
     <ul class="hand">
@@ -48,6 +68,30 @@
 
   .roll {
     margin: 0 0 0.5rem;
+  }
+
+  .recent-rolls {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    color: #444;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .roll-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .swatch {
+    display: inline-block;
+    width: 0.7em;
+    height: 0.7em;
+    border-radius: 50%;
+    border: 1px solid #000;
   }
 
   .hand-label {

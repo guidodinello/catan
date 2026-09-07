@@ -8,9 +8,11 @@
     type Geometry,
     type GameStateView,
     type LegalAction,
+    type TrailEntry,
   } from "./lib/api";
   import Board from "./lib/Board.svelte";
   import ActionPanel from "./lib/ActionPanel.svelte";
+  import ActivityLog from "./lib/ActivityLog.svelte";
   import TradeForm from "./lib/TradeForm.svelte";
   import TradeOfferBanner from "./lib/TradeOfferBanner.svelte";
   import DevCardResourceForm from "./lib/DevCardResourceForm.svelte";
@@ -18,10 +20,26 @@
   import HandSummary from "./lib/HandSummary.svelte";
   import Scoreboard from "./lib/Scoreboard.svelte";
   import { firstEdgeCandidates, secondEdgeCandidates } from "./lib/roadBuilding";
+  import { recentRolls as recentRollsFrom } from "./lib/actionLog";
   import { PLAYER_COLOR } from "./lib/playerColor";
   import { loadCachedGeometry, saveCachedGeometry, saveLastGame } from "./lib/lastGame";
 
   const POLL_INTERVAL_MS = 2000;
+
+  // "Visible, paced bot turns" + "dice roll history" (docs/backlog.md) --
+  // both share one mechanism: server/app.py's action responses now carry
+  // an action_trail (every action applied while producing that response,
+  // human's own first, then any consecutive bot turns). Rather than
+  // jumping straight from one gameState to the next, this trail is
+  // revealed into `revealedLog` one entry at a time with a pause between
+  // each, so a whole bot turn doesn't complete invisibly between one
+  // click and the next. There are no intermediate GameState snapshots to
+  // show (only intermediate actions), so the board/panel still jump
+  // straight to the final state immediately -- only this text log is
+  // paced. A fuller "animate the board turn by turn" version stays a
+  // distinct, larger follow-up if ever wanted.
+  const REPLAY_DELAY_MS = 900;
+  const LOG_CAP = 30;
 
   let status: "setup" | "loading" | "ok" | "error" = $state("setup");
   let gameId: string | null = $state(null);
@@ -113,6 +131,61 @@
   // request itself, which is what this flag actually represents.
   let isBusy = $state(false);
 
+  // The paced reveal queue -- see the top-of-file comment. `pendingTrail`
+  // holds entries not yet revealed; `revealedLog` (capped) holds what's
+  // been shown so far and feeds both ActivityLog and HandSummary's
+  // recent-rolls strip. `isBusy` stays true for the whole reveal, not just
+  // the network request, per the "reuse isBusy" design -- selectAction's
+  // own finally only resets it when nothing is queued to replay.
+  let pendingTrail: TrailEntry[] = $state([]);
+  let revealedLog: TrailEntry[] = $state([]);
+  let replayTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function cancelReplay() {
+    if (replayTimeout !== null) {
+      clearTimeout(replayTimeout);
+      replayTimeout = null;
+    }
+    pendingTrail = [];
+  }
+
+  function pushToLog(entry: TrailEntry) {
+    revealedLog = [...revealedLog, entry].slice(-LOG_CAP);
+  }
+
+  function advanceReplay() {
+    if (pendingTrail.length === 0) {
+      replayTimeout = null;
+      isBusy = false;
+      return;
+    }
+    const [next, ...rest] = pendingTrail;
+    pendingTrail = rest;
+    pushToLog(next);
+    replayTimeout = setTimeout(advanceReplay, REPLAY_DELAY_MS);
+  }
+
+  // Queues `trail` for paced reveal; isBusy is expected to already be true
+  // (selectAction/startGame/resumeGame set it before calling this) and
+  // stays true until the queue empties.
+  function startReplay(trail: TrailEntry[]) {
+    if (trail.length === 0) return;
+    pendingTrail = [...pendingTrail, ...trail];
+    if (replayTimeout === null) advanceReplay();
+  }
+
+  // Reveals every still-pending entry immediately, e.g. for a long bot
+  // batch (an all-bot spectator game) someone doesn't want to sit through.
+  function skipReplay() {
+    if (replayTimeout !== null) {
+      clearTimeout(replayTimeout);
+      replayTimeout = null;
+    }
+    for (const entry of pendingTrail) pushToLog(entry);
+    pendingTrail = [];
+    isBusy = false;
+  }
+
   const isGameOver = $derived.by(() => gameState !== null && gameState.phase === "GAME_OVER");
 
   let pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -166,6 +239,10 @@
       // fetch the properly redacted view for our seat instead, so another
       // seat's hand is never briefly shown before the first action.
       gameState = await getState(gameId, viewer);
+      // No board/panel is on screen yet during "loading" -- pacing this
+      // reveal wouldn't be visible to anyone, so it's dumped straight into
+      // the log rather than run through startReplay/isBusy.
+      revealedLog = created.action_trail.slice(-LOG_CAP);
       status = "ok";
       await refreshLegalActions();
       if (!isGameOver) startPolling();
@@ -214,6 +291,9 @@
   function playAgain() {
     stopPolling();
     cancelAutoReject();
+    cancelReplay();
+    revealedLog = [];
+    isBusy = false;
     status = "setup";
     gameId = null;
     geometry = null;
@@ -261,7 +341,8 @@
     const priorResources =
       isTrade && viewer !== undefined ? { ...gameState?.players[viewer]?.resources } : undefined;
     try {
-      gameState = await postAction(gameId, { index, give, receive });
+      const response = await postAction(gameId, { index, give, receive });
+      gameState = response;
       errorMessage = "";
       showTradeForm = false;
       showMonopolyForm = false;
@@ -276,11 +357,16 @@
       } else {
         await refreshLegalActions();
       }
+      startReplay(response.action_trail);
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
       await resyncAfterError();
     } finally {
-      isBusy = false;
+      // Deferred to advanceReplay's own end-of-queue branch when a trail
+      // was just queued (startReplay set pendingTrail synchronously above,
+      // before this runs) -- isBusy stays true for the whole paced reveal,
+      // not just this request.
+      if (pendingTrail.length === 0) isBusy = false;
     }
   }
 
@@ -395,6 +481,9 @@
         {/if}
         {#if isBusy}
           <em>-- applying your move (any bot turns resolve automatically)...</em>
+          {#if pendingTrail.length > 0}
+            <button onclick={skipReplay}>Skip</button>
+          {/if}
         {/if}
       </p>
       {#if humanSeats.length > 1}
@@ -448,8 +537,10 @@
         </div>
         <div class="panel-column" class:disabled={roadBuildingActive}>
           <Scoreboard state={gameState} {viewer} />
+          <ActivityLog entries={revealedLog} />
           <HandSummary
             diceRoll={gameState.dice_roll}
+            recentRolls={recentRollsFrom(revealedLog)}
             resources={viewer !== undefined ? gameState.players[viewer].resources : undefined}
           />
           <ActionPanel
