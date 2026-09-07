@@ -71,6 +71,16 @@ class GameRecord:
     production_events: tuple[ProductionEvent, ...]
     max_vp_observed: int
     max_vp_observed_by: int
+    # Whether public victory_points hit >=10 on a turn that wasn't that
+    # player's own. Pre-fix (engine/game.py hidden-VP auto-win), public *was*
+    # the win condition, so this flagged "someone had a winning score and
+    # didn't win" -- a real anomaly. Post-fix, the true win condition
+    # (engine.game.true_victory_points) also counts hidden VP cards, and 10+
+    # true VP on another player's turn is an expected, legal state (see
+    # tests/test_win.py::test_ten_vp_on_non_holders_turn_does_not_end_game) --
+    # so this now only tracks the public-score-observed variant, kept as-is
+    # for continuity with earlier records rather than switched to the true
+    # total.
     non_winner_exceeded_ten: bool
     first_settlement_vertex: tuple[int, ...]  # indexed by seat, first-round pick
     agent_names: tuple[str, ...] = ()  # indexed by player id

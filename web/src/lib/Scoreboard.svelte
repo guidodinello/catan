@@ -12,13 +12,17 @@
 
   // player.victory_points (engine.game.victory_points) is deliberately the
   // *public* tally -- settlements/cities/road/army bonuses plus only
-  // revealed_vp_cards, matching the real game's win condition exactly
-  // (engine/game.py's own docstring: "not unrevealed cards still sitting in
-  // dev_hand"). An unplayed VICTORY_POINT dev card is hidden information a
-  // player knows about their own hand but the rest of the board doesn't --
-  // so only the viewer's own row adds their own unrevealed VP cards on top
-  // of the public number; every other row stays at the public tally, same
-  // as a real board where you can't see what's in someone else's hand.
+  // revealed_vp_cards, never unrevealed cards still sitting in dev_hand
+  // (that's engine.game.true_victory_points, the real win condition -- kept
+  // engine-internal and never serialized). An unplayed VICTORY_POINT dev
+  // card is hidden information a player knows about their own hand but the
+  // rest of the board doesn't -- so only the viewer's own row adds their own
+  // unrevealed VP cards on top of the public number; every other row stays
+  // at the public tally, same as a real board where you can't see what's in
+  // someone else's hand. On a win, the engine reveals the winner's VP cards
+  // (dev_hand -> revealed_vp_cards) in the same step it ends the game, so
+  // the winner's public victory_points is already 10 and hidden here reads 0
+  // -- no double-count.
   function hiddenVpCount(player: GameStateView["players"][number]): number {
     return player.dev_hand?.filter((c) => c.card_type === "VICTORY_POINT").length ?? 0;
   }

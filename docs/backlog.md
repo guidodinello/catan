@@ -117,32 +117,31 @@ and built.
 
 ## Engine
 
-- **Bug: hidden Victory Point cards don't trigger an automatic win.** Real
-  rule: the instant a player's *true* total (public score plus any VP dev
-  cards still sitting in hand, revealed or not) reaches 10, they win
-  immediately and automatically, mid-turn, the moment whatever action
-  crossed the threshold happens (e.g. stealing longest road via a road
-  build) — revealing is just showing proof, not a distinct game action
-  with its own timing. This engine doesn't do that: `_check_win`
-  (`engine/game.py:219`) is called after every state-changing action
-  (including `_build_road`, which is what flips `longest_road_owner`), but
-  it only ever calls `victory_points()`, which counts
-  `player.revealed_vp_cards` — never the raw VP cards still in `dev_hand`.
-  So a player sitting on 9 public points plus 1 hidden VP card does *not*
-  auto-win; they must separately submit `PlayVictoryPoint` before
-  `_check_win` recognizes it. (One thing that isn't as bad as it could be:
-  `PlayVictoryPoint` is legal in both ROLL and MAIN phase, so this can
-  still be done in the very same turn right after the qualifying action —
-  it's not "wait until next turn," just "one more explicit action," which
-  is still wrong per the real rule but a smaller gap than it first looks.)
-  Raised during play. Likely fix shape: have `_check_win` count a player's
-  full VP total (public score plus every VP card in `dev_hand`, revealed
-  or not) rather than only `revealed_vp_cards` — but check
-  `server/serialize.py`'s redaction story stays correct doing this (an
-  opponent's hand should still look redacted right up until the game
-  actually ends, not leak "they secretly had a VP card" one instant before
-  the reveal). `engine/` + likely `server/serialize.py` change — needs
-  go-ahead and a `:8000` restart, not attempted here.
+- ~~**Bug: hidden Victory Point cards don't trigger an automatic win.**~~
+  Done — `engine/game.py`'s `_check_win` now drives off a new
+  `true_victory_points` (public tally plus every VP card still in
+  `dev_hand`, revealed or not), not `victory_points` (which keeps its exact
+  prior public-tally semantics; every existing caller/serializer is
+  unchanged). `_buy_dev_card` gained a trailing `_check_win` too, since
+  buying a card can now cross the true-VP threshold on its own, with no
+  separate `PlayVictoryPoint`. On a win, the winner's VP cards are revealed
+  (`dev_hand` -> `revealed_vp_cards`) in the very same step that sets
+  `GAME_OVER` (a new `_reveal_victory_point_cards` helper), which is what
+  keeps the fix contained to `engine/` alone: `server/serialize.py` needed
+  **no change**, since it only ever serializes the public `victory_points`,
+  and that number becomes accurate exactly when the game ends, never an
+  instant before — an opponent's hand still reads fully redacted right up
+  until then. Verified the redaction claim rather than assuming it: the
+  other place VP information could leak is `_dev_card_play_actions`
+  offering `PlayVictoryPoint` (which would betray a hidden card), but
+  `server/app.py`'s `get_legal_actions` already returns `[]` unless
+  `viewer == acting_player`, so that was never actually reachable.
+  `true_victory_points` is deliberately not re-exported from
+  `engine/__init__.py` — it's engine-internal on purpose, only `_check_win`
+  calls it. Losers' hands stay redacted forever after `GAME_OVER` (a
+  post-game full reveal, if ever wanted, is a separate product decision).
+  `tests/golden_phase2_records.json` was deliberately **not** regenerated
+  as part of this fix — see the commit/PR for the reported diff instead.
 - **Counter-trades / free trade negotiation.** README decision 5
   deliberately scoped domestic trade down to propose → each other player
   accepts or rejects in turn, first accept wins, no counter-offers — "a
@@ -193,8 +192,11 @@ and built.
     a stale-shaped object missing the new field. So this would reliably
     survive restarts for changes that don't reshape engine state (most
     `server/app.py` routes, `web/` changes, non-structural engine bug
-    fixes) but not, e.g., the hidden-VP win-condition fix above (which
-    does reshape state). Also needs a decision on *when* to persist
+    fixes) but not one that adds/removes/renames a `PlayerState`/`GameState`
+    field. (The hidden-VP win-condition fix above turned out not to be an
+    example of that: it added no new state field, since the win reveal
+    reuses the existing `dev_hand`/`revealed_vp_cards` fields.) Also needs
+    a decision on *when* to persist
     (every action = safest, extra I/O per request; only on a graceful
     shutdown hook = simpler, loses the game on a crash/kill) and whether
     bot `Agent` RNG streams are worth persisting too (skippable — losing

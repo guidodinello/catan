@@ -28,8 +28,8 @@ from engine.board import (
     NUM_VERTICES,
     Resource,
 )
-from engine.game import CatanGame, victory_points
-from engine.state import Phase, TradeOffer
+from engine.game import CatanGame, _check_win, victory_points
+from engine.state import DevCard, DevCardType, Phase, TradeOffer
 from server.bots import TrailEntry
 from server.serialize import (
     player_view,
@@ -101,6 +101,53 @@ def test_player_view_victory_points_match_the_engine() -> None:
     view = player_view(state, viewer=None)
     for entry in view["players"]:
         assert entry["victory_points"] == victory_points(state, entry["player_id"])
+
+
+def test_opponent_hand_stays_redacted_until_the_win() -> None:
+    """Load-bearing redaction check for the hidden-VP auto-win fix
+    (engine/game.py's ``true_victory_points``/``_check_win``): a hidden VP
+    card must not leak through ``player_view`` for a non-viewing seat one
+    action before the win, but the win itself is allowed to reveal it --
+    that's the real rule (revealing is showing proof once the game ends).
+    """
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=5)
+    winner_idx = 1
+    state.current_player = winner_idx
+    winner = state.players[winner_idx]
+    winner.settlement_vertices = {1, 2, 3}  # 3
+    winner.city_vertices = {4}  # +2 = 5
+    winner.revealed_vp_cards = 2  # +2 = 7 public
+    winner.dev_hand.append(
+        DevCard(card_type=DevCardType.KNIGHT, bought_this_turn=False)
+    )
+    winner.dev_hand.append(
+        DevCard(card_type=DevCardType.VICTORY_POINT, bought_this_turn=False)
+    )  # +1 hidden = 8 true; not yet a winning true total
+    state.phase = Phase.MAIN
+
+    # One action short of a win: the true total (8) hasn't crossed 10 yet, so
+    # nothing has been revealed and the seat still looks fully redacted.
+    view = player_view(state, viewer=0)
+    entry = next(e for e in view["players"] if e["player_id"] == winner_idx)
+    assert "dev_hand" not in entry
+    assert "resources" not in entry
+    assert entry["dev_card_count"] == 2
+    assert entry["victory_points"] == 7  # public tally only
+
+    # Cross the true-VP threshold: two more revealed VP cards, then the win
+    # check that engine/game.py's _build_settlement/_build_road/etc. all run.
+    winner.revealed_vp_cards += 2  # public 7 -> 9
+    _check_win(state)
+    assert state.phase == Phase.GAME_OVER
+    assert state.winner == winner_idx
+
+    view = player_view(state, viewer=0)
+    entry = next(e for e in view["players"] if e["player_id"] == winner_idx)
+    assert entry["victory_points"] == 10  # public tally now reflects the win
+    assert entry["dev_card_count"] == 1  # KNIGHT only; VP card was revealed
+    assert "dev_hand" not in entry  # still redacted for a non-owner seat
+    assert "resources" not in entry
 
 
 def test_player_view_acting_player_and_phase_are_exposed() -> None:
