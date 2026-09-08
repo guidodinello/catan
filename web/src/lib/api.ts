@@ -241,3 +241,17 @@ export function deleteGame(gameId: string): Promise<{ deleted: boolean }> {
     parseJsonOrThrow<{ deleted: boolean }>(r),
   );
 }
+
+// server/serialize.py's serialize_build_costs(): the fixed, RNG-free,
+// viewer-independent resource cost of each build kind (ROAD/SETTLEMENT/
+// CITY/DEV_CARD), sparse -- a kind's dict only has the resources it
+// actually costs. Static and session-independent, unlike Geometry (which
+// only comes back from createGame), so callers fetch it once per app
+// mount rather than caching it per-game.
+export type BuildCosts = Record<string, Record<string, number>>;
+
+export function getBuildCosts(): Promise<BuildCosts> {
+  return fetch(`${API_BASE}/build_costs`).then((r) =>
+    parseJsonOrThrow<BuildCosts>(r),
+  );
+}

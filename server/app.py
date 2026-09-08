@@ -22,6 +22,7 @@ from engine.state import acting_player
 from server.bots import SeatKind, apply_and_record, build_agents, step_bots
 from server.serialize import (
     player_view,
+    serialize_build_costs,
     serialize_geometry,
     serialize_legal_actions,
     serialize_trail,
@@ -174,6 +175,11 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
     response = player_view(state, viewer=actor)
     response["action_trail"] = serialize_trail(trail)
     return response
+
+
+@app.get("/api/build_costs")
+def get_build_costs() -> dict[str, dict[str, int]]:
+    return serialize_build_costs()
 
 
 @app.delete("/api/games/{game_id}")

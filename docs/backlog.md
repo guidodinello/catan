@@ -98,22 +98,38 @@ and built.
   this browser has created/resumed at least one game before. A dedicated
   `GET /api/geometry` endpoint would remove that restriction, but that's a
   `server/` change, out of scope for this frontend-only pass.
-- **A build-costs reference table.** Came up during play — no on-screen
-  reminder of what a settlement/city/road/dev card actually costs, so it's
-  guesswork or an alt-tab to the rulebook. The real numbers already live
-  as named constants in `engine/game.py` (re-exported from
-  `engine/__init__.py`): `ROAD_COST` (1 BRICK, 1 LUMBER), `SETTLEMENT_COST`
-  (1 BRICK, 1 LUMBER, 1 WOOL, 1 GRAIN), `CITY_COST` (2 GRAIN, 3 ORE),
-  `DEV_CARD_COST` (1 ORE, 1 WOOL, 1 GRAIN) — frontend-only, hot-reload:
-  either a small static reference table/panel (reusing `RESOURCE_ICON`
-  glyphs) with these four rows hand-copied into a `web/src/lib/`
-  constant, or, to avoid a second source of truth that could drift from
-  `engine/game.py` if a cost ever changes, a tiny dedicated
-  `GET /api/build_costs`-style endpoint (a `server/` change, needing
-  go-ahead + restart) that serializes the real constants directly. Worth
-  deciding which before starting: hand-copied numbers are simpler and
-  ship immediately, but they're a second source of truth for values that
-  currently only exist once, in `engine/game.py`.
+- ~~**A build-costs reference table.**~~ Done — chose the endpoint over
+  hand-copying, deliberately against this repo's own precedent of
+  hand-mirroring engine enums (`resources.ts`'s `RESOURCES`/
+  `TERRAIN_RESOURCE`, `icons/index.ts`'s `TERRAIN_ICON`/`DEV_CARD_ICON`):
+  those mirrors fail *loudly* (`server/serialize.py` sends `.name` on the
+  wire, so a renamed enum member breaks rendering immediately), whereas a
+  wrong hand-copied `CITY_COST` would fail *silently* — a wrong number
+  shown forever, no type error, no failing test. That asymmetry is why
+  SSOT wins here even though it costs a `uvicorn` restart (which, per the
+  "sessions don't survive a restart" item below, drops in-progress games).
+  New `server/serialize.py`'s `serialize_build_costs()` builds a
+  `{"ROAD": {...}, "SETTLEMENT": {...}, "CITY": {...}, "DEV_CARD": {...}}`
+  payload straight from the imported `ROAD_COST`/`SETTLEMENT_COST`/
+  `CITY_COST`/`DEV_CARD_COST`, served by a new `GET /api/build_costs` in
+  `server/app.py`. One real wrinkle, caught before writing the endpoint:
+  the existing `_resources_to_dict` (used by `bank`/a hand's `resources`)
+  indexes *all five* `Resource` members and `KeyError`s on a sparse dict
+  like `ROAD_COST` (no WOOL/GRAIN/ORE keys at all) — so it couldn't be
+  reused as-is, and a new `_sparse_resources_to_dict` handles the cost
+  dicts' sparse shape instead (each entry only lists the resources that
+  build kind actually costs; no `{"WOOL": 0}` noise). `web/src/lib/api.ts`
+  gained a matching `getBuildCosts()`; `web/src/lib/BuildCosts.svelte` is a
+  new panel modeled on `HandSummary.svelte`'s existing resource-row
+  pattern (same `RESOURCE_ICON` 18px-svg-plus-count markup, reused rather
+  than reinvented). `App.svelte` fetches it once `onMount` — not threaded
+  through `startGame`/`resumeGame` — since build costs are static and
+  viewer-independent, which covers "Resume a game" for free with no
+  `lastGame.ts`-style caching needed; a failed fetch just leaves the panel
+  hidden rather than blocking play. Scope note: `GET /api/geometry` (the
+  still-open gap under "Resume a game by ID" above) was deliberately
+  **not** bundled in here even though the restart was already being paid
+  for — it's a distinct backlog item.
 
 ## Engine
 

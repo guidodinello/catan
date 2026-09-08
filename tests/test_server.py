@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from agents import RandomAgent
 from engine.board import Resource
+from engine.game import CITY_COST, DEV_CARD_COST, ROAD_COST, SETTLEMENT_COST
 from engine.state import Phase
 from server.app import app
 from server.sessions import get_session
@@ -40,6 +41,22 @@ def test_create_game_returns_game_id_geometry_and_initial_state() -> None:
     assert len(body["geometry"]["vertices"]) == 54
     assert len(body["geometry"]["edges"]) == 72
     assert body["state"]["phase"] == Phase.SETUP_SETTLEMENT.name
+
+
+def test_build_costs_reflects_the_real_engine_constants() -> None:
+    # Asserted against the imported constants, not literals -- a test
+    # hardcoding e.g. {"BRICK": 1, "LUMBER": 1} would reintroduce the very
+    # second source of truth this endpoint exists to avoid.
+    body = client.get("/api/build_costs").json()
+    assert body.keys() == {"ROAD", "SETTLEMENT", "CITY", "DEV_CARD"}
+    assert body["ROAD"] == {r.name: n for r, n in ROAD_COST.items()}
+    assert body["SETTLEMENT"] == {r.name: n for r, n in SETTLEMENT_COST.items()}
+    assert body["CITY"] == {r.name: n for r, n in CITY_COST.items()}
+    assert body["DEV_CARD"] == {r.name: n for r, n in DEV_CARD_COST.items()}
+    # Sparse, not all-five-with-zeros -- ROAD_COST has no WOOL/GRAIN/ORE
+    # entry at all, and the payload must not silently grow one.
+    assert "WOOL" not in body["ROAD"]
+    assert "ORE" not in body["ROAD"]
 
 
 def test_create_game_rejects_seat_kind_count_mismatch() -> None:

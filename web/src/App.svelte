@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import {
     createGame,
+    getBuildCosts,
     getLegalActions,
     getState,
     postAction,
+    type BuildCosts as BuildCostsData,
     type Geometry,
     type GameStateView,
     type LegalAction,
@@ -13,6 +15,7 @@
   import Board from "./lib/Board.svelte";
   import ActionPanel from "./lib/ActionPanel.svelte";
   import ActivityLog from "./lib/ActivityLog.svelte";
+  import BuildCosts from "./lib/BuildCosts.svelte";
   import TradeForm from "./lib/TradeForm.svelte";
   import TradeOfferBanner from "./lib/TradeOfferBanner.svelte";
   import DevCardResourceForm from "./lib/DevCardResourceForm.svelte";
@@ -51,6 +54,21 @@
   let showTradeForm = $state(false);
   let showMonopolyForm = $state(false);
   let showYearOfPlentyForm = $state(false);
+
+  // "A build-costs reference table" (docs/backlog.md) -- static,
+  // viewer-independent, and session-independent (unlike Geometry, which
+  // only comes back from createGame), so it's fetched once on mount rather
+  // than threaded through startGame/resumeGame; this covers the resume
+  // path for free, with no lastGame.ts caching needed. A failed fetch just
+  // hides the panel (stays null) -- it's a convenience, not something that
+  // should block or error out the game itself.
+  let buildCosts: BuildCostsData | null = $state(null);
+
+  onMount(() => {
+    getBuildCosts()
+      .then((costs) => (buildCosts = costs))
+      .catch((err) => console.error("failed to load build costs", err));
+  });
 
   // PlayRoadBuilding's two-click board pick (see lib/roadBuilding.ts):
   // roadBuildingFirstEdge is null while awaiting the first click, set once
@@ -543,6 +561,9 @@
             recentRolls={recentRollsFrom(revealedLog)}
             resources={viewer !== undefined ? gameState.players[viewer].resources : undefined}
           />
+          {#if buildCosts}
+            <BuildCosts costs={buildCosts} />
+          {/if}
           <ActionPanel
             legalActions={isBusy || roadBuildingActive ? [] : legalActions}
             onSelect={(index) => selectAction(index)}

@@ -15,7 +15,13 @@ from typing import Any
 
 from engine.actions import Action
 from engine.board import GEOMETRY, Board, Cube, Resource
-from engine.game import victory_points
+from engine.game import (
+    CITY_COST,
+    DEV_CARD_COST,
+    ROAD_COST,
+    SETTLEMENT_COST,
+    victory_points,
+)
 from engine.state import GameState, PlayerState, TradeOffer, acting_player
 from server.bots import TrailEntry
 
@@ -26,6 +32,30 @@ def _cube_to_list(hexagon: Cube) -> list[int]:
 
 def _resources_to_dict(resources: dict[Resource, int]) -> dict[str, int]:
     return {r.name: resources[r] for r in Resource}
+
+
+def _sparse_resources_to_dict(resources: dict[Resource, int]) -> dict[str, int]:
+    """Like ``_resources_to_dict``, but for a sparse cost dict (e.g.
+    ``ROAD_COST`` has no ``WOOL``/``ORE`` entries at all) -- iterating all of
+    ``Resource`` the way ``_resources_to_dict`` does would ``KeyError`` on a
+    missing resource, and a ``{"WOOL": 0}`` entry would carry no information
+    anyway.
+    """
+    return {r.name: n for r, n in resources.items()}
+
+
+def serialize_build_costs() -> dict[str, dict[str, int]]:
+    """Serialize the fixed build costs. RNG-free and identical for every
+    game, like ``serialize_geometry`` -- meant to be called once, not once
+    per turn/game, and viewer-independent (build costs are public rules, not
+    per-player state).
+    """
+    return {
+        "ROAD": _sparse_resources_to_dict(ROAD_COST),
+        "SETTLEMENT": _sparse_resources_to_dict(SETTLEMENT_COST),
+        "CITY": _sparse_resources_to_dict(CITY_COST),
+        "DEV_CARD": _sparse_resources_to_dict(DEV_CARD_COST),
+    }
 
 
 def serialize_geometry() -> dict[str, Any]:
