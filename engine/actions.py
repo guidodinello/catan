@@ -108,6 +108,12 @@ class RejectTrade:
 
 
 @dataclass(frozen=True, slots=True)
+class CounterTrade:
+    give: dict[Resource, int]
+    receive: dict[Resource, int]
+
+
+@dataclass(frozen=True, slots=True)
 class EndTurn:
     pass
 
@@ -131,5 +137,6 @@ Action = (
     | ProposeTrade
     | AcceptTrade
     | RejectTrade
+    | CounterTrade
     | EndTurn
 )

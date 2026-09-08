@@ -34,6 +34,7 @@ from .actions import (
     AcceptTrade,
     Action,
     BuyDevCard,
+    CounterTrade,
     Discard,
     EndTurn,
     MoveRobber,
@@ -202,9 +203,14 @@ def _pay(state: GameState, player: PlayerState, cost: dict[Resource, int]) -> No
 
 
 def victory_points(state: GameState, player_idx: int) -> int:
-    """Public victory-point tally for ``player_idx``, matching the engine's
-    own win condition exactly: revealed VP dev cards only, not unrevealed
-    cards still sitting in ``dev_hand`` (see ``PlayerState.revealed_vp_cards``).
+    """*Public* victory-point tally for ``player_idx``: revealed VP dev cards
+    only, deliberately excluding unrevealed cards still sitting in ``dev_hand``
+    (see ``PlayerState.revealed_vp_cards``).
+
+    This is the number every player at the table can see, and the only one safe
+    to serialize for *any* viewer -- it is what ``server/serialize.py`` publishes
+    per seat and what ``experiments/`` records as the observable score series.
+    It is **not** the win condition: see ``true_victory_points``.
     """
     player = state.players[player_idx]
     vp = len(player.settlement_vertices) + 2 * len(player.city_vertices)
@@ -216,12 +222,59 @@ def victory_points(state: GameState, player_idx: int) -> int:
     return vp
 
 
+def true_victory_points(state: GameState, player_idx: int) -> int:
+    """The *real* victory-point total: the public tally plus every VP dev card
+    still in hand, revealed or not -- the engine's actual win condition.
+
+    Per the real rule, the instant a player's true total reaches 10 they win
+    immediately and automatically, mid-turn, on whatever action crossed the
+    threshold; revealing a VP card is showing proof, not a game action with its
+    own timing. A card bought this very turn counts, matching
+    ``_dev_card_play_actions``, which offers ``PlayVictoryPoint`` regardless of
+    ``bought_this_turn``.
+
+    Kept separate from ``victory_points`` (rather than replacing it) because
+    the difference between the two *is* hidden information: this number must
+    never reach a viewer who isn't the card's owner. It is intentionally not
+    re-exported from ``engine/__init__.py`` -- ``server/`` and ``web/`` have no
+    business reading it, and only ``_check_win`` calls it.
+    """
+    player = state.players[player_idx]
+    hidden_vp = sum(
+        1 for c in player.dev_hand if c.card_type is DevCardType.VICTORY_POINT
+    )
+    return victory_points(state, player_idx) + hidden_vp
+
+
+def _reveal_victory_point_cards(state: GameState, player_idx: int) -> None:
+    """Move every VP dev card out of ``player_idx``'s hand into the public
+    ``revealed_vp_cards`` count -- one card out, one count in, so the dev-card
+    conservation invariant holds. Called only when the game ends, on the winner
+    alone: a loser's hand stays hidden, same as the real game.
+    """
+    player = state.players[player_idx]
+    remaining = [
+        c for c in player.dev_hand if c.card_type is not DevCardType.VICTORY_POINT
+    ]
+    player.revealed_vp_cards += len(player.dev_hand) - len(remaining)
+    player.dev_hand[:] = remaining
+
+
 def _check_win(state: GameState) -> None:
+    """End the game if the turn player's *true* total has reached 10.
+
+    Mutates on a win beyond the phase/winner fields: the winner's VP dev cards
+    are revealed (``_reveal_victory_point_cards``) in the same transition that
+    sets GAME_OVER, so the public ``victory_points`` tally becomes accurate
+    exactly when the game ends -- never an instant before, which is what keeps
+    ``server/serialize.py``'s opponent-hand redaction honest.
+    """
     if state.phase == Phase.GAME_OVER:
         return
-    if victory_points(state, state.current_player) >= WINNING_VICTORY_POINTS:
+    if true_victory_points(state, state.current_player) >= WINNING_VICTORY_POINTS:
         state.winner = state.current_player
         state.phase = Phase.GAME_OVER
+        _reveal_victory_point_cards(state, state.current_player)
 
 
 # ---------------------------------------------------------------------------
@@ -681,6 +734,10 @@ def _buy_dev_card(state: GameState, player_idx: int) -> None:
     _pay(state, player, DEV_CARD_COST)
     card_type = state.dev_deck.pop()
     player.dev_hand.append(DevCard(card_type=card_type, bought_this_turn=True))
+    # A bought VICTORY_POINT card can itself cross the true-VP threshold --
+    # unlike every other card type, buying it changes the *true* (though not
+    # the public) tally, so this is a new win-check site (see docs/backlog.md).
+    _check_win(state)
 
 
 def _play_knight(state: GameState, player_idx: int, return_phase: Phase) -> None:
@@ -853,18 +910,20 @@ def _apply_trade_port(
 MAX_TRADE_OFFER_SIDE = 4
 
 
-def _propose_trade(
+def _validate_offer_bundle(
     state: GameState,
     player_idx: int,
     give: dict[Resource, int],
     receive: dict[Resource, int],
 ) -> None:
-    """Propose a domestic trade. ``give``/``receive`` are full multi-resource
-    bundles (e.g. give 2 lumber + 1 brick for 1 ore) -- real Catan trades are
-    routinely multi-resource, so no single-resource-type restriction is
-    applied. The only cap is a per-side card count, kept small purely so an
-    interactive builder (the CLI) doesn't need to prompt for absurd amounts;
-    it is not a rules restriction and does not force a single resource type.
+    """Shared shape/cap/affordability validation for a domestic-trade offer --
+    a fresh ``ProposeTrade`` or a responder's ``CounterTrade`` alike.
+    ``give``/``receive`` are full multi-resource bundles (e.g. give 2 lumber +
+    1 brick for 1 ore) -- real Catan trades are routinely multi-resource, so
+    no single-resource-type restriction is applied. The only cap is a
+    per-side card count, kept small purely so an interactive builder (the
+    CLI) doesn't need to prompt for absurd amounts; it is not a rules
+    restriction and does not force a single resource type.
     """
     _validate_trade_shape(give, receive)
     if sum(give.values()) > MAX_TRADE_OFFER_SIDE:
@@ -875,6 +934,15 @@ def _propose_trade(
         )
     if not _has_resources(state.players[player_idx], give):
         raise IllegalActionError("cannot offer resources you do not have")
+
+
+def _propose_trade(
+    state: GameState,
+    player_idx: int,
+    give: dict[Resource, int],
+    receive: dict[Resource, int],
+) -> None:
+    _validate_offer_bundle(state, player_idx, give, receive)
     state.trade_offer = TradeOffer(
         proposer=player_idx, give=dict(give), receive=dict(receive)
     )
@@ -935,6 +1003,20 @@ def _trade_response_legal(state: GameState) -> list[Action]:
     offer = state.trade_offer
     if offer is not None and _has_resources(state.players[responder], offer.receive):
         actions.append(AcceptTrade())
+    # A bounded, single-round counter: only against a fresh offer (never
+    # against a counter itself -- offer.counter_of is None is the depth
+    # bound), and only when the responder actually holds cards to offer back.
+    # Same open-ended-sentinel convention as _propose_trade_actions: an empty
+    # give/receive that always fails validation if applied unmodified.
+    # Appended last (after AcceptTrade) -- this ordering feeds
+    # StratifiedRandomAgent's action-type draw and is pinned by
+    # tests/golden_phase2_records.json.
+    if (
+        offer is not None
+        and offer.counter_of is None
+        and state.players[responder].resource_card_count() > 0
+    ):
+        actions.append(CounterTrade(give={}, receive={}))
     return actions
 
 
@@ -962,6 +1044,23 @@ def _trade_response_apply(state: GameState, action: Action) -> GameState:
         if not state.trade_responders:
             state.trade_offer = None
             state.phase = Phase.MAIN
+    elif isinstance(action, CounterTrade):
+        if offer is None:
+            raise IllegalActionError("no trade offer pending")
+        if offer.counter_of is not None:
+            raise IllegalActionError("a counter-offer cannot itself be countered")
+        _validate_offer_bundle(state, responder, action.give, action.receive)
+        state.trade_offer = TradeOffer(
+            proposer=responder,
+            give=dict(action.give),
+            receive=dict(action.receive),
+            counter_of=offer.proposer,
+        )
+        state.trade_responders = [offer.proposer]
+        # Phase stays AWAIT_TRADE_RESPONSE: the original proposer now
+        # responds to the counter, and current_player is untouched either
+        # way -- a resolved counter (accept or reject) simply returns to
+        # MAIN with the proposer's turn still theirs to continue.
     else:
         raise IllegalActionError(
             f"illegal action while awaiting trade response: {action!r}"

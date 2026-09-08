@@ -207,7 +207,11 @@ def run_arm(
         "comparisons": comparisons,
         "known_biases": [
             "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- "
-            "every agent reveals VP cards immediately.",
+            "every agent reveals VP cards immediately. This no longer affects "
+            "win timing (engine.game.true_victory_points/_check_win auto-wins "
+            "on a hidden VP card the instant the true total reaches 10, "
+            "independent of when/whether it's revealed); it's noted here only "
+            "as a residual agent-behavior quirk, not a win-timing bias.",
             "Bank shortage (_produce) skips a resource when the bank cannot "
             "cover all claimants; heuristic agents produce more, so they hit "
             "this more often than random agents did in Phase 2.",

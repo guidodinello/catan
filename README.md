@@ -94,15 +94,28 @@ each phase before it was built is kept in `docs/plans/`.
 4. **Observability.** State holds full ground truth; there is no
    `player_view()` / redaction helper. The CLI simply never prints another
    player's hand. Redaction is Phase 2+ scaffolding.
-5. **Trading.** `ProposeTrade` / `AcceptTrade` / `RejectTrade`: an offer goes to
-   all other players at once, first accept executes, no counter-offers — a
-   documented scope simplification, not a rules claim (the real game allows
-   free negotiation). The give/receive bundle itself is a **full multi-resource
-   bundle on each side** — e.g. give 2 lumber + 1 brick for 1 ore + 1 grain — with
-   no restriction to a single resource type; that would be a real usability
-   regression on a rule domestic trade uses constantly. Because that bundle
-   space is too large to usefully pre-enumerate, `legal_actions` offers a
-   single open-ended `ProposeTrade` affordance rather than every possible
+5. **Trading.** `ProposeTrade` / `AcceptTrade` / `RejectTrade` / `CounterTrade`:
+   an offer goes to all other players at once, first accept executes; a
+   responder may instead answer with **exactly one bounded counter-offer**
+   (a different bundle sent back to the original proposer only) rather than a
+   flat rejection — a documented scope simplification, not a rules claim (the
+   real game allows free, unbounded negotiation). The bound is structural, not
+   an added expiry/turn-limit mechanism: a counter-offer's `TradeOffer` is
+   marked with the original proposer's id (`counter_of`), and `legal_actions`
+   never offers a further `CounterTrade` against an offer that is itself
+   already a counter, so the episode can extend by at most one extra
+   round-trip. Countering also drops any other players who hadn't yet
+   responded to the original offer — the negotiation narrows to the two
+   parties once a counter is on the table (still "first accept wins" between
+   them) — and resolving the counter (accept or reject) always returns
+   control to `Phase.MAIN` with `current_player` unchanged, so the original
+   proposer's turn continues rather than ending. The give/receive bundle
+   itself is a **full multi-resource bundle on each side** — e.g. give 2
+   lumber + 1 brick for 1 ore + 1 grain — with no restriction to a single
+   resource type; that would be a real usability regression on a rule
+   domestic trade uses constantly. Because that bundle space is too large to
+   usefully pre-enumerate, `legal_actions` offers a single open-ended
+   `ProposeTrade`/`CounterTrade` affordance rather than every possible
    instance (the same reasoning as decision 10 below); the caller (the CLI,
    prompting a human interactively; a test driver, constructing one at random)
    builds the actual bundle and `apply_action` validates it in full — both
@@ -217,6 +230,66 @@ results in `experiments/results/benchmark.md`):
     unfixed: `_check_win` still evaluates only the turn player. See
     `experiments/results/benchmark.md` for the full measurement.
 
+Resolved while planning the web GUI (full detail in
+`docs/plans/gui-web-frontend.md`):
+
+20. **Redaction moves to the API boundary, not the engine.** Decision 4 left
+    `GameState` with full ground truth and no `player_view()`, on the
+    reasoning that the CLI's own discipline (never print another player's
+    hand) was enough. A browser client breaks that reasoning — anyone can
+    open DevTools — so the web server gets a `player_view(state, viewer)`
+    serializer that redacts other seats' hands/dev cards to counts only.
+    This is additive, not a reversal: the engine still holds full truth by
+    design, exactly as decision 4 intended; only the new HTTP boundary needs
+    its own gate.
+21. **Legal actions cross the wire by index, with one exception.** The
+    server lists `legal_actions(state)` as an indexed, render-hinted array;
+    the client posts back `{index}` and never constructs an
+    `engine/actions.py` dataclass itself. `ProposeTrade`'s open-ended
+    sentinel (decisions 5/10/18) is the one action that needs a
+    caller-constructed bundle, so its wire format carries `give`/`receive`
+    alongside the index — the same shape `agents/human.py`'s
+    `_prompt_propose_trade` already builds interactively, just over HTTP
+    instead of `input()`.
+22. **Sessions are in-memory (`dict[game_id, GameSession]`, TTL eviction),
+    backed by write-through pickle snapshots on disk.** This was revisited
+    once actually requested: `server/persistence.py` pickles each
+    `GameSession` to `.catan-sessions/<game_id>.pickle` after every mutating
+    request (`server/app.py`'s `create_game`/`post_action`/`delete_game`),
+    and a FastAPI lifespan handler reloads them all at startup — so a
+    backend restart (any `server/`/`engine/` code change, or a crash)
+    resumes games in progress instead of losing them. This does couple the
+    save format to `engine/state.py`'s exact field layout, as originally
+    flagged: a shape fingerprint (dataclass field names plus every
+    persisted `Enum`'s name→value map — `auto()` numbering silently shifts
+    on a member insertion, which is the one truly silent failure mode)
+    gates every load, so a reshape discards the stale snapshot (logged)
+    rather than resurrecting a corrupted one. Bot `Agent` RNG streams are
+    deliberately *not* persisted — only each seat's kind is, and agents are
+    rebuilt fresh (a new `driver_seed`) on load — since losing bot RNG
+    position costs only reproducibility, not correctness. Not a step toward
+    online multiplayer: that needs a shared, versioned datastore instead of
+    per-process disk pickles (see `docs/backlog.md`).
+23. **No game logic in the frontend.** It renders geometry the server sends
+    (board topology is RNG-free and identical across games — `engine/
+    board.py`'s `GEOMETRY` singleton — so it's serialized once per game, not
+    per turn) and highlights/posts legal actions the server already
+    computed. Legality, resolution, and RNG stay in `engine/`, matching
+    decision 8's stance that this is one simulator, not two.
+24. **Frontend: Svelte + Vite, not vanilla TypeScript or React.** The app's
+    real complexity is reactive UI state (legal-action highlighting on the
+    board, a side panel that swaps per game phase, an open/close trade
+    form) re-rendering on every poll. Plain TS was rejected as hand-rolled
+    DOM diffing for exactly the kind of state a reactive layer already
+    solves; React was rejected as sized for a big multi-screen SPA whose
+    main value — ecosystem depth — this one-board-plus-a-panel app doesn't
+    need. Svelte compiles to a small, near-vanilla-JS runtime with low
+    boilerplate, a good fit at this scale. `~/projects/fitted`'s stack
+    (Postgres/SQLAlchemy/Celery/auth backend; React/TanStack/Tailwind/PWA
+    frontend) was considered and not reused for the same reason in both
+    directions: sized for a production multi-user app, not a local
+    in-memory research tool.
+
 ## Proposed Roadmap
 
 - [x] **Phase 1 — Engine**: board generation, game state, legal actions,
@@ -233,6 +306,11 @@ results in `experiments/results/benchmark.md`):
       vs heuristic opponents, self-play with anti-collapse controls.
 - [ ] **Phase 6 — Retrofit** `truco-py` / `roulette` onto the shared package
       (only if the extraction holds up).
+- [ ] **Tooling — Web GUI**: FastAPI backend wrapping `engine/` + a Svelte +
+      Vite frontend, so a human can play in a browser (hot-seat
+      and/or vs. the Phase 3 agents) instead of only via `cli.py`. Runs in
+      parallel with the numbered phases above, not part of the ML track. See
+      `docs/plans/gui-web-frontend.md`.
 
 ## Status
 

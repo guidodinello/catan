@@ -19,7 +19,9 @@ repos:
       rev: v2.3.1
       hooks:
           - id: mypy
-            # The hook's isolated env otherwise lacks hypothesis, so mypy
-            # can't type tests/test_engine.py's @rule()/@invariant()
-            # decorators ("Untyped decorator makes function ... untyped").
-            additional_dependencies: ["hypothesis>=6.167.1"]
+            # The hook's isolated env otherwise lacks hypothesis/fastapi/pytest,
+            # so mypy can't type tests/test_engine.py's @rule()/@invariant(),
+            # server/app.py's @app.get()/@app.post(), or tests/test_persistence.py's
+            # @pytest.fixture() decorators ("Untyped decorator makes function ...
+            # untyped").
+            additional_dependencies: ["hypothesis>=6.167.1", "fastapi>=0.141.1", "pytest>=9.1.1"]
