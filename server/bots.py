@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from agents import Agent, HeuristicAgent, RandomAgent, StratifiedRandomAgent
-from engine.actions import AcceptTrade, Action, RejectTrade, RollDice
+from engine.actions import AcceptTrade, Action, CounterTrade, RejectTrade, RollDice
 from engine.board import Resource
 from engine.game import CatanGame
 from engine.state import GameState, TradeOffer, acting_player
@@ -76,11 +76,13 @@ class TrailEntry:
     board, everyone's settlements/cities) -- any player at the table could
     compute it themselves, same as the dice roll itself.
 
-    ``trade_offer`` is only ever set when ``action`` is ``AcceptTrade`` or
-    ``RejectTrade`` -- neither carries fields either, so the deal (or
-    rejected offer) being responded to would otherwise be invisible. Also
-    not a new redaction concern: a domestic trade offer is already public
-    once proposed (``player_view``'s own docstring).
+    ``trade_offer`` is only ever set when ``action`` is ``AcceptTrade``,
+    ``RejectTrade``, or ``CounterTrade`` -- none of the first two carry
+    fields either, so the deal (or rejected offer) being responded to would
+    otherwise be invisible; a ``CounterTrade`` carries its own new bundle but
+    not the *original* offer it is responding to, which is the same gap.
+    Also not a new redaction concern: a domestic trade offer is already
+    public once proposed (``player_view``'s own docstring).
     """
 
     player_id: int
@@ -128,7 +130,9 @@ def apply_and_record(
     # as a side effect -- snapshot it beforehand so the caller can still see
     # what deal was being responded to.
     trade_offer_before = (
-        state.trade_offer if isinstance(action, AcceptTrade | RejectTrade) else None
+        state.trade_offer
+        if isinstance(action, AcceptTrade | RejectTrade | CounterTrade)
+        else None
     )
     game.apply_action(state, action)
     if resources_before is not None:

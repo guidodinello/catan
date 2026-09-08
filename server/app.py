@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from engine.actions import ProposeTrade
+from engine.actions import CounterTrade, ProposeTrade
 from engine.board import Resource
 from engine.game import IllegalActionError
 from engine.state import acting_player
@@ -152,8 +152,10 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
         )
     action = legal[request.index]
 
-    if isinstance(action, ProposeTrade):
-        action = ProposeTrade(
+    if isinstance(action, ProposeTrade | CounterTrade):
+        # Reconstruct the same class the sentinel was -- a counter must
+        # never be silently downgraded to a fresh propose (or vice versa).
+        action = type(action)(
             give=_resource_bundle_from_wire(request.give),
             receive=_resource_bundle_from_wire(request.receive),
         )
@@ -161,11 +163,11 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
     # The human's own action belongs in the trail too, not just the bot
     # actions that follow it -- otherwise a human's own dice rolls (and the
     # resulting production) could never appear in a client-side "recent
-    # rolls" view built from this trail, only bots'. Captured after
-    # ProposeTrade's sentinel was already resolved above, so this reflects
-    # the real give/receive bundle. apply_and_record is the same helper
-    # step_bots uses for bot actions, so dice_roll/production are captured
-    # identically either way.
+    # rolls" view built from this trail, only bots'. Captured after the
+    # ProposeTrade/CounterTrade sentinel was already resolved above, so this
+    # reflects the real give/receive bundle. apply_and_record is the same
+    # helper step_bots uses for bot actions, so dice_roll/production are
+    # captured identically either way.
     try:
         human_entry = apply_and_record(state, game, actor, action)
     except IllegalActionError as exc:

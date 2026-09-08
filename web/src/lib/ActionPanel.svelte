@@ -15,6 +15,7 @@
     legalActions: LegalAction[];
     onSelect: (index: number) => void;
     onProposeTrade: () => void;
+    onCounterTrade: () => void;
     onPlayRoadBuilding: () => void;
     onPlayYearOfPlenty: () => void;
     onPlayMonopoly: () => void;
@@ -24,6 +25,7 @@
     legalActions,
     onSelect,
     onProposeTrade,
+    onCounterTrade,
     onPlayRoadBuilding,
     onPlayYearOfPlenty,
     onPlayMonopoly,
@@ -31,10 +33,12 @@
 
   // Kinds routed to a dedicated form/board-picking flow instead of the
   // generic expandable instance list below -- ProposeTrade already
-  // established this precedent; PlayRoadBuilding/PlayYearOfPlenty/
-  // PlayMonopoly extend it rather than growing formatAction's raw text.
+  // established this precedent; CounterTrade/PlayRoadBuilding/
+  // PlayYearOfPlenty/PlayMonopoly extend it rather than growing
+  // formatAction's raw text.
   const SPECIAL_KIND_HANDLERS: Record<string, () => void> = {
     ProposeTrade: () => onProposeTrade(),
+    CounterTrade: () => onCounterTrade(),
     PlayRoadBuilding: () => onPlayRoadBuilding(),
     PlayYearOfPlenty: () => onPlayYearOfPlenty(),
     PlayMonopoly: () => onPlayMonopoly(),

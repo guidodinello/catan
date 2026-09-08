@@ -9,7 +9,14 @@ resources; domestic trade is only ever with the current turn's player; both
 sides of any trade must be non-empty and must not share a resource type.
 """
 
-from engine.actions import AcceptTrade, ProposeTrade, RejectTrade, TradeBank, TradePort
+from engine.actions import (
+    AcceptTrade,
+    CounterTrade,
+    ProposeTrade,
+    RejectTrade,
+    TradeBank,
+    TradePort,
+)
 from engine.board import GEOMETRY, PortType, Resource
 from engine.game import (
     MAX_TRADE_OFFER_SIDE,
@@ -282,3 +289,173 @@ def test_accept_trade_swaps_resources_and_reject_moves_to_next_responder() -> No
     assert state.phase == Phase.MAIN
     assert state.players[p].resources[Resource.ORE] == 1
     assert state.players[second_responder].resources[Resource.LUMBER] == 1
+
+
+def test_counter_trade_swaps_resources_correctly_on_accept() -> None:
+    """The asymmetry that would break if _trade_response_apply's Accept
+    branch didn't generalize to a counter-offer's swapped proposer/responder
+    roles: accepting hands the *counterer's* give to the original proposer,
+    and the counterer's receive back to the counterer."""
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    state.players[p].resources[Resource.LUMBER] = 1
+
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    counterer = state.trade_responders[0]
+    state.players[counterer].resources[Resource.ORE] = 2
+
+    game.apply_action(
+        state, CounterTrade(give={Resource.ORE: 2}, receive={Resource.LUMBER: 1})
+    )
+    assert state.phase == Phase.AWAIT_TRADE_RESPONSE
+    offer = state.trade_offer
+    assert offer is not None
+    assert offer.proposer == counterer
+    assert offer.counter_of == p
+    assert state.trade_responders == [p]
+
+    game.apply_action(state, AcceptTrade())
+    assert state.phase == Phase.MAIN
+    assert state.trade_offer is None
+    assert state.players[p].resources[Resource.ORE] == 2
+    assert state.players[p].resources[Resource.LUMBER] == 0
+    assert state.players[counterer].resources[Resource.ORE] == 0
+    assert state.players[counterer].resources[Resource.LUMBER] == 1
+
+
+def test_rejected_counter_trade_returns_to_main_with_turn_unchanged() -> None:
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    state.players[p].resources[Resource.LUMBER] = 1
+
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    counterer = state.trade_responders[0]
+    state.players[counterer].resources[Resource.ORE] = 1
+    game.apply_action(
+        state, CounterTrade(give={Resource.ORE: 1}, receive={Resource.LUMBER: 1})
+    )
+
+    game.apply_action(state, RejectTrade())
+    assert state.phase == Phase.MAIN
+    assert state.trade_offer is None
+    assert state.trade_responders == []
+    # The original proposer's turn continues -- a resolved counter-offer
+    # never ends it.
+    assert state.current_player == p
+
+
+def test_counter_trade_drops_remaining_original_responders() -> None:
+    """A counter replaces the original offer outright -- the negotiation
+    narrows to the two parties, so any other player who hadn't yet
+    responded to the original offer is dropped."""
+    game = CatanGame(num_players=4)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    state.players[p].resources[Resource.LUMBER] = 1
+
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    assert len(state.trade_responders) == 3
+    game.apply_action(state, RejectTrade())
+    assert len(state.trade_responders) == 2
+
+    counterer = state.trade_responders[0]
+    state.players[counterer].resources[Resource.ORE] = 1
+    game.apply_action(
+        state, CounterTrade(give={Resource.ORE: 1}, receive={Resource.LUMBER: 1})
+    )
+    assert state.trade_responders == [p]
+
+
+def test_counter_trade_cannot_itself_be_countered() -> None:
+    """The depth bound: a counter-offer's TradeOffer.counter_of is set, so
+    legal_actions never offers a further CounterTrade against it, and
+    applying one anyway is rejected."""
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    state.players[p].resources[Resource.LUMBER] = 1
+
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    counterer = state.trade_responders[0]
+    state.players[counterer].resources[Resource.ORE] = 1
+    game.apply_action(
+        state, CounterTrade(give={Resource.ORE: 1}, receive={Resource.LUMBER: 1})
+    )
+
+    legal = game.legal_actions(state)
+    assert not any(isinstance(a, CounterTrade) for a in legal)
+
+    with_error = False
+    try:
+        game.apply_action(
+            state, CounterTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+        )
+    except IllegalActionError:
+        with_error = True
+    assert with_error
+
+
+def test_counter_trade_validates_bundle_shape_and_affordability() -> None:
+    """The shared _validate_offer_bundle helper really is shared: a counter
+    is rejected for the same reasons a fresh ProposeTrade would be."""
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    state.players[p].resources[Resource.LUMBER] = 1
+
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    counterer = state.trade_responders[0]
+
+    def counter_raises(give: dict, receive: dict) -> bool:
+        trial = state.copy()
+        try:
+            game.apply_action(trial, CounterTrade(give=give, receive=receive))
+        except IllegalActionError:
+            return True
+        return False
+
+    # counterer lacks the offered give
+    assert counter_raises({Resource.ORE: 1}, {Resource.LUMBER: 1})
+
+    state.players[counterer].resources[Resource.ORE] = MAX_TRADE_OFFER_SIDE + 1
+    assert counter_raises({}, {Resource.LUMBER: 1})
+    assert counter_raises({Resource.ORE: 1}, {})
+    assert counter_raises({Resource.LUMBER: 1}, {Resource.LUMBER: 1})
+    assert counter_raises(
+        {Resource.ORE: MAX_TRADE_OFFER_SIDE + 1}, {Resource.LUMBER: 1}
+    )
+
+
+def test_no_counter_trade_sentinel_when_responder_holds_no_cards() -> None:
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=1)
+    state.phase = Phase.MAIN
+    p = state.current_player
+    state.players[p].resources[Resource.LUMBER] = 1
+
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    counterer = state.trade_responders[0]
+    for r in Resource:
+        state.players[counterer].resources[r] = 0
+
+    legal = game.legal_actions(state)
+    assert not any(isinstance(a, CounterTrade) for a in legal)

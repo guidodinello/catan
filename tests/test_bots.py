@@ -13,7 +13,13 @@ import random
 import pytest
 
 from agents import HeuristicAgent, RandomAgent, StratifiedRandomAgent
-from engine.actions import AcceptTrade, ProposeTrade, RejectTrade, RollDice
+from engine.actions import (
+    AcceptTrade,
+    CounterTrade,
+    ProposeTrade,
+    RejectTrade,
+    RollDice,
+)
 from engine.board import Resource
 from engine.game import CatanGame
 from engine.state import GameState, Phase, acting_player
@@ -198,10 +204,35 @@ def test_apply_and_record_reject_trade_captures_the_offer_too() -> None:
     assert entry.trade_offer.give == {Resource.LUMBER: 1}
 
 
+def test_apply_and_record_counter_trade_captures_the_original_offer() -> None:
+    game, state, proposer, responder = _drive_to_main_with_a_pending_trade(
+        {Resource.LUMBER: 1}
+    )
+    state.players[responder].resources[Resource.ORE] = 1
+
+    entry = apply_and_record(
+        state,
+        game,
+        responder,
+        CounterTrade(give={Resource.ORE: 1}, receive={Resource.LUMBER: 1}),
+    )
+    # The *original* offer being countered, not the counter's own bundle.
+    assert entry.trade_offer is not None
+    assert entry.trade_offer.proposer == proposer
+    assert entry.trade_offer.give == {Resource.LUMBER: 1}
+    assert entry.trade_offer.receive == {Resource.ORE: 1}
+    assert entry.trade_offer.counter_of is None
+    # state.trade_offer now holds the counter itself, distinct from the
+    # captured entry.
+    assert state.trade_offer is not None
+    assert state.trade_offer.proposer == responder
+    assert state.trade_offer.counter_of == proposer
+
+
 def test_apply_and_record_trade_offer_is_none_for_unrelated_actions() -> None:
     agents = build_agents(["heuristic", "heuristic", "heuristic"], driver_seed=1)
     _, session = create_session(3, agents, seed=1)
     trail = step_bots(session)
     for entry in trail:
-        if not isinstance(entry.action, AcceptTrade | RejectTrade):
+        if not isinstance(entry.action, AcceptTrade | RejectTrade | CounterTrade):
             assert entry.trade_offer is None

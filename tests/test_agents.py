@@ -147,7 +147,8 @@ def test_never_returns_the_unresolved_propose_trade_sentinel() -> None:
     for seed in range(3):
         record = run_game(4, engine_seed=seed, driver_seed=seed)
         # run_game itself fails fast (raises IllegalActionError) if an agent
-        # ever returns the unresolved sentinel -- reaching here is the proof.
+        # ever returns the unresolved ProposeTrade *or* CounterTrade sentinel
+        # -- reaching here is the proof, for both.
         assert record.winner is not None or record.step_count > 0
 
 
@@ -162,10 +163,53 @@ def test_build_random_trade_offer_never_produces_the_sentinel() -> None:
     # Give the current player a hand to trade from.
     for r in Resource:
         state.players[state.current_player].resources[r] += 2
-    offer = build_random_trade_offer(rng, state)
+    offer = build_random_trade_offer(rng, state, state.current_player)
     assert isinstance(offer, ProposeTrade)
     assert offer.give
     assert offer.receive
+
+
+def test_build_random_trade_offer_uses_the_acting_player_not_current_player() -> None:
+    """Regression: build_random_trade_offer used to read
+    state.players[state.current_player] unconditionally -- wrong the moment
+    the acting player differs from the turn player, which happens the
+    instant a domestic trade is under negotiation (a responder, or a
+    counterer, acts while state.current_player still names the original
+    turn player)."""
+    from agents.random_agent import build_random_trade_offer
+    from engine.actions import ProposeTrade as _ProposeTrade
+    from engine.board import Resource
+    from engine.game import CatanGame
+    from engine.state import Phase
+
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=3)
+    state.phase = Phase.MAIN
+    proposer = state.current_player
+    for r in Resource:
+        # Empty every hand first (setup placement may have granted starting
+        # resources) so current_player's hand has nothing to draw from --
+        # only the responder's hand (set below) can supply a non-empty give.
+        for player in state.players:
+            player.resources[r] = 0
+    state.players[proposer].resources[Resource.LUMBER] = 1
+    game.apply_action(
+        state, _ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    responder = state.trade_responders[0]
+    assert responder != state.current_player
+
+    for r in Resource:
+        state.players[responder].resources[r] += 2
+
+    rng = random.Random(3)
+    offer = build_random_trade_offer(rng, state, responder)
+    assert isinstance(offer, ProposeTrade)
+    # current_player's hand is empty -- a non-empty give proves the bundle
+    # was drawn from the responder's hand, not current_player's.
+    assert offer.give
+    for count in offer.give.values():
+        assert 0 < count <= 2
 
 
 def _heuristic_player0_vs_random_factory(

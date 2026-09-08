@@ -18,7 +18,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 from agents.random_agent import StratifiedRandomAgent
 from engine.actions import Action
 from engine.game import CatanGame
-from engine.state import DEV_DECK_SIZE, GameState, Phase
+from engine.state import DEV_DECK_SIZE, GameState, Phase, acting_player
 
 STEP_BUDGET = 4000
 TOTAL_RESOURCE_CARDS = 95
@@ -30,8 +30,15 @@ def _sample_and_resolve_action(
     """Sample and resolve one action via the shared stratified agent (see
     ``agents/random_agent.py`` -- the canonical sentinel-resolution logic
     lives there so this test and the Phase 3 rollout driver never drift).
+
+    Passes the real acting player (``acting_player(state)``), not a
+    hardcoded seat -- a ProposeTrade/CounterTrade sentinel is resolved from
+    *that* player's hand, and the acting player is not always seat 0 (e.g.
+    a trade responder, or a counterer, while state.current_player still
+    names the original turn player).
     """
-    return StratifiedRandomAgent(rng).choose_action(state, actions, 0)
+    actor = acting_player(state)
+    return StratifiedRandomAgent(rng).choose_action(state, actions, actor)
 
 
 def _total_resource_cards(state: GameState) -> int:

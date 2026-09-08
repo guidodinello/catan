@@ -11,9 +11,10 @@ which is the public API doing the work, not a private accessor.
 
 Agents do not propose domestic trades (README decisions 5, 10) -- the
 ``ProposeTrade`` sentinel is filtered out of every candidate set. When
-another agent proposes a trade to this one, it always rejects: negotiating a
-trade is out of scope for a fixed heuristic (see the Phase 3 plan's scope
-boundary).
+another agent proposes a trade to this one, it always rejects -- and never
+counters either, even though a ``CounterTrade`` sentinel may be on offer:
+negotiating a trade is out of scope for a fixed heuristic (see the Phase 3
+plan's scope boundary).
 """
 
 from __future__ import annotations

@@ -14,6 +14,7 @@ import json
 
 from engine.actions import (
     AcceptTrade,
+    CounterTrade,
     Discard,
     PlaceSettlement,
     ProposeTrade,
@@ -159,6 +160,28 @@ def test_player_view_acting_player_and_phase_are_exposed() -> None:
     assert view["acting_player"] == state.setup_sequence[0]
 
 
+def test_player_view_trade_offer_exposes_counter_of() -> None:
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=6)
+    state.phase = Phase.MAIN
+    proposer = state.current_player
+    state.players[proposer].resources[Resource.LUMBER] = 1
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    view = player_view(state, viewer=None)
+    assert view["trade_offer"]["counter_of"] is None
+
+    counterer = state.trade_responders[0]
+    state.players[counterer].resources[Resource.ORE] = 1
+    game.apply_action(
+        state, CounterTrade(give={Resource.ORE: 1}, receive={Resource.LUMBER: 1})
+    )
+    view = player_view(state, viewer=None)
+    assert view["trade_offer"]["proposer"] == counterer
+    assert view["trade_offer"]["counter_of"] == proposer
+
+
 def test_player_view_is_json_safe_and_idempotent() -> None:
     game = CatanGame(num_players=4)
     state = game.reset(seed=5)
@@ -191,6 +214,27 @@ def test_serialize_legal_actions_flags_the_open_ended_propose_trade_sentinel() -
     propose_trade_entries = [e for e in serialized if e["kind"] == "ProposeTrade"]
     assert len(propose_trade_entries) == 1
     entry = propose_trade_entries[0]
+    assert entry["open_ended"] is True
+    assert entry["give"] == {}
+    assert entry["receive"] == {}
+
+
+def test_serialize_legal_actions_flags_the_open_ended_counter_trade_sentinel() -> None:
+    game = CatanGame(num_players=3)
+    state = game.reset(seed=6)
+    state.phase = Phase.MAIN
+    proposer = state.current_player
+    state.players[proposer].resources[Resource.LUMBER] = 1
+    game.apply_action(
+        state, ProposeTrade(give={Resource.LUMBER: 1}, receive={Resource.ORE: 1})
+    )
+    responder = state.trade_responders[0]
+    state.players[responder].resources[Resource.ORE] = 1
+
+    serialized = serialize_legal_actions(game.legal_actions(state))
+    counter_trade_entries = [e for e in serialized if e["kind"] == "CounterTrade"]
+    assert len(counter_trade_entries) == 1
+    entry = counter_trade_entries[0]
     assert entry["open_ended"] is True
     assert entry["give"] == {}
     assert entry["receive"] == {}
@@ -255,8 +299,42 @@ def test_serialize_trail_entry_includes_trade_offer_for_accept_trade() -> None:
             "proposer": 1,
             "give": {"LUMBER": 1},
             "receive": {"ORE": 1},
+            "counter_of": None,
         },
     }
+
+
+def test_serialize_trail_entry_includes_trade_offer_for_counter_trade() -> None:
+    # The offer captured for a CounterTrade entry is the *original* offer
+    # being countered, distinct from the entry's own give/receive fields
+    # (the counterer's new bundle).
+    original = TradeOffer(
+        proposer=1, give={Resource.LUMBER: 1}, receive={Resource.ORE: 1}
+    )
+    entry = TrailEntry(
+        player_id=2,
+        action=CounterTrade(give={Resource.ORE: 1}, receive={Resource.LUMBER: 2}),
+        trade_offer=original,
+    )
+    result = serialize_trail(entries=[entry])[0]
+    assert result["kind"] == "CounterTrade"
+    assert result["give"] == {"ORE": 1}
+    assert result["receive"] == {"LUMBER": 2}
+    assert result["trade_offer"] == {
+        "proposer": 1,
+        "give": {"LUMBER": 1},
+        "receive": {"ORE": 1},
+        "counter_of": None,
+    }
+
+
+def test_serialize_trade_offer_round_trips_counter_of() -> None:
+    counter = TradeOffer(
+        proposer=2, give={Resource.ORE: 1}, receive={Resource.LUMBER: 2}, counter_of=1
+    )
+    entry = TrailEntry(player_id=1, action=AcceptTrade(), trade_offer=counter)
+    result = serialize_trail(entries=[entry])[0]
+    assert result["trade_offer"]["counter_of"] == 1
 
 
 def test_serialize_trail_entry_includes_trade_offer_for_reject_trade() -> None:

@@ -158,30 +158,37 @@ and built.
   post-game full reveal, if ever wanted, is a separate product decision).
   `tests/golden_phase2_records.json` was deliberately **not** regenerated
   as part of this fix — see the commit/PR for the reported diff instead.
-- **Counter-trades / free trade negotiation.** README decision 5
-  deliberately scoped domestic trade down to propose → each other player
-  accepts or rejects in turn, first accept wins, no counter-offers — "a
-  documented scope simplification, not a rules claim (the real game allows
-  free negotiation)." Surfaced again from actual play: an offer that gets
-  rejected outright today might have been accepted with a different
-  bundle, but there's no way to propose one back. This is a real engine
-  gap, not a UI one — there's no `CounterTrade` action in `engine/actions.py`,
-  and adding one means new negotiation state (who's countering whom, with
-  what bundle, and how/when the original offer expires), not just a new
-  action variant. Worth scoping properly before starting, since it touches
-  `state.trade_offer`/`state.trade_responders` and every agent that
-  currently handles `ProposeTrade`/`AcceptTrade`/`RejectTrade`
-  (`agents/random_agent.py`, `agents/heuristic.py`, `agents/human.py`,
-  `server/bots.py`).
-  - Design thought (not scoped, not started): a smaller first cut than open
-    negotiation might be "one counter-offer, then the original proposer's
-    turn ends" (bounded, so it can't loop indefinitely and doesn't need an
-    expiry mechanism) rather than jumping straight to real multi-round
-    negotiation -- but even that bounded version still needs a real
-    `CounterTrade` action, new `state` fields for who's countering whom
-    with what, and every agent above updated to at least reject it
-    sanely. Worth deciding the bounded-vs-open-ended shape explicitly
-    before writing any of it, since they imply different state shapes.
+- ~~**Counter-trades / free trade negotiation.**~~ Done — bounded, exactly
+  one counter-offer, decided and scoped rather than open-ended
+  negotiation (see README decision 5 for the rationale). A new
+  `CounterTrade` action (`engine/actions.py`) and one new `TradeOffer`
+  field (`counter_of: int | None` — the original proposer's id, marking an
+  offer as a counter) are the entire state addition; the bound is
+  structural (`_trade_response_legal` never offers a further
+  `CounterTrade` against an offer that already has `counter_of` set), so no
+  expiry mechanism was needed. Countering drops the remaining original
+  responders (`trade_responders` becomes `[original proposer]` only) and
+  resolving the counter — accept or reject — returns to `Phase.MAIN` with
+  `current_player` unchanged, so the original proposer's turn continues.
+  Every call site flagged in the original note got updated:
+  `agents/random_agent.py` (which also had a real pre-existing bug fixed
+  along the way — `build_random_trade_offer` read
+  `state.players[state.current_player]` instead of the acting player,
+  wrong the moment the actor differs from the turn player, as it now can
+  mid-negotiation), `agents/heuristic.py` (still rejects everything, never
+  counters), `agents/human.py`, `server/bots.py`, `server/serialize.py`,
+  `server/app.py`, `experiments/rollout.py`'s sentinel guard, and the
+  Svelte layer (`TradeForm`, `TradeOfferBanner`, `ActionPanel`,
+  `actionLog.ts`, and two real `App.svelte` bugs the new action type would
+  otherwise have caused: the auto-reject effect firing while a counter was
+  actually available, and `describeTradeOutcome` misreporting outcomes on
+  both the human-as-proposer and human-as-counterer paths). Adding a third
+  action type to `AWAIT_TRADE_RESPONSE`'s legal set changes
+  `StratifiedRandomAgent`'s action-type draw, so
+  `tests/golden_phase2_records.json` was regenerated (see the commit/PR
+  for the reported before/after diff) rather than left as a documented
+  exception — unlike the VP-card fix above, this change could not leave
+  the bit-identity test green.
 
 ## Server / infrastructure
 

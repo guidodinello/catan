@@ -14,18 +14,28 @@
   // (README decision 5) -- unlike a hand, it's never hidden information, so
   // there's no redaction to worry about here, just phrasing it unambiguously
   // for whoever's looking (the proposer waiting on responses, or a
-  // responder deciding whether to accept).
+  // responder deciding whether to accept). A counter-offer is exactly as
+  // public, but must read as a counter (offer.counter_of set) rather than a
+  // fresh offer, so the original proposer can tell the two apart.
   function nonZero(bundle: Record<string, number>): [Resource, number][] {
     return RESOURCES.map((r) => [r, bundle[r] ?? 0] as [Resource, number]).filter(
       ([, count]) => count > 0,
     );
   }
+
+  const label = $derived(
+    offer.counter_of !== null
+      ? offer.proposer === viewer
+        ? "Your counter-offer"
+        : `Player ${offer.proposer} countered`
+      : offer.proposer === viewer
+        ? "Your trade offer"
+        : `Player ${offer.proposer} offers a trade`,
+  );
 </script>
 
 <div class="trade-offer">
-  <p class="trade-offer-label">
-    {offer.proposer === viewer ? "Your trade offer" : `Player ${offer.proposer} offers a trade`}
-  </p>
+  <p class="trade-offer-label">{label}</p>
   <p class="trade-offer-bundle">
     Gives:
     {#each nonZero(offer.give) as [resource, count] (resource)}

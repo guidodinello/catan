@@ -106,6 +106,9 @@ export interface TradeOfferView {
   proposer: number;
   give: Record<string, number>;
   receive: Record<string, number>;
+  // The original proposer's id, when this offer is a counter-offer; null
+  // for a fresh ProposeTrade.
+  counter_of: number | null;
 }
 
 // server/serialize.py's player_view(): the redacted per-turn game state.
@@ -135,8 +138,10 @@ export interface GameStateView {
 // `production`'s keys are player_id as a *string* -- JSON object keys
 // always are -- and it's present only when it's non-empty (a 7, or a roll
 // matching no settled hex, produces nothing). `trade_offer` is present only
-// on AcceptTrade/RejectTrade -- neither carries fields either, so the deal
-// (or rejected offer) being responded to would otherwise be invisible.
+// on AcceptTrade/RejectTrade/CounterTrade -- for the first two, neither
+// carries fields either, so the deal (or rejected offer) being responded to
+// would otherwise be invisible; for CounterTrade it's the *original* offer
+// being countered, distinct from the entry's own give/receive fields.
 export interface TrailEntry {
   player_id: number;
   kind: string;
@@ -166,7 +171,7 @@ export interface ActionResponse extends GameStateView {
 // render-hinted. Field shape varies per `kind` (vertex_id, edge_id, hex_id,
 // resource fields, ...), so it's a loosely-typed record rather than a
 // per-kind union -- the frontend only ever echoes `index` (plus, for
-// ProposeTrade, a constructed bundle) back to the server.
+// ProposeTrade/CounterTrade, a constructed bundle) back to the server.
 export interface LegalAction {
   index: number;
   kind: string;

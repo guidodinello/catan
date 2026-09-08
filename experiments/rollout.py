@@ -21,7 +21,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from agents import Agent, StratifiedRandomAgent
-from engine.actions import Action, EndTurn, PlaceSettlement, ProposeTrade, RollDice
+from engine.actions import (
+    Action,
+    CounterTrade,
+    EndTurn,
+    PlaceSettlement,
+    ProposeTrade,
+    RollDice,
+)
 from engine.board import Cube, Resource
 from engine.game import CatanGame, IllegalActionError, victory_points
 from engine.state import WINNING_VICTORY_POINTS, Phase, acting_player
@@ -157,15 +164,15 @@ def run_game(
         else:
             action = agent_list[actor].choose_action(state, legal, actor)
             if (
-                isinstance(action, ProposeTrade)
+                isinstance(action, ProposeTrade | CounterTrade)
                 and not action.give
                 and not action.receive
             ):
                 raise IllegalActionError(
                     f"agent {agent_list[actor].name!r} (player {actor}) returned "
-                    "the unresolved ProposeTrade sentinel -- agents must resolve "
-                    "it themselves (build_random_trade_offer) or never offer it "
-                    "(filter it out of legal_actions)"
+                    f"the unresolved {type(action).__name__} sentinel -- agents "
+                    "must resolve it themselves (build_random_trade_offer) or "
+                    "never offer it (filter it out of legal_actions)"
                 )
 
         pre_phase = state.phase

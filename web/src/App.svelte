@@ -52,6 +52,7 @@
   let errorMessage = $state("");
   let tradeResultMessage = $state("");
   let showTradeForm = $state(false);
+  let showCounterForm = $state(false);
   let showMonopolyForm = $state(false);
   let showYearOfPlentyForm = $state(false);
 
@@ -124,6 +125,7 @@
     if (!gameId || newViewer === viewer || isBusy) return;
     viewer = newViewer;
     showTradeForm = false;
+    showCounterForm = false;
     showMonopolyForm = false;
     showYearOfPlentyForm = false;
     cancelRoadBuilding();
@@ -319,6 +321,7 @@
     legalActions = [];
     errorMessage = "";
     showTradeForm = false;
+    showCounterForm = false;
     showMonopolyForm = false;
     showYearOfPlentyForm = false;
     cancelRoadBuilding();
@@ -347,14 +350,22 @@
     index: number,
     give?: Record<string, number>,
     receive?: Record<string, number>,
+    tradeKind?: "ProposeTrade" | "CounterTrade",
   ) {
     if (!gameId || isBusy) return;
     isBusy = true;
-    // ProposeTrade resolves entirely inside step_bots before this response
-    // comes back (engine/game.py's _trade_response_apply clears
-    // trade_offer/trade_responders either way), so acceptance vs. every bot
-    // rejecting looks identical in the returned state unless we diff the
-    // viewer's own hand against what it was right before the request.
+    // A ProposeTrade/CounterTrade doesn't always resolve entirely inside
+    // step_bots before this response comes back: it does when every
+    // responder still to act is a bot (engine/game.py's
+    // _trade_response_apply clears trade_offer/trade_responders once
+    // accepted or rejected), but a bot *countering* a ProposeTrade -- or a
+    // human-held original offer still awaiting a reply to our own
+    // CounterTrade -- leaves the response mid-episode instead
+    // (phase still AWAIT_TRADE_RESPONSE, trade_offer set). So acceptance
+    // vs. rejection vs. "still pending" can't be told apart from the
+    // returned state alone for the resolved cases -- diffing the viewer's
+    // own hand against what it was right before the request settles those;
+    // describeTradeOutcome checks the still-pending case first.
     const isTrade = give !== undefined && receive !== undefined;
     const priorResources =
       isTrade && viewer !== undefined ? { ...gameState?.players[viewer]?.resources } : undefined;
@@ -363,11 +374,12 @@
       gameState = response;
       errorMessage = "";
       showTradeForm = false;
+      showCounterForm = false;
       showMonopolyForm = false;
       showYearOfPlentyForm = false;
       cancelRoadBuilding();
       tradeResultMessage = isTrade
-        ? describeTradeOutcome(priorResources, give, receive)
+        ? describeTradeOutcome(priorResources, give, receive, tradeKind ?? "ProposeTrade")
         : "";
       if (isGameOver) {
         stopPolling();
@@ -392,9 +404,20 @@
     priorResources: Record<string, number> | undefined,
     give: Record<string, number>,
     receive: Record<string, number>,
+    tradeKind: "ProposeTrade" | "CounterTrade",
   ): string {
+    // Still pending: the response returned mid-episode with a new offer
+    // awaiting a reply from the other side -- either a bot countered our
+    // own ProposeTrade, or we countered and the original proposer is a
+    // human seat who hasn't responded yet. Checked before the hand diff,
+    // since the viewer's hand hasn't changed either way.
+    if (gameState?.phase === "AWAIT_TRADE_RESPONSE" && gameState.trade_offer?.counter_of != null) {
+      return tradeKind === "ProposeTrade"
+        ? "Your trade offer was countered."
+        : "Your counter-offer is pending a response.";
+    }
     if (!priorResources || viewer === undefined || !gameState) {
-      return "Trade proposed.";
+      return tradeKind === "ProposeTrade" ? "Trade proposed." : "Counter-offer sent.";
     }
     const nowResources = gameState.players[viewer].resources ?? {};
     const expectedAfterAccept = { ...priorResources };
@@ -407,22 +430,33 @@
     const accepted = Object.keys(expectedAfterAccept).every(
       (r) => (nowResources[r] ?? 0) === expectedAfterAccept[r],
     );
-    return accepted ? "Trade accepted!" : "No one accepted your trade offer.";
+    if (tradeKind === "ProposeTrade") {
+      return accepted ? "Trade accepted!" : "No one accepted your trade offer.";
+    }
+    return accepted ? "Your counter-offer was accepted!" : "Your counter-offer was rejected.";
   }
 
   function submitTrade(give: Record<string, number>, receive: Record<string, number>) {
     const sentinel = legalActions.find((a) => a.kind === "ProposeTrade");
     if (!sentinel) return;
-    void selectAction(sentinel.index, give, receive);
+    void selectAction(sentinel.index, give, receive, "ProposeTrade");
+  }
+
+  function submitCounter(give: Record<string, number>, receive: Record<string, number>) {
+    const sentinel = legalActions.find((a) => a.kind === "CounterTrade");
+    if (!sentinel) return;
+    void selectAction(sentinel.index, give, receive, "CounterTrade");
   }
 
   // engine/game.py's _trade_response_legal only offers AcceptTrade when the
-  // responder actually holds the requested resources -- so if RejectTrade
-  // is the *only* legal action, there is no real decision on the table,
-  // just a forced outcome. Requiring a click for that is pure friction (the
-  // same reasoning step_bots already applies to bot turns), so auto-submit
-  // it -- but only in that exact case, never a reject the viewer could have
-  // turned down deliberately.
+  // responder actually holds the requested resources, and CounterTrade only
+  // when the responder holds any cards at all to offer back -- so if
+  // neither is present, RejectTrade is the only real option: there is no
+  // decision on the table, just a forced outcome. Requiring a click for that
+  // is pure friction (the same reasoning step_bots already applies to bot
+  // turns), so auto-submit it -- but only in that exact case. Countering
+  // *is* a real decision (a different bundle might land), so its presence
+  // alone must stop the auto-reject, same as AcceptTrade's.
   // A short delay before actually submitting -- so the trade-offer banner
   // and the "auto-rejecting" notice are visible long enough to read,
   // instead of flashing and vanishing the instant this effect runs.
@@ -437,21 +471,22 @@
   }
 
   $effect(() => {
+    const rejectAction = legalActions.find((a) => a.kind === "RejectTrade");
     const canOnlyReject =
       !isBusy &&
       gameState?.phase === "AWAIT_TRADE_RESPONSE" &&
-      legalActions.length === 1 &&
-      legalActions[0].kind === "RejectTrade";
+      rejectAction !== undefined &&
+      !legalActions.some((a) => a.kind === "AcceptTrade" || a.kind === "CounterTrade");
     if (!canOnlyReject) {
       cancelAutoReject();
       return;
     }
     if (autoRejectTimeout !== null) return; // already counting down
-    const rejectIndex = legalActions[0].index;
-    tradeResultMessage = "Auto-rejecting: you don't have the resources to accept...";
+    tradeResultMessage =
+      "Auto-rejecting: you don't have the resources to accept or counter...";
     autoRejectTimeout = setTimeout(() => {
       autoRejectTimeout = null;
-      void selectAction(rejectIndex);
+      void selectAction(rejectAction.index);
     }, AUTO_REJECT_DELAY_MS);
   });
 
@@ -568,6 +603,7 @@
             legalActions={isBusy || roadBuildingActive ? [] : legalActions}
             onSelect={(index) => selectAction(index)}
             onProposeTrade={() => (showTradeForm = true)}
+            onCounterTrade={() => (showCounterForm = true)}
             onPlayRoadBuilding={() => {
               roadBuildingActive = true;
               roadBuildingFirstEdge = null;
@@ -582,6 +618,16 @@
                 : undefined}
               onSubmit={submitTrade}
               onCancel={() => (showTradeForm = false)}
+            />
+          {/if}
+          {#if showCounterForm}
+            <TradeForm
+              mode="counter"
+              humanResources={viewer !== undefined
+                ? gameState.players[viewer].resources
+                : undefined}
+              onSubmit={submitCounter}
+              onCancel={() => (showCounterForm = false)}
             />
           {/if}
           {#if showMonopolyForm}

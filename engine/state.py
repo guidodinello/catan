@@ -112,10 +112,17 @@ class TradeOffer:
     proposer: int
     give: dict[Resource, int]
     receive: dict[Resource, int]
+    # The original proposer, when this offer is a counter-offer -- None for a
+    # fresh ProposeTrade. Also the depth bound: a counter-offer may not itself
+    # be countered (see engine/game.py's _trade_response_legal).
+    counter_of: int | None = None
 
     def copy(self) -> TradeOffer:
         return TradeOffer(
-            proposer=self.proposer, give=dict(self.give), receive=dict(self.receive)
+            proposer=self.proposer,
+            give=dict(self.give),
+            receive=dict(self.receive),
+            counter_of=self.counter_of,
         )
 
 

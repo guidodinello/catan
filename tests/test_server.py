@@ -343,6 +343,7 @@ def test_post_action_propose_trade_with_a_bundle_succeeds() -> None:
         "proposer": actor,
         "give": {"LUMBER": 2},
         "receive": {"ORE": 1},
+        "counter_of": None,
     }
 
 
@@ -372,6 +373,7 @@ def test_post_action_trail_reject_trade_includes_the_offer() -> None:
         "proposer": proposer,
         "give": {"LUMBER": 2},
         "receive": {"ORE": 1},
+        "counter_of": None,
     }
 
 
@@ -403,7 +405,75 @@ def test_post_action_trail_accept_trade_includes_the_offer() -> None:
         "proposer": proposer,
         "give": {"LUMBER": 2},
         "receive": {"ORE": 1},
+        "counter_of": None,
     }
+
+
+def test_post_action_counter_trade_sentinel_requires_a_bundle() -> None:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    session = get_session(game_id)
+    session.state.phase = Phase.MAIN
+    proposer = session.state.current_player
+    session.state.players[proposer].resources[Resource.LUMBER] = 2
+
+    legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    trade_index = next(a["index"] for a in legal if a["kind"] == "ProposeTrade")
+    client.post(
+        f"/api/games/{game_id}/action",
+        json={"index": trade_index, "give": {"LUMBER": 2}, "receive": {"ORE": 1}},
+    )
+
+    responder = session.state.trade_responders[0]
+    session.state.players[responder].resources[Resource.ORE] = 1
+    responder_legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    counter_entries = [a for a in responder_legal if a["kind"] == "CounterTrade"]
+    assert len(counter_entries) == 1
+    assert counter_entries[0]["open_ended"] is True
+    counter_index = counter_entries[0]["index"]
+
+    response = client.post(
+        f"/api/games/{game_id}/action", json={"index": counter_index}
+    )
+    assert response.status_code == 400
+
+
+def test_post_action_counter_trade_with_a_bundle_succeeds() -> None:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    session = get_session(game_id)
+    session.state.phase = Phase.MAIN
+    proposer = session.state.current_player
+    session.state.players[proposer].resources[Resource.LUMBER] = 2
+
+    legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    trade_index = next(a["index"] for a in legal if a["kind"] == "ProposeTrade")
+    client.post(
+        f"/api/games/{game_id}/action",
+        json={"index": trade_index, "give": {"LUMBER": 2}, "receive": {"ORE": 1}},
+    )
+
+    responder = session.state.trade_responders[0]
+    session.state.players[responder].resources[Resource.ORE] = 1
+    responder_legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    counter_index = next(
+        a["index"] for a in responder_legal if a["kind"] == "CounterTrade"
+    )
+
+    response = client.post(
+        f"/api/games/{game_id}/action",
+        json={"index": counter_index, "give": {"ORE": 1}, "receive": {"LUMBER": 1}},
+    )
+    assert response.status_code == 200
+    new_state = response.json()
+    assert new_state["phase"] == Phase.AWAIT_TRADE_RESPONSE.name
+    assert new_state["trade_offer"] == {
+        "proposer": responder,
+        "give": {"ORE": 1},
+        "receive": {"LUMBER": 1},
+        "counter_of": proposer,
+    }
+    assert new_state["trade_responders"] == [proposer]
 
 
 def test_delete_game_removes_the_session() -> None:

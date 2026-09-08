@@ -147,11 +147,15 @@ def _serialize_trade_offer(offer: TradeOffer) -> dict[str, Any]:
     # A domestic trade offer is announced to every player by the real rules
     # (decision 5) -- unlike a hand, it is never hidden information, so it's
     # never redacted by viewer, whether it's the live offer on `state`
-    # (player_view) or one already resolved (serialize_trail_entry).
+    # (player_view) or one already resolved (serialize_trail_entry). A
+    # counter-offer is just as public -- `counter_of` (the original
+    # proposer's id, or None) lets the client tell a counter apart from a
+    # fresh offer.
     return {
         "proposer": offer.proposer,
         "give": {r.name: c for r, c in offer.give.items()},
         "receive": {r.name: c for r, c in offer.receive.items()},
+        "counter_of": offer.counter_of,
     }
 
 
@@ -222,16 +226,17 @@ def serialize_action(action: Action, index: int) -> dict[str, Any]:
     """One legal action as an indexed, render-hinted dict.
 
     Field names/values come straight from the action dataclass — vertex/edge/
-    hex ids need no lookup. ``ProposeTrade``'s empty-``give``/``receive``
-    sentinel (``engine/game.py``'s open-ended trade affordance) is flagged
-    with ``open_ended: true`` so the client knows to open a bundle form
-    instead of just posting the index back.
+    hex ids need no lookup. ``ProposeTrade``'s and ``CounterTrade``'s empty-
+    ``give``/``receive`` sentinels (``engine/game.py``'s open-ended trade
+    affordances) are flagged with ``open_ended: true`` so the client knows to
+    open a bundle form instead of just posting the index back.
     """
     fields = _action_fields(action)
     kind = type(action).__name__
     result: dict[str, Any] = {"index": index, "kind": kind, **fields}
-    if kind == "ProposeTrade" and not fields["give"] and not fields["receive"]:
-        result["open_ended"] = True
+    if kind in {"ProposeTrade", "CounterTrade"}:
+        if not fields["give"] and not fields["receive"]:
+            result["open_ended"] = True
     return result
 
 
@@ -260,9 +265,11 @@ def serialize_trail_entry(entry: TrailEntry) -> dict[str, Any]:
     which resources from it, since ``RollDice`` itself carries no fields to
     serialize. ``production``'s player-id keys become strings, since JSON
     object keys always are. ``trade_offer`` is set only for ``AcceptTrade``/
-    ``RejectTrade`` -- neither carries fields of its own, so the deal (or
-    rejected offer) they were responding to is otherwise invisible; it's the
-    live ``state.trade_offer`` from just before this response cleared it.
+    ``RejectTrade``/``CounterTrade`` -- for the first two, neither carries
+    fields of its own, so the deal (or rejected offer) they were responding
+    to is otherwise invisible; for ``CounterTrade`` it's the *original*
+    offer being countered, distinct from the action's own new bundle. It's
+    the live ``state.trade_offer`` from just before this response applied.
     """
     kind = type(entry.action).__name__
     exclude = _TRAIL_REDACTED_FIELDS.get(kind, frozenset())

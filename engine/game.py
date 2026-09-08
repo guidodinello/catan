@@ -34,6 +34,7 @@ from .actions import (
     AcceptTrade,
     Action,
     BuyDevCard,
+    CounterTrade,
     Discard,
     EndTurn,
     MoveRobber,
@@ -909,18 +910,20 @@ def _apply_trade_port(
 MAX_TRADE_OFFER_SIDE = 4
 
 
-def _propose_trade(
+def _validate_offer_bundle(
     state: GameState,
     player_idx: int,
     give: dict[Resource, int],
     receive: dict[Resource, int],
 ) -> None:
-    """Propose a domestic trade. ``give``/``receive`` are full multi-resource
-    bundles (e.g. give 2 lumber + 1 brick for 1 ore) -- real Catan trades are
-    routinely multi-resource, so no single-resource-type restriction is
-    applied. The only cap is a per-side card count, kept small purely so an
-    interactive builder (the CLI) doesn't need to prompt for absurd amounts;
-    it is not a rules restriction and does not force a single resource type.
+    """Shared shape/cap/affordability validation for a domestic-trade offer --
+    a fresh ``ProposeTrade`` or a responder's ``CounterTrade`` alike.
+    ``give``/``receive`` are full multi-resource bundles (e.g. give 2 lumber +
+    1 brick for 1 ore) -- real Catan trades are routinely multi-resource, so
+    no single-resource-type restriction is applied. The only cap is a
+    per-side card count, kept small purely so an interactive builder (the
+    CLI) doesn't need to prompt for absurd amounts; it is not a rules
+    restriction and does not force a single resource type.
     """
     _validate_trade_shape(give, receive)
     if sum(give.values()) > MAX_TRADE_OFFER_SIDE:
@@ -931,6 +934,15 @@ def _propose_trade(
         )
     if not _has_resources(state.players[player_idx], give):
         raise IllegalActionError("cannot offer resources you do not have")
+
+
+def _propose_trade(
+    state: GameState,
+    player_idx: int,
+    give: dict[Resource, int],
+    receive: dict[Resource, int],
+) -> None:
+    _validate_offer_bundle(state, player_idx, give, receive)
     state.trade_offer = TradeOffer(
         proposer=player_idx, give=dict(give), receive=dict(receive)
     )
@@ -991,6 +1003,20 @@ def _trade_response_legal(state: GameState) -> list[Action]:
     offer = state.trade_offer
     if offer is not None and _has_resources(state.players[responder], offer.receive):
         actions.append(AcceptTrade())
+    # A bounded, single-round counter: only against a fresh offer (never
+    # against a counter itself -- offer.counter_of is None is the depth
+    # bound), and only when the responder actually holds cards to offer back.
+    # Same open-ended-sentinel convention as _propose_trade_actions: an empty
+    # give/receive that always fails validation if applied unmodified.
+    # Appended last (after AcceptTrade) -- this ordering feeds
+    # StratifiedRandomAgent's action-type draw and is pinned by
+    # tests/golden_phase2_records.json.
+    if (
+        offer is not None
+        and offer.counter_of is None
+        and state.players[responder].resource_card_count() > 0
+    ):
+        actions.append(CounterTrade(give={}, receive={}))
     return actions
 
 
@@ -1018,6 +1044,23 @@ def _trade_response_apply(state: GameState, action: Action) -> GameState:
         if not state.trade_responders:
             state.trade_offer = None
             state.phase = Phase.MAIN
+    elif isinstance(action, CounterTrade):
+        if offer is None:
+            raise IllegalActionError("no trade offer pending")
+        if offer.counter_of is not None:
+            raise IllegalActionError("a counter-offer cannot itself be countered")
+        _validate_offer_bundle(state, responder, action.give, action.receive)
+        state.trade_offer = TradeOffer(
+            proposer=responder,
+            give=dict(action.give),
+            receive=dict(action.receive),
+            counter_of=offer.proposer,
+        )
+        state.trade_responders = [offer.proposer]
+        # Phase stays AWAIT_TRADE_RESPONSE: the original proposer now
+        # responds to the counter, and current_player is untouched either
+        # way -- a resolved counter (accept or reject) simply returns to
+        # MAIN with the proposer's turn still theirs to continue.
     else:
         raise IllegalActionError(
             f"illegal action while awaiting trade response: {action!r}"

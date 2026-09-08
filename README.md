@@ -94,15 +94,28 @@ each phase before it was built is kept in `docs/plans/`.
 4. **Observability.** State holds full ground truth; there is no
    `player_view()` / redaction helper. The CLI simply never prints another
    player's hand. Redaction is Phase 2+ scaffolding.
-5. **Trading.** `ProposeTrade` / `AcceptTrade` / `RejectTrade`: an offer goes to
-   all other players at once, first accept executes, no counter-offers — a
-   documented scope simplification, not a rules claim (the real game allows
-   free negotiation). The give/receive bundle itself is a **full multi-resource
-   bundle on each side** — e.g. give 2 lumber + 1 brick for 1 ore + 1 grain — with
-   no restriction to a single resource type; that would be a real usability
-   regression on a rule domestic trade uses constantly. Because that bundle
-   space is too large to usefully pre-enumerate, `legal_actions` offers a
-   single open-ended `ProposeTrade` affordance rather than every possible
+5. **Trading.** `ProposeTrade` / `AcceptTrade` / `RejectTrade` / `CounterTrade`:
+   an offer goes to all other players at once, first accept executes; a
+   responder may instead answer with **exactly one bounded counter-offer**
+   (a different bundle sent back to the original proposer only) rather than a
+   flat rejection — a documented scope simplification, not a rules claim (the
+   real game allows free, unbounded negotiation). The bound is structural, not
+   an added expiry/turn-limit mechanism: a counter-offer's `TradeOffer` is
+   marked with the original proposer's id (`counter_of`), and `legal_actions`
+   never offers a further `CounterTrade` against an offer that is itself
+   already a counter, so the episode can extend by at most one extra
+   round-trip. Countering also drops any other players who hadn't yet
+   responded to the original offer — the negotiation narrows to the two
+   parties once a counter is on the table (still "first accept wins" between
+   them) — and resolving the counter (accept or reject) always returns
+   control to `Phase.MAIN` with `current_player` unchanged, so the original
+   proposer's turn continues rather than ending. The give/receive bundle
+   itself is a **full multi-resource bundle on each side** — e.g. give 2
+   lumber + 1 brick for 1 ore + 1 grain — with no restriction to a single
+   resource type; that would be a real usability regression on a rule
+   domestic trade uses constantly. Because that bundle space is too large to
+   usefully pre-enumerate, `legal_actions` offers a single open-ended
+   `ProposeTrade`/`CounterTrade` affordance rather than every possible
    instance (the same reasoning as decision 10 below); the caller (the CLI,
    prompting a human interactively; a test driver, constructing one at random)
    builds the actual bundle and `apply_action` validates it in full — both

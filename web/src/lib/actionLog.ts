@@ -60,6 +60,18 @@ export function describeTrailEntry(entry: TrailEntry): string {
     }
     case "RejectTrade":
       return `${p} rejected the trade`;
+    case "CounterTrade": {
+      // give/receive here are the *counterer*'s own bundle (the action's own
+      // fields, entry.give/entry.receive) -- distinct from entry.trade_offer,
+      // which is the original offer being countered, used only to name who.
+      const original = entry.trade_offer?.proposer;
+      const give = entry.give as Record<string, number> | undefined;
+      const receive = entry.receive as Record<string, number> | undefined;
+      if (original === undefined || !give || !receive) {
+        return `${p} countered with a different offer`;
+      }
+      return `${p} countered Player ${original}'s offer: gives ${formatBundle(give)}, wants ${formatBundle(receive)}`;
+    }
     case "EndTurn":
       return `${p} ended their turn`;
     default:
@@ -93,7 +105,10 @@ export interface ActivityLine {
 // that is more informative on its own. A run of exactly one RejectTrade
 // (nothing to collapse) is also left alone. This is purely a display
 // concern over an already-complete, correct trail -- no entries are
-// dropped, only merged for readability.
+// dropped, only merged for readability. A rejected CounterTrade produces a
+// run of exactly one RejectTrade (the original proposer's response to the
+// counter), which the "nothing to collapse" case already leaves as its own
+// line -- no special-casing needed for counters here.
 export function groupActivityEntries(entries: TrailEntry[]): ActivityLine[] {
   const lines: ActivityLine[] = [];
   let i = 0;

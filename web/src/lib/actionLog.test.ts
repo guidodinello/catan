@@ -64,7 +64,7 @@ describe("describeTrailEntry", () => {
     const entry: TrailEntry = {
       player_id: 2,
       kind: "AcceptTrade",
-      trade_offer: { proposer: 0, give: { WOOL: 1 }, receive: { BRICK: 1 } },
+      trade_offer: { proposer: 0, give: { WOOL: 1 }, receive: { BRICK: 1 }, counter_of: null },
     };
     // Proposer (0) gave WOOL and got BRICK; responder (2, "p") is the one
     // who actually handed over BRICK and received WOOL.
@@ -77,6 +77,30 @@ describe("describeTrailEntry", () => {
     expect(describeTrailEntry({ player_id: 2, kind: "AcceptTrade" })).toBe(
       "Player 2 accepted the trade",
     );
+  });
+
+  test("describes a CounterTrade with the counterer's own bundle and who they countered", () => {
+    const entry: TrailEntry = {
+      player_id: 2,
+      kind: "CounterTrade",
+      give: { ORE: 1 },
+      receive: { LUMBER: 2 },
+      trade_offer: { proposer: 0, give: { WOOL: 1 }, receive: { BRICK: 1 }, counter_of: null },
+    };
+    expect(describeTrailEntry(entry)).toBe(
+      "Player 2 countered Player 0's offer: gives 1 ORE, wants 2 LUMBER",
+    );
+  });
+
+  test("falls back to a generic counter-trade line with no trade_offer", () => {
+    expect(
+      describeTrailEntry({
+        player_id: 2,
+        kind: "CounterTrade",
+        give: { ORE: 1 },
+        receive: { LUMBER: 2 },
+      }),
+    ).toBe("Player 2 countered with a different offer");
   });
 });
 
@@ -103,7 +127,7 @@ describe("groupActivityEntries", () => {
       {
         player_id: 2,
         kind: "AcceptTrade",
-        trade_offer: { proposer: 0, give: { WOOL: 1 }, receive: { BRICK: 1 } },
+        trade_offer: { proposer: 0, give: { WOOL: 1 }, receive: { BRICK: 1 }, counter_of: null },
       },
     ];
     const lines = groupActivityEntries(entries);
@@ -117,6 +141,26 @@ describe("groupActivityEntries", () => {
     const lines = groupActivityEntries(entries);
     expect(lines).toEqual([
       { key: "0", text: "Player 1 rejected the trade", playerIds: [1] },
+    ]);
+  });
+
+  test("leaves a single rejection of a counter-offer as its own line, uncollapsed", () => {
+    const entries: TrailEntry[] = [
+      { player_id: 0, kind: "ProposeTrade", give: { WOOL: 1 }, receive: { BRICK: 1 } },
+      {
+        player_id: 1,
+        kind: "CounterTrade",
+        give: { BRICK: 1 },
+        receive: { WOOL: 2 },
+        trade_offer: { proposer: 0, give: { WOOL: 1 }, receive: { BRICK: 1 }, counter_of: null },
+      },
+      { player_id: 0, kind: "RejectTrade" },
+    ];
+    const lines = groupActivityEntries(entries);
+    expect(lines.map((l) => l.text)).toEqual([
+      "Player 0 proposed a trade",
+      "Player 1 countered Player 0's offer: gives 1 BRICK, wants 2 WOOL",
+      "Player 0 rejected the trade",
     ]);
   });
 

@@ -10,14 +10,22 @@
   const MAX_TRADE_OFFER_SIDE = 4;
 
   interface Props {
-    // The human proposer's own hand, capping the give side. Optional
-    // because PlayerView only reveals `resources` for the viewer's own seat.
+    // The human proposer's (or counterer's) own hand, capping the give
+    // side. Optional because PlayerView only reveals `resources` for the
+    // viewer's own seat.
     humanResources?: Record<string, number>;
+    // "propose" (default) for a fresh ProposeTrade, "counter" when
+    // responding to someone else's offer with a CounterTrade -- only the
+    // heading/button wording differs, the bundle-building UI is identical.
+    mode?: "propose" | "counter";
     onSubmit: (give: Record<string, number>, receive: Record<string, number>) => void;
     onCancel: () => void;
   }
 
-  const { humanResources = {}, onSubmit, onCancel }: Props = $props();
+  const { humanResources = {}, mode = "propose", onSubmit, onCancel }: Props = $props();
+
+  const heading = $derived(mode === "counter" ? "Counter-offer" : "Propose a trade");
+  const submitLabel = $derived(mode === "counter" ? "Counter" : "Propose");
 
   function emptyBundle(): Record<string, number> {
     return Object.fromEntries(RESOURCES.map((r) => [r, 0]));
@@ -48,7 +56,7 @@
 </script>
 
 <div class="trade-form">
-  <h3>Propose a trade</h3>
+  <h3>{heading}</h3>
   <p>Up to {MAX_TRADE_OFFER_SIDE} cards per side, no shared resource type.</p>
   <div class="columns">
     <div>
@@ -82,7 +90,7 @@
   {#if overlappingResource}
     <p class="error">Cannot trade the same resource on both sides.</p>
   {/if}
-  <button onclick={submit} disabled={!isValid}>Propose</button>
+  <button onclick={submit} disabled={!isValid}>{submitLabel}</button>
   <button onclick={onCancel}>Cancel</button>
 </div>
 
