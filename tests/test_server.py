@@ -9,10 +9,13 @@ purely through HTTP calls reaches the same kind of outcome
 """
 
 import random
+from pathlib import Path
 from typing import Any, cast
 
+import pytest
 from fastapi.testclient import TestClient
 
+import server.persistence as persistence_mod
 from agents import RandomAgent
 from engine.board import Resource
 from engine.game import CITY_COST, DEV_CARD_COST, ROAD_COST, SETTLEMENT_COST
@@ -21,6 +24,15 @@ from server.app import app
 from server.sessions import get_session
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _session_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # Every route in this module goes through server/app.py's real
+    # save_session/delete_snapshot calls -- keep them out of the real
+    # .catan-sessions/ directory.
+    monkeypatch.setattr(persistence_mod, "SESSION_DIR", tmp_path)
+    return tmp_path
 
 
 def _create_game(
@@ -502,3 +514,56 @@ def test_full_game_via_http_with_one_human_seat_reaches_a_winner() -> None:
     final_state = client.get(f"/api/games/{game_id}/state").json()
     assert final_state["phase"] == Phase.GAME_OVER.name
     assert final_state["winner"] is not None
+
+
+def test_create_and_post_action_write_a_session_snapshot(tmp_path: Path) -> None:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    assert (tmp_path / f"{game_id}.pickle").exists()
+
+    legal = client.get(f"/api/games/{game_id}/legal_actions").json()
+    assert legal
+    client.post(f"/api/games/{game_id}/action", json={"index": 0})
+    # Still present (and re-written) after a real mutation, not just at
+    # creation time.
+    assert (tmp_path / f"{game_id}.pickle").exists()
+
+
+def test_delete_game_also_removes_its_snapshot(tmp_path: Path) -> None:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    assert (tmp_path / f"{game_id}.pickle").exists()
+
+    client.delete(f"/api/games/{game_id}")
+
+    assert not (tmp_path / f"{game_id}.pickle").exists()
+
+
+def test_a_game_survives_an_app_restart() -> None:
+    # The end-to-end payoff this whole feature exists for: a game created
+    # against one FastAPI app instance is resumable, by the same game_id,
+    # against a brand new instance -- simulating the backend restart a
+    # server/ code change forces (docs/backlog.md's "Sessions don't survive
+    # a backend restart").
+    with TestClient(app) as restart_client:
+        body = restart_client.post(
+            "/api/games",
+            json={
+                "num_players": 3,
+                "seat_kinds": ["human", "heuristic", "heuristic"],
+                "seed": 1,
+            },
+        ).json()
+        game_id = body["game_id"]
+        before = restart_client.get(f"/api/games/{game_id}/state").json()
+
+    # A fresh TestClient over the same `app` object re-runs the lifespan
+    # startup handler, mirroring a fresh `uvicorn server.app:app` process
+    # picking the same .catan-sessions/ directory back up.
+    with TestClient(app) as restart_client:
+        after = restart_client.get(f"/api/games/{game_id}/state").json()
+        assert after["phase"] == before["phase"]
+        assert after["current_player"] == before["current_player"]
+
+        legal = restart_client.get(f"/api/games/{game_id}/legal_actions").json()
+        assert legal or after["phase"] != before["phase"]

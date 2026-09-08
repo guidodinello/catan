@@ -251,11 +251,25 @@ Resolved while planning the web GUI (full detail in
     alongside the index — the same shape `agents/human.py`'s
     `_prompt_propose_trade` already builds interactively, just over HTTP
     instead of `input()`.
-22. **Sessions are in-memory only, multiple concurrent games.** A
-    `dict[game_id, GameSession]` with TTL eviction; no disk persistence.
-    Pickling a live `random.Random` across restarts is possible but couples
-    the save format to `state.py`'s field layout for a local dev/demo tool
-    that doesn't need it — revisit only if actually requested.
+22. **Sessions are in-memory (`dict[game_id, GameSession]`, TTL eviction),
+    backed by write-through pickle snapshots on disk.** This was revisited
+    once actually requested: `server/persistence.py` pickles each
+    `GameSession` to `.catan-sessions/<game_id>.pickle` after every mutating
+    request (`server/app.py`'s `create_game`/`post_action`/`delete_game`),
+    and a FastAPI lifespan handler reloads them all at startup — so a
+    backend restart (any `server/`/`engine/` code change, or a crash)
+    resumes games in progress instead of losing them. This does couple the
+    save format to `engine/state.py`'s exact field layout, as originally
+    flagged: a shape fingerprint (dataclass field names plus every
+    persisted `Enum`'s name→value map — `auto()` numbering silently shifts
+    on a member insertion, which is the one truly silent failure mode)
+    gates every load, so a reshape discards the stale snapshot (logged)
+    rather than resurrecting a corrupted one. Bot `Agent` RNG streams are
+    deliberately *not* persisted — only each seat's kind is, and agents are
+    rebuilt fresh (a new `driver_seed`) on load — since losing bot RNG
+    position costs only reproducibility, not correctness. Not a step toward
+    online multiplayer: that needs a shared, versioned datastore instead of
+    per-process disk pickles (see `docs/backlog.md`).
 23. **No game logic in the frontend.** It renders geometry the server sends
     (board topology is RNG-free and identical across games — `engine/
     board.py`'s `GEOMETRY` singleton — so it's serialized once per game, not

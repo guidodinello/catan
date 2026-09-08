@@ -192,41 +192,28 @@ and built.
 
 ## Server / infrastructure
 
-- **Sessions don't survive a backend restart.** `server/sessions.py` keeps
-  every game in an in-memory `dict[str, GameSession]` on the one running
-  `uvicorn` process — restarting it (needed for any `server/`/`engine/`
-  code change) loses every game in progress, "Resume a game by ID"
-  included (that feature only reconnects the *browser* to a game still
-  running server-side; it has nothing to reconnect to once the process
-  restarts). Raised during play.
-  - **Games are pickle-friendly essentially for free.** `engine.state.GameState`
-    (`board`, `players`, `dev_deck`, `bank`, `trade_offer`, etc., plus
-    `rng: random.Random`) is plain dataclasses/dicts/lists/Enums — no
-    exotic types blocking a round trip, and `random.Random` pickles its
-    *exact* stream position, not just a reseed. `CatanGame` itself is
-    stateless (`num_players` only), so it doesn't need persisting, just
-    reconstructing fresh. `server/serialize.py` is **not** reusable for
-    this — it's a one-way, lossy, per-viewer-*redacted* JSON projection
-    built for the browser, never meant to round-trip back into a live game.
-  - **The real catch:** pickle round-trips are tied to the *exact* class
-    shape at dump time. If the very code change that triggered the
-    restart reshapes `engine/state.py`'s dataclasses (add/remove/rename a
-    field), the old pickle can fail to load, or worse, silently load into
-    a stale-shaped object missing the new field. So this would reliably
-    survive restarts for changes that don't reshape engine state (most
-    `server/app.py` routes, `web/` changes, non-structural engine bug
-    fixes) but not one that adds/removes/renames a `PlayerState`/`GameState`
-    field. (The hidden-VP win-condition fix above turned out not to be an
-    example of that: it added no new state field, since the win reveal
-    reuses the existing `dev_hand`/`revealed_vp_cards` fields.) Also needs
-    a decision on *when* to persist
-    (every action = safest, extra I/O per request; only on a graceful
-    shutdown hook = simpler, loses the game on a crash/kill) and whether
-    bot `Agent` RNG streams are worth persisting too (skippable — losing
-    them just means bots reseed fresh post-restart, not a correctness
-    issue, only perfect reproducibility). Not attempted here; would need
-    a real plan first given the fragility, same as other backend-touching
-    items.
+- ~~**Sessions don't survive a backend restart.**~~ Done —
+  `server/persistence.py` pickles each `GameSession` to
+  `.catan-sessions/<game_id>.pickle` after every mutating request
+  (`server/app.py`'s `create_game`/`post_action`/`delete_game`) and a
+  FastAPI lifespan handler reloads them at startup, so "Resume a game by
+  ID" now has something to reconnect to after a restart. `GameState`
+  pickled cleanly and cheaply as expected (5.4 KB for a fresh 3-player
+  game; `random.Random`'s exact stream position round-trips). The one
+  measured surprise: a `slots=True` dataclass field rename/removal/addition
+  raises `AttributeError` (at load, or on first read of a new field) —
+  loud, not silent as originally worried — but `Phase`/`DevCardType`/
+  `Resource`/`Terrain`/`PortType`'s `auto()` numbering restores *by value*,
+  so inserting an enum member mid-list silently loads a *different*,
+  wrong member with no exception at all. A shape fingerprint (dataclass
+  field names + every persisted enum's name→value map) gates every load
+  to catch exactly that; a mismatch discards the snapshot (logged) rather
+  than resurrecting a corrupted one. Persists write-through on every
+  mutation, not just on a shutdown hook, since the restart this exists to
+  survive is also a crash or `kill -9`, not only Ctrl+C. Bot `Agent` RNG
+  streams are not persisted, as flagged as skippable — only each seat's
+  kind is saved, and agents are rebuilt fresh (a new `driver_seed`) on
+  load. See README decision 22 for the on-disk format.
   - **Bigger picture, if this ever goes properly online (multiplayer over
     the internet, not just local dev):** pickle-to-disk stops being the
     right answer entirely, for two separate reasons, not one. (1) A

@@ -15,3 +15,7 @@ wheels/
 .mypy_cache/
 .hypothesis/
 .benchmarks/
+
+# Persisted game sessions (server/persistence.py) -- tied to the checkout
+# that produced them, not meant to be shared or committed.
+.catan-sessions/

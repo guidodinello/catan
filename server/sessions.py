@@ -82,3 +82,19 @@ def get_session(game_id: str) -> GameSession:
 
 def delete_session(game_id: str) -> None:
     _SESSIONS.pop(game_id, None)
+
+
+def restore_sessions(sessions: dict[str, GameSession]) -> None:
+    """Install sessions recovered from disk (``server/persistence.py``) into
+    the in-memory store, at process startup only.
+
+    A narrow setter rather than letting the caller poke ``_SESSIONS``
+    directly -- this module owns the dict and ``_sweep_expired`` needs to
+    stay consistent with whatever's in it. ``persistence.load_all`` has
+    already dropped anything TTL-expired by wall clock, so no sweep is
+    needed here; each restored session's ``last_touched`` is a fresh
+    ``time.monotonic()`` set by the caller (see ``GameSession``'s
+    docstring -- a persisted monotonic value would be meaningless after a
+    restart).
+    """
+    _SESSIONS.update(sessions)

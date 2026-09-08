@@ -10,6 +10,8 @@ those -- it never decides whether a move is legal itself.
 from __future__ import annotations
 
 import secrets
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -20,6 +22,7 @@ from engine.board import Resource
 from engine.game import IllegalActionError
 from engine.state import acting_player
 from server.bots import SeatKind, apply_and_record, build_agents, step_bots
+from server.persistence import delete_snapshot, load_all, save_session
 from server.serialize import (
     player_view,
     serialize_build_costs,
@@ -33,10 +36,23 @@ from server.sessions import (
     create_session,
     delete_session,
     get_session,
+    restore_sessions,
 )
 from server.static import mount_static
 
-app = FastAPI(title="Catan")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Recover any games left over from before the last restart (see
+    # server/persistence.py) -- eager, one-time scan of a handful of small
+    # files, so get_session's hot path never has to touch disk. No shutdown
+    # half needed: every mutation already writes through (server/app.py's
+    # own save_session calls below), so there's nothing left to flush here.
+    restore_sessions(load_all())
+    yield
+
+
+app = FastAPI(title="Catan", lifespan=_lifespan)
 
 
 class CreateGameRequest(BaseModel):
@@ -102,6 +118,9 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     initial_trail = step_bots(session)
+    # After step_bots, not before -- a save made inside create_session would
+    # snapshot a state already stale by whatever bot turns just ran.
+    save_session(game_id, session)
     return CreateGameResponse(
         game_id=game_id,
         geometry=serialize_geometry(),
@@ -174,6 +193,7 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     trail = [human_entry, *step_bots(session)]
+    save_session(game_id, session)
     response = player_view(state, viewer=actor)
     response["action_trail"] = serialize_trail(trail)
     return response
@@ -187,6 +207,7 @@ def get_build_costs() -> dict[str, dict[str, int]]:
 @app.delete("/api/games/{game_id}")
 def delete_game(game_id: str) -> dict[str, bool]:
     delete_session(game_id)
+    delete_snapshot(game_id)  # else a restart would resurrect a deleted game
     return {"deleted": True}
 
 
