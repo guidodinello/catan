@@ -92,7 +92,7 @@
 </script>
 
 <div class="action-panel panel">
-  <h2>Actions</h2>
+  <h2 class="panel-label">Actions</h2>
   {#if panelActions.length === 0}
     <p class="empty">No actions available.</p>
   {/if}
@@ -118,15 +118,6 @@
 </div>
 
 <style>
-  .action-panel h2 {
-    margin: 0 0 var(--space-2);
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   .empty {
     margin: 0;
     color: var(--text-muted);

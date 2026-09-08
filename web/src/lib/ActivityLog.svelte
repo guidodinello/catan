@@ -28,7 +28,7 @@
 </script>
 
 <div class="activity-log panel">
-  <p class="activity-log-label">Recent activity</p>
+  <h2 class="panel-label">Recent activity</h2>
   {#if lines.length === 0}
     <p class="empty">Nothing yet.</p>
   {:else}
@@ -55,13 +55,7 @@
     flex: 1;
   }
 
-  .activity-log-label {
-    margin: 0 0 var(--space-2);
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+  .panel-label {
     flex: none;
   }
 
@@ -92,7 +86,7 @@
   .swatches {
     flex: none;
     display: inline-flex;
-    gap: 0.15rem;
+    gap: var(--space-1);
   }
 
   .swatch {

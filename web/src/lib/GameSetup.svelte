@@ -90,7 +90,8 @@
     </select>
   </label>
 
-  <div class="seats">
+  <fieldset class="seats">
+    <legend>Seats</legend>
     {#each seatKinds as _seatKind, i (i)}
       <label>
         Seat {i}:
@@ -101,7 +102,7 @@
         </select>
       </label>
     {/each}
-  </div>
+  </fieldset>
 
   <p class="hint">
     Multiple "Human" seats are all playable from this browser tab -- a
@@ -157,7 +158,19 @@
   }
 
   .seats {
+    border: none;
+    padding: 0;
     margin: var(--space-3) 0;
+  }
+
+  .seats legend {
+    padding: 0;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-2);
   }
 
   .hint {

@@ -36,26 +36,30 @@
 
 <div class="trade-offer banner-warn">
   <p class="trade-offer-label">{label}</p>
-  <p class="trade-offer-bundle">
-    Gives:
-    {#each nonZero(offer.give) as [resource, count] (resource)}
-      {@const Icon = RESOURCE_ICON[resource]}
-      <span class="card">
-        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><Icon /></svg>
-        {count}
-      </span>
-    {/each}
-  </p>
-  <p class="trade-offer-bundle">
-    Wants:
-    {#each nonZero(offer.receive) as [resource, count] (resource)}
-      {@const Icon = RESOURCE_ICON[resource]}
-      <span class="card">
-        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><Icon /></svg>
-        {count}
-      </span>
-    {/each}
-  </p>
+  <div class="trade-offer-bundle">
+    <span>Gives:</span>
+    <ul class="card-list">
+      {#each nonZero(offer.give) as [resource, count] (resource)}
+        {@const Icon = RESOURCE_ICON[resource]}
+        <li class="card">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><Icon /></svg>
+          {count}
+        </li>
+      {/each}
+    </ul>
+  </div>
+  <div class="trade-offer-bundle">
+    <span>Wants:</span>
+    <ul class="card-list">
+      {#each nonZero(offer.receive) as [resource, count] (resource)}
+        {@const Icon = RESOURCE_ICON[resource]}
+        <li class="card">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><Icon /></svg>
+          {count}
+        </li>
+      {/each}
+    </ul>
+  </div>
 </div>
 
 <style>
@@ -65,16 +69,25 @@
   }
 
   .trade-offer-bundle {
-    margin: 0.15rem 0;
+    margin: var(--space-1) 0;
     display: flex;
     align-items: center;
     gap: var(--space-2);
     flex-wrap: wrap;
   }
 
+  .card-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
   .card {
     display: inline-flex;
     align-items: center;
-    gap: 0.15rem;
+    gap: var(--space-1);
   }
 </style>

@@ -56,7 +56,7 @@ body {
 main {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: var(--space-5);
 }
 
 /* Shared card surface -- replaces the border/radius/padding block that was
@@ -142,6 +142,19 @@ button.primary:hover {
   border-radius: 50%;
   border: 1px solid var(--border-strong);
   vertical-align: middle;
+}
+
+/* Shared section-heading treatment for every sidebar card's title --
+   Scoreboard/ActivityLog/HandSummary/BuildCosts/ActionPanel all use a
+   real heading element at this one rank so screen-reader jump-by-heading
+   navigation reaches every section, not just ActionPanel's. */
+.panel-label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .visually-hidden {

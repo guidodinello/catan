@@ -71,11 +71,11 @@
 
 <style>
   .dev-card-strip {
-    margin-top: 0.15rem;
+    margin-top: var(--space-1);
   }
 
   .dev-card-label {
-    margin: 0.15rem 0 0.1rem;
+    margin: var(--space-1) 0;
     font-size: 0.75em;
     color: var(--text-muted);
   }
@@ -92,7 +92,7 @@
   .dev-card-list li {
     display: flex;
     align-items: center;
-    gap: 0.2rem;
+    gap: var(--space-1);
     font-size: 0.85em;
   }
 </style>

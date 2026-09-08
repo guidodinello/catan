@@ -21,7 +21,7 @@
 </script>
 
 <div class="build-costs panel">
-  <p class="label">Build costs</p>
+  <h2 class="panel-label">Build costs</h2>
   <ul class="costs">
     {#each KIND_ORDER as kind (kind)}
       {@const cost = costs[kind] ?? {}}
@@ -47,15 +47,6 @@
 </div>
 
 <style>
-  .label {
-    margin: 0 0 var(--space-2);
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   .costs {
     list-style: none;
     margin: 0;
@@ -88,7 +79,7 @@
   .amount {
     display: flex;
     align-items: center;
-    gap: 0.2rem;
+    gap: var(--space-1);
     color: var(--text);
   }
 </style>

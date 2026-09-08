@@ -30,19 +30,21 @@
     {/if}
   </p>
   {#if recentRolls.length > 0}
-    <p class="recent-rolls">
-      Recent rolls:
-      {#each recentRolls as entry, i (i)}
-        {@const [d1, d2] = entry.dice_roll ?? [0, 0]}
-        <span class="roll-chip">
-          <span class="swatch" style="background: {PLAYER_COLOR[entry.player_id]}"></span>
-          {d1 + d2}
-        </span>
-      {/each}
-    </p>
+    <div class="recent-rolls">
+      <span>Recent rolls:</span>
+      <ul class="roll-chip-list">
+        {#each recentRolls as entry, i (i)}
+          {@const [d1, d2] = entry.dice_roll ?? [0, 0]}
+          <li class="roll-chip">
+            <span class="swatch" style="background: {PLAYER_COLOR[entry.player_id]}"></span>
+            {d1 + d2}
+          </li>
+        {/each}
+      </ul>
+    </div>
   {/if}
   {#if resources}
-    <p class="hand-label">Your hand</p>
+    <h2 class="panel-label">Your hand</h2>
     <ul class="hand">
       {#each RESOURCES as resource (resource)}
         {@const Icon = RESOURCE_ICON[resource]}
@@ -73,6 +75,15 @@
     gap: var(--space-2);
   }
 
+  .roll-chip-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
   .roll-chip {
     display: inline-flex;
     align-items: center;
@@ -81,15 +92,6 @@
 
   .roll-chip .swatch {
     --swatch-size: 0.7em;
-  }
-
-  .hand-label {
-    margin: 0 0 var(--space-1);
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
 
   .hand {

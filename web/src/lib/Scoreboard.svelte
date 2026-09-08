@@ -29,7 +29,7 @@
 </script>
 
 <div class="scoreboard panel">
-  <p class="scoreboard-label">Victory points</p>
+  <h2 class="panel-label">Victory points</h2>
   <ul>
     {#each state.players as player (player.player_id)}
       {@const hidden = player.player_id === viewer ? hiddenVpCount(player) : 0}
@@ -55,15 +55,6 @@
 </div>
 
 <style>
-  .scoreboard-label {
-    margin: 0 0 var(--space-2);
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   ul {
     list-style: none;
     margin: 0;
@@ -77,7 +68,7 @@
     font-size: 0.75em;
     border: 1px solid currentColor;
     border-radius: 999px;
-    padding: 0.05rem 0.4rem;
+    padding: var(--space-1) 0.4rem;
     margin-left: var(--space-1);
   }
 </style>
