@@ -27,7 +27,7 @@
   });
 </script>
 
-<div class="activity-log">
+<div class="activity-log panel">
   <p class="activity-log-label">Recent activity</p>
   {#if lines.length === 0}
     <p class="empty">Nothing yet.</p>
@@ -49,39 +49,44 @@
 
 <style>
   .activity-log {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
   }
 
   .activity-log-label {
-    margin: 0 0 0.5rem;
-    font-weight: bold;
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex: none;
   }
 
   .empty {
     margin: 0;
-    color: #666;
-    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
   }
 
   ul {
     list-style: none;
     margin: 0;
     padding: 0;
-    max-height: 180px;
+    min-height: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--space-1);
   }
 
   li {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.9rem;
+    gap: var(--space-2);
+    font-size: var(--fs-sm);
   }
 
   .swatches {
@@ -91,11 +96,6 @@
   }
 
   .swatch {
-    flex: none;
-    display: inline-block;
-    width: 0.8em;
-    height: 0.8em;
-    border-radius: 50%;
-    border: 1px solid #000;
+    --swatch-size: 0.8em;
   }
 </style>

@@ -55,7 +55,7 @@
   }
 </script>
 
-<div class="trade-form">
+<div class="trade-form panel">
   <h3>{heading}</h3>
   <p>Up to {MAX_TRADE_OFFER_SIDE} cards per side, no shared resource type.</p>
   <div class="columns">
@@ -95,31 +95,29 @@
 </div>
 
 <style>
-  .trade-form {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-top: 0.75rem;
-  }
-
   .columns {
     display: flex;
-    gap: 2rem;
+    flex-wrap: wrap;
+    gap: var(--space-5);
   }
 
   label {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
-    margin-bottom: 0.3rem;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
   }
 
   input {
     width: 3.5rem;
-    margin-left: 0.4rem;
+    margin-left: var(--space-2);
+    background: var(--surface-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
   }
 
   .error {
-    color: #d90429;
+    color: var(--danger);
   }
 </style>

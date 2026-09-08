@@ -1,14 +1,157 @@
 :root {
   color-scheme: light dark;
   font: 16px/1.5 system-ui, "Segoe UI", Roboto, sans-serif;
+
+  /* Surfaces */
+  --bg: light-dark(#f4f5f3, #14171a);
+  --surface: light-dark(#ffffff, #1e2226);
+  --surface-raised: light-dark(#eef0ee, #262b30);
+  --border: light-dark(#d6d8d4, #3a4046);
+  --border-strong: light-dark(#b7bab5, #545b62);
+
+  /* Text -- --text/--text-muted both hold >=4.5:1 against --surface in
+     both schemes; --text-muted is for labels/captions only, never for a
+     value (that's the "greyed-out Build costs" bug this fixes). */
+  --text: light-dark(#1b1e20, #e7e9ea);
+  --text-strong: light-dark(#0e1012, #f5f6f6);
+  --text-muted: light-dark(#585f63, #a7adb2);
+
+  /* Accent / status */
+  --accent: light-dark(#1d6f5e, #4fd1b5);
+  --accent-contrast: light-dark(#ffffff, #05221b);
+  --danger: light-dark(#c1121f, #ff6b6f);
+  --warn-bg: light-dark(#fff3cd, #4a3c0a);
+  --warn-text: light-dark(#664d03, #ffe08a);
+  --warn-border: light-dark(#ffd60a, #c9a400);
+
+  /* Spacing scale -- the only spacing values used anywhere after this */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Radii / elevation */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 40%));
+
+  /* Type scale */
+  --fs-sm: 0.85rem;
+  --fs-base: 1rem;
+  --fs-lg: 1.2rem;
+  --fs-xl: 1.5rem;
+
+  --swatch-size: 1em;
 }
 
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
 }
 
 main {
   max-width: 720px;
   margin: 0 auto;
   padding: 1.5rem;
+}
+
+/* Shared card surface -- replaces the border/radius/padding block that was
+   copy-pasted across Scoreboard/ActivityLog/HandSummary/BuildCosts/
+   ActionPanel/GameSetup/TradeForm/DevCardResourceForm/game-over. Lives
+   here (not scoped per-component) so one rule governs every card; no
+   margin-bottom -- spacing between cards comes from the sidebar's own
+   `gap`, not from each card padding itself apart. */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow);
+}
+
+/* Shared warning-banner surface -- replaces the identical
+   #fff3cd/#664d03/#ffd60a block duplicated in App's
+   .road-building-banner and TradeOfferBanner's .trade-offer. */
+.banner-warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* Real button affordance -- these must reach buttons inside scoped
+   components, so they live in the global stylesheet keyed on the
+   element itself rather than a class each component would have to opt
+   into individually. */
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  min-height: 2rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color 0.1s ease,
+    transform 0.05s ease;
+}
+
+button:hover {
+  background: var(--border);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+}
+
+/* Player-color swatch circle -- was defined at four different sizes
+   across App/Scoreboard/ActivityLog/HandSummary; one base sized from
+   --swatch-size, overridden locally where a smaller one is wanted. */
+.swatch {
+  display: inline-block;
+  flex: none;
+  width: var(--swatch-size);
+  height: var(--swatch-size);
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  vertical-align: middle;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

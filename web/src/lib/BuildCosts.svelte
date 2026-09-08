@@ -20,7 +20,7 @@
   const KIND_ORDER = ["ROAD", "SETTLEMENT", "CITY", "DEV_CARD"];
 </script>
 
-<div class="build-costs">
+<div class="build-costs panel">
   <p class="label">Build costs</p>
   <ul class="costs">
     {#each KIND_ORDER as kind (kind)}
@@ -47,16 +47,13 @@
 </div>
 
 <style>
-  .build-costs {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-  }
-
   .label {
-    margin: 0 0 0.5rem;
-    font-weight: bold;
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .costs {
@@ -65,41 +62,33 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--space-2);
   }
 
   .costs li {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    font-size: 0.9rem;
+    gap: var(--space-2);
+    font-size: var(--fs-sm);
   }
 
+  /* This is a value (what a build costs), not a caption -- it must read
+     at full body contrast, not the muted "greyed-out" look it had before
+     tokens existed. */
   .kind {
-    color: #444;
+    color: var(--text);
   }
 
   .amounts {
     display: flex;
-    gap: 0.6rem;
+    gap: var(--space-3);
   }
 
   .amount {
     display: flex;
     align-items: center;
     gap: 0.2rem;
-  }
-
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+    color: var(--text);
   }
 </style>

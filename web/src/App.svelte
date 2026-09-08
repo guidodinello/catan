@@ -494,36 +494,9 @@
 </script>
 
 <main class:playing={status === "ok"}>
-  <h1>Catan</h1>
-
-  {#if status === "setup"}
-    <GameSetup onCreate={startGame} onResume={resumeGame} />
-  {:else if status === "loading"}
-    <p>Loading...</p>
-  {:else if status === "error"}
-    <p class="error">
-      Error: {errorMessage}
-      <button onclick={playAgain}>Back to setup</button>
-    </p>
-  {:else if geometry && gameState}
-    {#if isGameOver}
-      <div class="game-over">
-        <h2>Game over</h2>
-        {#if gameState.winner !== null}
-          <p>
-            <span
-              class="swatch"
-              style="background: {PLAYER_COLOR[gameState.winner]}"
-            ></span>
-            Player {gameState.winner} wins!
-          </p>
-        {:else}
-          <p>Game over.</p>
-        {/if}
-        <button onclick={playAgain}>New game</button>
-      </div>
-      <Board {geometry} state={gameState} />
-    {:else}
+  <header class="app-bar">
+    <h1>Catan</h1>
+    {#if status === "ok" && gameState && !isGameOver}
       <p class="phase-line">
         Phase: {gameState.phase}, turn: Player {gameState.current_player}
         {#if gameState.acting_player !== gameState.current_player}
@@ -554,30 +527,39 @@
           <span class="hint">(pass-and-play -- this doesn't hide the view from anyone else at this screen)</span>
         </p>
       {/if}
-      {#if errorMessage}
-        <p class="error">
-          {errorMessage}
-          <button onclick={() => (errorMessage = "")}>&times;</button>
-        </p>
-      {/if}
-      {#if tradeResultMessage}
-        <p class="trade-result">
-          {tradeResultMessage}
-          <button onclick={() => (tradeResultMessage = "")}>&times;</button>
-        </p>
-      {/if}
-      {#if roadBuildingActive}
-        <p class="road-building-banner">
-          Play Road Building:
-          {roadBuildingFirstEdge === null
-            ? "pick the first road on the board."
-            : "now pick the second road."}
-          <button onclick={cancelRoadBuilding}>Cancel</button>
-        </p>
-      {/if}
-      {#if gameState.trade_offer}
-        <TradeOfferBanner offer={gameState.trade_offer} {viewer} />
-      {/if}
+    {/if}
+  </header>
+
+  {#if status === "setup"}
+    <GameSetup onCreate={startGame} onResume={resumeGame} />
+  {:else if status === "loading"}
+    <p>Loading...</p>
+  {:else if status === "error"}
+    <p class="error">
+      Error: {errorMessage}
+      <button onclick={playAgain}>Back to setup</button>
+    </p>
+  {:else if geometry && gameState}
+    {#if isGameOver}
+      <div class="game-over panel">
+        <h2>Game over</h2>
+        {#if gameState.winner !== null}
+          <p>
+            <span
+              class="swatch"
+              style="background: {PLAYER_COLOR[gameState.winner]}"
+            ></span>
+            Player {gameState.winner} wins!
+          </p>
+        {:else}
+          <p>Game over.</p>
+        {/if}
+        <button onclick={playAgain}>New game</button>
+      </div>
+      <div class="board-column">
+        <Board {geometry} state={gameState} />
+      </div>
+    {:else}
       <div class="layout" class:busy={isBusy}>
         <div class="board-column">
           <Board
@@ -588,7 +570,34 @@
             {edgePickHandlers}
           />
         </div>
-        <div class="panel-column" class:disabled={roadBuildingActive}>
+        <div class="panel-column">
+          {#if errorMessage}
+            <p class="error banner-warn sticky-banner">
+              {errorMessage}
+              <button onclick={() => (errorMessage = "")}>&times;</button>
+            </p>
+          {/if}
+          {#if tradeResultMessage}
+            <p class="trade-result banner-warn sticky-banner">
+              {tradeResultMessage}
+              <button onclick={() => (tradeResultMessage = "")}>&times;</button>
+            </p>
+          {/if}
+          {#if roadBuildingActive}
+            <p class="road-building-banner banner-warn sticky-banner">
+              Play Road Building:
+              {roadBuildingFirstEdge === null
+                ? "pick the first road on the board."
+                : "now pick the second road."}
+              <button onclick={cancelRoadBuilding}>Cancel</button>
+            </p>
+          {/if}
+          {#if gameState.trade_offer}
+            <div class="sticky-banner">
+              <TradeOfferBanner offer={gameState.trade_offer} {viewer} />
+            </div>
+          {/if}
+          <div class="panels" class:disabled={roadBuildingActive}>
           <Scoreboard state={gameState} {viewer} />
           <ActivityLog entries={revealedLog} />
           <HandSummary
@@ -648,6 +657,7 @@
               onCancel={() => (showYearOfPlentyForm = false)}
             />
           {/if}
+          </div>
         </div>
       </div>
     {/if}
@@ -656,29 +666,59 @@
 
 <style>
   /* app.css caps <main> at 720px for the setup/error screens, where a
-     narrow form reads better -- but that same cap starved the board of
-     room once actually playing, since Board.svelte's svg is width: 100%
-     of .board-column and scales down with whatever space it's given. */
+     narrow form reads better. Once actually playing, the shell claims the
+     full viewport height/width so the board -- the hero element -- has
+     real room to scale into (see Board.svelte's svg sizing). */
   main.playing {
-    max-width: 1400px;
+    max-width: 1600px;
+    margin-inline: auto;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .app-bar {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-5);
+    flex: none;
   }
 
   main h1 {
-    font-size: 3rem;
-    margin-bottom: 0.25rem;
+    font-size: var(--fs-xl);
+    font-weight: 700;
+    color: var(--text-strong);
+    margin: 0;
   }
 
+  /* The prominent status element -- deliberately louder than the static
+     title above, since it's what actually changes turn to turn. */
   .phase-line {
-    font-size: 1.2rem;
+    margin: 0;
+    font-size: var(--fs-base);
+    font-weight: 600;
+    color: var(--text-strong);
+    background: var(--surface-raised);
+    border-radius: 999px;
+    padding: var(--space-1) var(--space-3);
   }
 
   .layout {
-    display: flex;
-    gap: 1.5rem;
-    /* stretch (not the default-overriding flex-start) so .panel-column
-       matches .board-column's height instead of shrink-wrapping its own
-       content and leaving empty space below it next to a taller board. */
-    align-items: stretch;
+    display: grid;
+    /* minmax(0, 1fr), not bare 1fr -- lets the board cell shrink below
+       its SVG's intrinsic content size; without the 0 it can't. */
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 380px);
+    /* A plain implicit "auto" row would size to its tallest child's
+       content instead of filling .layout's own (flex:1-derived) height --
+       1fr makes the single row actually claim it, which is what lets
+       .board-column's svg (height:100%) and .panel-column's internal
+       scroll both do anything. */
+    grid-auto-rows: 1fr;
+    gap: var(--space-5);
+    flex: 1;
+    min-height: 0;
   }
 
   .layout.busy {
@@ -687,70 +727,101 @@
   }
 
   .board-column {
-    flex: 1;
     min-width: 0;
+    min-height: 0;
+    display: flex;
   }
 
   .panel-column {
-    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
+    gap: var(--space-3);
+    min-height: 0;
+    overflow-y: auto;
   }
 
-  /* The last box (normally ActionPanel, or whichever form is currently
-     open below it) grows to fill the remaining stretched height from
-     .layout above, so the column reaches the board's bottom without
-     spreading big empty gaps between every box (space-between's effect,
-     tried first and rejected -- it looked disconnected, not "aligned"). */
-  .panel-column > :global(:last-child) {
+  /* The scrollable panel stack -- kept separate from the sticky banners
+     above it so .disabled's pointer-events:none (during Play Road
+     Building) doesn't also swallow clicks on the road-building banner's
+     own Cancel button. */
+  .panels {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
     flex: 1;
+    min-height: 0;
   }
 
-  .panel-column.disabled {
+  .panels.disabled {
     opacity: 0.6;
     pointer-events: none;
   }
 
+  /* Transient banners (error/trade-result/road-building/trade-offer) live
+     at the top of the scrolling sidebar rather than full-width above the
+     board, so the board never reflows when one appears. Sticky so one
+     that appears while the sidebar is scrolled down still stays visible --
+     this is the surface resyncAfterError's recovery message depends on. */
+  .sticky-banner {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    flex: none;
+  }
+
+  .banner-warn {
+    margin: 0;
+  }
+
   .road-building-banner {
-    background: #fff3cd;
-    color: #664d03;
-    border: 1px solid #ffd60a;
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
   .game-over {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .swatch {
-    display: inline-block;
-    width: 0.9em;
-    height: 0.9em;
-    border-radius: 50%;
-    border: 1px solid #000;
-    vertical-align: middle;
+    margin-bottom: var(--space-4);
   }
 
   .error {
-    color: #d90429;
+    color: var(--danger);
   }
 
   .trade-result {
-    color: #1d3557;
+    color: var(--accent);
     font-weight: bold;
   }
 
   .viewer-switch {
-    margin: 0 0 0.75rem;
+    margin: 0;
+    font-size: var(--fs-sm);
   }
 
   .viewer-switch .hint {
-    color: #666;
-    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+  }
+
+  @media (max-width: 1000px) {
+    main.playing {
+      height: auto;
+    }
+
+    .layout {
+      grid-template-columns: 1fr;
+    }
+
+    .board-column {
+      /* Below this width the board no longer sits in a height-bounded
+         flex row (main.playing drops height:100dvh above), so give it an
+         intrinsic height via aspect-ratio -- Board.svelte's computed
+         viewBox is near-square (~555x535 user units). */
+      aspect-ratio: 1 / 1;
+    }
+
+    .panel-column {
+      overflow-y: visible;
+    }
   }
 </style>

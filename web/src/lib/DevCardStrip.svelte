@@ -77,7 +77,7 @@
   .dev-card-label {
     margin: 0.15rem 0 0.1rem;
     font-size: 0.75em;
-    color: #666;
+    color: var(--text-muted);
   }
 
   .dev-card-list {
@@ -86,7 +86,7 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-2);
   }
 
   .dev-card-list li {

@@ -21,7 +21,7 @@
   const { diceRoll, recentRolls = [], resources }: Props = $props();
 </script>
 
-<div class="hand-summary">
+<div class="hand-summary panel">
   <p class="roll">
     {#if diceRoll}
       Last roll: {diceRoll[0]} + {diceRoll[1]} = <strong>{diceRoll[0] + diceRoll[1]}</strong>
@@ -59,44 +59,37 @@
 </div>
 
 <style>
-  .hand-summary {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-  }
-
   .roll {
-    margin: 0 0 0.5rem;
+    margin: 0 0 var(--space-2);
   }
 
   .recent-rolls {
-    margin: 0 0 0.5rem;
-    font-size: 0.85rem;
-    color: #444;
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: var(--space-2);
   }
 
   .roll-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-1);
   }
 
-  .swatch {
-    display: inline-block;
-    width: 0.7em;
-    height: 0.7em;
-    border-radius: 50%;
-    border: 1px solid #000;
+  .roll-chip .swatch {
+    --swatch-size: 0.7em;
   }
 
   .hand-label {
-    margin: 0 0 0.25rem;
-    font-weight: bold;
+    margin: 0 0 var(--space-1);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .hand {
@@ -105,24 +98,12 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
+    gap: var(--space-3);
   }
 
   .hand li {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
-  }
-
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+    gap: var(--space-1);
   }
 </style>

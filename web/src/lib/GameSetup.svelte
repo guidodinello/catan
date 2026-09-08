@@ -79,7 +79,7 @@
   }
 </script>
 
-<div class="game-setup">
+<div class="game-setup panel">
   <h2>New game</h2>
 
   <label>
@@ -148,23 +148,30 @@
 
 <style>
   .game-setup {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
     max-width: 480px;
   }
 
   label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--space-2);
   }
 
   .seats {
-    margin: 0.75rem 0;
+    margin: var(--space-3) 0;
   }
 
   .hint {
-    color: #666;
-    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+  }
+
+  input,
+  select {
+    background: var(--surface-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    padding: 0.15rem var(--space-2);
   }
 </style>

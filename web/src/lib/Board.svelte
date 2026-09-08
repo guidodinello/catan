@@ -411,9 +411,14 @@
 
 <style>
   svg {
+    /* Fills whichever axis of .board-column binds first -- the viewBox
+       (computed above) plus the default preserveAspectRatio:xMidYMid
+       meet does the actual scaling, so the board grows to use the space
+       App.svelte's grid now gives it instead of being width-driven and
+       then vertically clamped. */
     width: 100%;
-    height: auto;
-    max-height: 80vh;
+    height: 100%;
+    min-height: 0;
   }
 
   .terrain-icon,

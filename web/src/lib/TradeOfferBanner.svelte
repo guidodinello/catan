@@ -34,7 +34,7 @@
   );
 </script>
 
-<div class="trade-offer">
+<div class="trade-offer banner-warn">
   <p class="trade-offer-label">{label}</p>
   <p class="trade-offer-bundle">
     Gives:
@@ -59,17 +59,8 @@
 </div>
 
 <style>
-  .trade-offer {
-    border: 1px solid #ffd60a;
-    background: #fff3cd;
-    color: #664d03;
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.75rem;
-  }
-
   .trade-offer-label {
-    margin: 0 0 0.35rem;
+    margin: 0 0 var(--space-1);
     font-weight: bold;
   }
 
@@ -77,7 +68,7 @@
     margin: 0.15rem 0;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
     flex-wrap: wrap;
   }
 

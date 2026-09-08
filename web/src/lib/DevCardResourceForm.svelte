@@ -53,7 +53,7 @@
   }
 </script>
 
-<div class="dev-card-form">
+<div class="dev-card-form panel">
   <h3>{title}</h3>
   {#each Array.from({ length: count }) as _unused, i (i)}
     {@const Icon = RESOURCE_ICON[picks[i]]}
@@ -74,17 +74,19 @@
 </div>
 
 <style>
-  .dev-card-form {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-top: 0.75rem;
-  }
-
   label {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.4rem;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  select {
+    background: var(--surface-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    padding: 0.15rem var(--space-2);
   }
 </style>

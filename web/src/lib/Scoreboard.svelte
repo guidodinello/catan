@@ -28,7 +28,7 @@
   }
 </script>
 
-<div class="scoreboard">
+<div class="scoreboard panel">
   <p class="scoreboard-label">Victory points</p>
   <ul>
     {#each state.players as player (player.player_id)}
@@ -55,16 +55,13 @@
 </div>
 
 <style>
-  .scoreboard {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-  }
-
   .scoreboard-label {
-    margin: 0 0 0.5rem;
-    font-weight: bold;
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   ul {
@@ -73,16 +70,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  .swatch {
-    display: inline-block;
-    width: 0.9em;
-    height: 0.9em;
-    border-radius: 50%;
-    border: 1px solid #000;
-    vertical-align: middle;
+    gap: var(--space-2);
   }
 
   .badge {
@@ -90,6 +78,6 @@
     border: 1px solid currentColor;
     border-radius: 999px;
     padding: 0.05rem 0.4rem;
-    margin-left: 0.25rem;
+    margin-left: var(--space-1);
   }
 </style>

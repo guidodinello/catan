@@ -91,15 +91,15 @@
   }
 </script>
 
-<div class="action-panel">
+<div class="action-panel panel">
   <h2>Actions</h2>
   {#if panelActions.length === 0}
-    <p>No actions available.</p>
+    <p class="empty">No actions available.</p>
   {/if}
   {#each kinds as kind (kind)}
     {@const options = byKind.get(kind) ?? []}
     <div class="action-group">
-      <button onclick={() => chooseKind(kind)}>
+      <button class:primary={kind === "EndTurn"} onclick={() => chooseKind(kind)}>
         {kind}{options.length > 1 ? ` (${options.length} options)` : ""}
       </button>
       {#if expandedKind === kind && options.length > 1}
@@ -118,26 +118,44 @@
 </div>
 
 <style>
-  .action-panel {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    min-width: 220px;
+  .action-panel h2 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
   }
 
   .action-group {
-    margin-bottom: 0.4rem;
+    margin-bottom: var(--space-2);
+  }
+
+  .action-group > button {
+    width: 100%;
+    text-align: left;
   }
 
   ul {
     list-style: none;
-    margin: 0.25rem 0 0;
-    padding-left: 0.5rem;
+    margin: var(--space-1) 0 0;
+    padding-left: var(--space-2);
     max-height: 220px;
     overflow-y: auto;
   }
 
   li {
-    margin-bottom: 0.2rem;
+    margin-bottom: var(--space-1);
+  }
+
+  li > button {
+    width: 100%;
+    text-align: left;
   }
 </style>
