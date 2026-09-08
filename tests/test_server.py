@@ -49,6 +49,7 @@ def _create_game(
 def test_create_game_returns_game_id_geometry_and_initial_state() -> None:
     body = _create_game(3, ["human", "human", "human"], seed=1)
     assert "game_id" in body
+    assert isinstance(body["driver_seed"], int)
     assert body["geometry"]["port_locations"]
     assert len(body["geometry"]["vertices"]) == 54
     assert len(body["geometry"]["edges"]) == 72

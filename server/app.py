@@ -63,6 +63,7 @@ class CreateGameRequest(BaseModel):
 
 class CreateGameResponse(BaseModel):
     game_id: str
+    driver_seed: int
     geometry: dict[str, Any]
     state: dict[str, Any]
     action_trail: list[dict[str, Any]]
@@ -108,7 +109,13 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
     # independent streams (README decision 17) -- reproducibility of a live
     # web game's engine rolls is the only thing the API exposes; bot choices
     # are not required to be reproducible, so the driver seed is always
-    # freshly drawn.
+    # freshly drawn (never accepted from the request). It's still returned
+    # in the response -- purely observable, not settable -- so a client (or
+    # a test, see docs/backlog.md's bit-identity cross-check) can replay this
+    # exact game's bot choices through experiments.rollout.run_game. Note a
+    # *resumed* game (server/persistence.py) draws a fresh driver_seed on
+    # restore -- bot RNG is deliberately not persisted -- so that replay only
+    # holds for the lifetime of one process.
     driver_seed = secrets.randbits(63)
     agents = build_agents(request.seat_kinds, driver_seed)
     try:
@@ -123,6 +130,7 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
     save_session(game_id, session)
     return CreateGameResponse(
         game_id=game_id,
+        driver_seed=driver_seed,
         geometry=serialize_geometry(),
         state=player_view(session.state, viewer=None),
         action_trail=serialize_trail(initial_trail),

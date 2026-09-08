@@ -249,17 +249,20 @@ and built.
   full `seat_kinds` isn't available to the client — switching among a
   resumed game's *other* human seats would need a server-side way to learn
   the lineup, which is a `server/` change out of scope here.
-- **No bit-identity cross-check between the HTTP path and
-  `experiments/rollout.run_game`.** Deferred during step 3 as real design
-  work beyond what the phased plan called for (needs a `driver_seed` exposed
-  through the API, plus reconciling `server/bots.py`'s per-seat agent shape
-  with `rollout.py`'s `AgentFactory` shape). Would be a strong addition to
-  the verification story if ever revisited. Sharpening the first piece:
-  `server/app.py`'s `create_game` already generates a `driver_seed =
-  secrets.randbits(63)` per game (used to build each seat's `Agent` via
-  `build_agents`) -- it's just discarded after use rather than returned in
-  `CreateGameResponse`, so exposing it is a small, additive API change (a
-  new response field), not a redesign. The harder half is still
-  `rollout.py`'s `AgentFactory` shape vs. `server/bots.py`'s per-seat
-  `Agent | None` list: reconciling those (or writing a small adapter
-  between them) is the real work, not the seed plumbing.
+- ~~**No bit-identity cross-check between the HTTP path and
+  `experiments/rollout.run_game`.**~~ Done — `tests/test_parity.py` plays
+  the same all-bot game twice (once through one `POST /api/games` call,
+  once through `run_game`) and asserts the raw `GameState`s and action
+  trails match. `CreateGameResponse` now returns the `driver_seed`
+  `create_game` was already generating and discarding, so the rollout side
+  can replay the HTTP game's bot choices exactly. The harder half --
+  `rollout.py`'s `AgentFactory` (`list[Agent]`) vs. `server/bots.py`'s
+  per-seat `Agent | None` list -- is bridged by a test-local adapter that
+  calls `build_agents` itself (not a reimplementation of its seeding rule,
+  which would make the test tautological) and narrows away the `None`s.
+  Two documented scope limits: the trail comparison strips `dice_roll`/
+  `production`/`trade_offer`, since an agent-level recording proxy can't
+  observe those before/after-diff fields -- the raw-state comparison
+  (including `rng.getstate()`) pins them independently; and a *resumed*
+  game (`server/persistence.py`) draws a fresh `driver_seed` on restore, so
+  it isn't bit-replayable this way (bot RNG is deliberately not persisted).
