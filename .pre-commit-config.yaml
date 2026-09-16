@@ -9,7 +9,7 @@ repos:
           - id: check-toml
 
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.16.5
+      rev: v0.16.6
       hooks:
           - id: ruff
             args: [--fix]
@@ -24,4 +24,4 @@ repos:
             # server/app.py's @app.get()/@app.post(), or tests/test_persistence.py's
             # @pytest.fixture() decorators ("Untyped decorator makes function ...
             # untyped").
-            additional_dependencies: ["hypothesis>=6.167.1", "fastapi>=0.141.1", "pytest>=9.1.1"]
+            additional_dependencies: ["hypothesis>=6.168.0", "fastapi>=0.141.1", "pytest>=9.1.1"]
