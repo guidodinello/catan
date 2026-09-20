@@ -26,10 +26,10 @@ the driver, not the rotation logic itself). **Pass.**
 `heuristic_vs_random`, 3,999 games (3p) / 4,000 games (4p), 1 heuristic seat
 rotated against 2 or 3 random seats:
 
-- 3p: heuristic 94.25% [93.48%, 94.93%] vs. random (pooled) 2.88% [2.53%,
-  3.27%]. Two-proportion test: z=-100.1, p≈0.
-- 4p: heuristic 91.83% [90.94%, 92.63%] vs. random (pooled) 2.72% [2.45%,
-  3.03%]. z=-112.7, p≈0.
+- 3p: heuristic 94.47% [93.72%, 95.14%] vs. random (pooled) 2.76% [2.43%,
+  3.15%]. Two-proportion test: z=-100.45, p≈0.
+- 4p: heuristic 91.93% [91.04%, 92.73%] vs. random (pooled) 2.69% [2.42%,
+  3.00%]. z=-112.87, p≈0.
 
 Non-overlapping CIs by a wide margin in both player counts. **Pass** — and a
 much larger effect than the "tens of points" the plan anticipated, which is
@@ -37,8 +37,8 @@ itself worth noting: a single fixed-priority heuristic (city > settlement >
 dev card > knight-on-robber > monopoly/YoP-to-unblock > bank/port trade
 that enables a build > road > end turn) beats uniform-random play by a wide
 margin in base-game Catan. The intermediate diagnostic agrees: `mean_resources_through_turn_10` is
-roughly double for heuristic in both player counts (3p: 6.52 vs. 3.18; 4p:
-6.44 vs. 3.20) — the heuristic wins by producing more, not by exploiting an
+roughly double for heuristic in both player counts (3p: 6.51 vs. 3.19; 4p:
+6.48 vs. 3.19) — the heuristic wins by producing more, not by exploiting an
 engine quirk.
 
 ## Gate 3 — HeuristicAgent vs HeuristicAgent -> per-seat win rates
@@ -81,7 +81,11 @@ record the outcome either way.
 ## Known biases (repeated from the harness output)
 
 - `PlayVictoryPoint` is not gated by `has_played_dev_card_this_turn` --
-  every agent reveals VP cards immediately.
+  every agent reveals VP cards immediately. This no longer affects win
+  timing (`engine.game.true_victory_points`/`_check_win` auto-wins on a
+  hidden VP card the instant the true total reaches 10, independent of
+  when/whether it's revealed); it's noted here only as a residual
+  agent-behavior quirk, not a win-timing bias.
 - Bank shortage (`_produce`) skips a resource when the bank cannot cover
   all claimants; heuristic agents produce more, so they hit this more often
   than random agents did in Phase 2.
