@@ -1,6 +1,6 @@
 {
-  "git_commit": "c51e4bd47284c3bc5e7f5e3c4009fc8e8016502c",
-  "generated_at": "2026-09-06T18:43:29.489963+00:00",
+  "git_commit": "0cff706b7cd4845b257d86a1c2824843600796da",
+  "generated_at": "2026-09-20T14:32:37.220360+00:00",
   "experiment": "benchmark",
   "mode": "heuristic_vs_heuristic",
   "num_players": 4,
@@ -69,7 +69,7 @@
   },
   "comparisons": {},
   "known_biases": [
-    "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- every agent reveals VP cards immediately.",
+    "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- every agent reveals VP cards immediately. This no longer affects win timing (engine.game.true_victory_points/_check_win auto-wins on a hidden VP card the instant the true total reaches 10, independent of when/whether it's revealed); it's noted here only as a residual agent-behavior quirk, not a win-timing bias.",
     "Bank shortage (_produce) skips a resource when the bank cannot cover all claimants; heuristic agents produce more, so they hit this more often than random agents did in Phase 2.",
     "HeuristicAgent is hand-tuned against Phase 2's random-play results; a rule that helps against random opponents need not help against a good one. heuristic_vs_heuristic is the check."
   ],
