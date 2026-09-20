@@ -339,7 +339,8 @@ copy/determinism, every rule cluster, and a cross-cutting random-game +
 property-based invariant check.
 
 Phase 2 complete: a rollout driver and MC statistics utilities
-(`experiments/rollout.py`, `experiments/mcstats.py`, `experiments/
+(`experiments/rollout.py`, `experiments/mcstats.py` -- later extracted to
+`gamekit.mc`, see decision 13 and Phase 4 below --, `experiments/
 features.py`), two starting-placement experiments (`experiments/
 exp_placement.py`: per-vertex ranking on a fixed board, and feature-bucketed
 win rate across random boards) and four resource/VP tables
@@ -369,5 +370,15 @@ here as a git dependency (`[tool.uv.sources]`). `experiments/rollout.py`
 and its `GameRecord` stayed local, untouched, since nothing in `gamekit`
 ever names a game's own record type. Every existing test still passes,
 including the golden bit-identity regression test, and the committed
-`experiments/results/benchmark_*.json` files are unchanged and remain
-reproducible from their recorded seeds. Phase 5 (RL) not started.
+`experiments/results/benchmark_*.json` files remain reproducible from their
+recorded seeds. Phase 5 (RL) not started.
+
+**Update (gamekit 0.2.0 migration):** `gamekit.seats.seat_rng` moved off
+`hash((driver_seed, seat))` onto a BLAKE2b-based mix, stable by construction
+rather than by test (the old stream survives as `seat_rng_legacy`). This
+changes every stream `seat_rng` produces, so the six committed
+`experiments/results/benchmark_*.json` files were regenerated at their
+stamped `n`/seeds to stay reproducible from code; both `heuristic_vs_heuristic`
+files came out numerically byte-identical (`HeuristicAgent` never consumes
+the per-seat RNG), confirming the mix change alone drove the other four
+files' deltas.
