@@ -19,3 +19,9 @@ wheels/
 # Persisted game sessions (server/persistence.py) -- tied to the checkout
 # that produced them, not meant to be shared or committed.
 .catan-sessions/
+
+# rl/train.py output: checkpoint .zip files and tensorboard event logs.
+# Binary training artifacts, not source -- the evidence a PR carries is the
+# stamped experiments/results/benchmark_rl_*.json, the same convention Phase 2
+# and Phase 3 already use for benchmark_*.json.
+rl_runs/
