@@ -325,11 +325,11 @@ Resolved while planning the web GUI (full detail in
       wrapper, self-play resampling, legal-action masking) — not yet built.
 - [ ] **Phase 6 — Retrofit** `truco-py` / `roulette` onto `gamekit`
       (only if the extraction holds up).
-- [ ] **Tooling — Web GUI**: FastAPI backend wrapping `engine/` + a Svelte +
-      Vite frontend, so a human can play in a browser (hot-seat
-      and/or vs. the Phase 3 agents) instead of only via `cli.py`. Runs in
-      parallel with the numbered phases above, not part of the ML track. See
-      `docs/plans/gui-web-frontend.md`.
+- [x] **Tooling — Web GUI**: FastAPI backend (`server/`) wrapping `engine/` +
+      a Svelte + Vite frontend (`web/`), so a human can play in a browser
+      (hot-seat and/or vs. the Phase 3 agents) instead of only via `cli.py`.
+      Ran in parallel with the numbered phases above, not part of the ML
+      track. See `docs/plans/gui-web-frontend.md`.
 
 ## Status
 
