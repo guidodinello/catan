@@ -18,6 +18,8 @@ import json
 import random
 from pathlib import Path
 
+from gamekit.seats import seat_rng
+
 from agents.base import Agent
 from agents.heuristic import HeuristicAgent
 from agents.random_agent import RandomAgent, StratifiedRandomAgent
@@ -119,7 +121,7 @@ def test_run_many_is_independent_of_which_seats_hold_which_agent() -> None:
     def rotated_factory(
         num_players: int, engine_seed: int, driver_seed: int
     ) -> list[Agent]:
-        rngs = [random.Random(hash((driver_seed, seat))) for seat in range(num_players)]
+        rngs = [seat_rng(driver_seed, seat) for seat in range(num_players)]
         # Rotate which rng (by construction, indistinguishable in behavior,
         # but distinct instances) lands on which seat.
         rotated = rngs[1:] + rngs[:1]
@@ -128,7 +130,7 @@ def test_run_many_is_independent_of_which_seats_hold_which_agent() -> None:
     def unrotated_factory(
         num_players: int, engine_seed: int, driver_seed: int
     ) -> list[Agent]:
-        rngs = [random.Random(hash((driver_seed, seat))) for seat in range(num_players)]
+        rngs = [seat_rng(driver_seed, seat) for seat in range(num_players)]
         return [StratifiedRandomAgent(r) for r in rngs]
 
     a = run_game(3, engine_seed=5, driver_seed=5, agent_factory=unrotated_factory)

@@ -17,7 +17,9 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from agents import Agent, HeuristicAgent, RandomAgent, StratifiedRandomAgent
+from gamekit.seats import seat_rng
+
+from agents import CatanAgent, HeuristicAgent, RandomAgent, StratifiedRandomAgent
 from engine.actions import AcceptTrade, Action, CounterTrade, RejectTrade, RollDice
 from engine.board import Resource
 from engine.game import CatanGame
@@ -30,7 +32,7 @@ BotKind = Literal["random", "stratified_random", "heuristic"]
 SeatKind = Literal["human", "random", "stratified_random", "heuristic"]
 
 
-def build_agent(kind: BotKind, rng: random.Random) -> Agent:
+def build_agent(kind: BotKind, rng: random.Random) -> CatanAgent:
     """One bot seat's agent -- mirrors ``experiments/benchmark.py``'s
     ``_build_role``, extended with ``stratified_random``.
     """
@@ -43,19 +45,20 @@ def build_agent(kind: BotKind, rng: random.Random) -> Agent:
     raise ValueError(f"unknown bot kind {kind!r}")
 
 
-def build_agents(seat_kinds: list[SeatKind], driver_seed: int) -> list[Agent | None]:
+def build_agents(
+    seat_kinds: list[SeatKind], driver_seed: int
+) -> list[CatanAgent | None]:
     """One agent per seat (``None`` for a human seat).
 
     Each bot seat gets its own independently-seeded RNG, keyed by seat, so
     swapping one seat's agent never perturbs another seat's draws.
     """
-    agents: list[Agent | None] = []
+    agents: list[CatanAgent | None] = []
     for seat, kind in enumerate(seat_kinds):
         if kind == "human":
             agents.append(None)
             continue
-        seat_rng = random.Random(hash((driver_seed, seat)))
-        agents.append(build_agent(kind, seat_rng))
+        agents.append(build_agent(kind, seat_rng(driver_seed, seat)))
     return agents
 
 

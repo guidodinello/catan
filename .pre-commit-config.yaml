@@ -23,5 +23,13 @@ repos:
             # so mypy can't type tests/test_engine.py's @rule()/@invariant(),
             # server/app.py's @app.get()/@app.post(), or tests/test_persistence.py's
             # @pytest.fixture() decorators ("Untyped decorator makes function ...
-            # untyped").
-            additional_dependencies: ["hypothesis>=6.168.0", "fastapi>=0.141.1", "pytest>=9.1.1"]
+            # untyped"). gamekit is a real (git) dependency now, not just
+            # decorator-typing stubs -- without it here, mypy can't resolve
+            # agents/base.py's/experiments/*.py's `from gamekit... import`.
+            additional_dependencies:
+              [
+                "hypothesis>=6.168.0",
+                "fastapi>=0.141.1",
+                "pytest>=9.1.1",
+                "git+https://github.com/guidodinello/gamekit@main",
+              ]
