@@ -32,4 +32,10 @@ repos:
                 "fastapi>=0.141.1",
                 "pytest>=9.1.1",
                 "git+https://github.com/guidodinello/gamekit@main",
+                # rl/ imports these directly; without them mypy can't resolve
+                # rl/encoder.py's and rl/env.py's imports. The heavier training
+                # stack (torch, sb3-contrib) is handled by ignore_missing_imports
+                # overrides in pyproject.toml instead of being installed here.
+                "gymnasium>=1.3.0",
+                "numpy>=2.5.3",
               ]

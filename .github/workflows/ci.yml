@@ -76,3 +76,26 @@ jobs:
 
       - name: Run tests
         run: uv run pytest
+
+  # Separate job so the default one never downloads a training stack. The `rl`
+  # extra is gymnasium + numpy only (~30MB); `rl-train` (sb3-contrib, torch) is
+  # deliberately never installed here. Without this job the tests under
+  # tests/rl/ would `importorskip` themselves away in CI, and green-by-skipping
+  # is not green.
+  test-rl:
+    name: Tests (RL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.29"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --dev --extra rl
+
+      - name: Run RL tests
+        run: uv run pytest tests/rl

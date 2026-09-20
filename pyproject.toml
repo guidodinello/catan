@@ -10,6 +10,25 @@ dependencies = [
     "uvicorn[standard]>=0.53.0",
 ]
 
+# Split by dependency so CI never downloads a training stack. `rl` is the env
+# + encoder (gymnasium/numpy, ~30MB) and is exercised by a dedicated CI job;
+# `rl-train` adds the framework and is never installed in CI. gamekit's own
+# pyproject draws the same line, and truco-py's flat dependency list -- where
+# installing the package always pulls CUDA torch -- is the anti-pattern.
+[project.optional-dependencies]
+rl = [
+    "gamekit[rl]",
+    "gymnasium>=1.3.0",
+    "numpy>=2.5.3",
+]
+rl-train = [
+    "catan[rl]",
+    "sb3-contrib>=2.9.0",
+    "stable-baselines3>=2.9.0",
+    "tensorboard>=2.20.0",
+    "torch>=2.14",
+]
+
 [project.scripts]
 catan = "main:main"
 
@@ -29,7 +48,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["engine", "experiments", "agents", "server"]
+packages = ["engine", "experiments", "agents", "server", "rl"]
 include = ["main.py", "cli.py"]
 
 [tool.ruff]
@@ -41,10 +60,22 @@ extend-exclude = ["docs"]
 select = ["E", "F", "B", "I", "N", "W", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["engine", "experiments", "agents", "server"]
+known-first-party = ["engine", "experiments", "agents", "server", "rl"]
 
 [tool.uv.sources]
 gamekit = { git = "https://github.com/guidodinello/gamekit", branch = "main" }
+# CPU-only torch. The default Linux index pulls ~3-4GB of nvidia-*/triton
+# wheels; this one pulls ~250MB and no CUDA at all. Justified empirically:
+# truco-py measured on this same machine that training is CPU-bound --
+# environment simulation dominates network inference -- and catan's engine is
+# pure Python and heavier still. Revisit if self-play turns out bottlenecked
+# on opponent-checkpoint inference.
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff.format]
 quote-style = "double"
@@ -65,3 +96,9 @@ strict_optional = true
 warn_redundant_casts = true
 warn_return_any = true
 warn_unused_ignores = true
+
+# The training stack is an optional extra, so type-checking must stay green
+# without it installed -- same approach as gamekit's gymnasium/numpy overrides.
+[[tool.mypy.overrides]]
+module = ["sb3_contrib.*", "stable_baselines3.*", "torch.*", "tensorboard.*"]
+ignore_missing_imports = true

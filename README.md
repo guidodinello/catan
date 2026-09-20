@@ -320,15 +320,19 @@ Resolved while planning the web GUI (full detail in
       second reference implementation, cross-checked but not itself
       touched. See `~/projects/docs/shared-ml-package.md`.
 - [ ] **Phase 5 — RL**: gymnasium env, state encoder, MaskablePPO training
-      vs heuristic opponents, self-play with anti-collapse controls. Not
-      started. `gamekit`'s `[rl]` extra (`gamekit.rl`: protocols, driver,
-      selfplay, masking, env) shipped in gamekit v0.2.0; Phase 5 would reuse
-      `gamekit.rl.protocols`/`driver`/`selfplay` while writing its own
-      `gym.Env`, since `gamekit.rl.env`'s `SingleAgentEnv` only covers the
-      flat masked-`Discrete` case and catan's action space is spatial/
-      variable (discard multisets, an open-ended trade sentinel). See
-      "`gamekit.rl`" in `~/projects/docs/shared-ml-package.md` for what
-      Phase 5 would supply vs. reuse.
+      vs heuristic opponents, self-play with anti-collapse controls. **In
+      progress**: the env, encoder and tests landed in `rl/` (no training
+      yet); MaskablePPO training and self-play are the next two PRs. As
+      planned, it reuses `gamekit.rl.protocols`/`driver`/`selfplay` and
+      writes its own `gym.Env`, since `gamekit.rl.env`'s `SingleAgentEnv`
+      only covers the flat masked-`Discrete` case and catan's action space is
+      spatial/variable (discard multisets, an open-ended trade sentinel).
+      `rl/action_space.py` resolves that with a flat atom head plus a
+      composition buffer: a multi-parameter action is spelled as a short
+      sequence of atoms over consecutive env steps, so a 3-card discard is
+      three picks from a 5-wide resource head rather than one choice among
+      197. See "`gamekit.rl`" in `~/projects/docs/shared-ml-package.md` for
+      what Phase 5 supplies vs. reuses.
 - [x] **Phase 6 — Retrofit `truco-py` onto `gamekit`**: done in
       `truco-py` PRs #1 (initial adoption) and #2 (`gamekit.rl` adoption).
       `roulette` never became a `gamekit` consumer — it's a local notebook
@@ -379,7 +383,7 @@ and its `GameRecord` stayed local, untouched, since nothing in `gamekit`
 ever names a game's own record type. Every existing test still passes,
 including the golden bit-identity regression test, and the committed
 `experiments/results/benchmark_*.json` files remain reproducible from their
-recorded seeds. Phase 5 (RL) not started.
+recorded seeds. Phase 5 (RL) is in progress -- see the roadmap entry.
 
 **Update (gamekit 0.2.0 migration):** `gamekit.seats.seat_rng` moved off
 `hash((driver_seed, seat))` onto a BLAKE2b-based mix, stable by construction
