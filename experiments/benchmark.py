@@ -56,14 +56,35 @@ MODE_LINEUPS: dict[str, Callable[[int], tuple[str, ...]]] = {
     "random_vs_random": lambda n: tuple(["random"] * n),
     "heuristic_vs_random": lambda n: ("heuristic",) + tuple(["random"] * (n - 1)),
     "heuristic_vs_heuristic": lambda n: tuple(["heuristic"] * n),
+    "rl_vs_random": lambda n: ("rl",) + tuple(["random"] * (n - 1)),
+    "rl_vs_heuristic": lambda n: ("rl",) + tuple(["heuristic"] * (n - 1)),
 }
 
+RL_MODES = frozenset({"rl_vs_random", "rl_vs_heuristic"})
 
-def _build_role(role: str, rng: random.Random) -> CatanAgent:
+RL_KNOWN_BIAS = (
+    "The RL agent never *proposes* a domestic trade: rl/action_space.py "
+    "reserves the ProposeTrade/CounterTrade atoms and masks them off, since "
+    "the give/receive bundle product is not enumerable (README decision 5). "
+    "It does still accept and reject offers, so it is not excluded from "
+    "trading entirely -- but against 3 RandomAgents, which do propose, it "
+    "gives up the initiative half of a rule random play uses constantly."
+)
+
+
+def _build_role(
+    role: str, rng: random.Random, checkpoint: str | None = None
+) -> CatanAgent:
     if role == "heuristic":
         return HeuristicAgent(name="heuristic")
     if role == "random":
         return RandomAgent(rng, name="random")
+    if role == "rl":
+        if checkpoint is None:
+            raise ValueError("the rl_* modes require --checkpoint")
+        from agents.rl_agent import RLAgent
+
+        return RLAgent(checkpoint, name="rl", rng=rng)
     raise ValueError(f"unknown role {role!r}")
 
 
@@ -76,11 +97,17 @@ def _recover_seat_order(num_players: int, engine_seed: int) -> tuple[int, ...]:
 
 
 def benchmark_agent_factory(
-    mode: str, num_players: int, engine_seed: int, driver_seed: int
+    mode: str,
+    checkpoint: str | None,
+    num_players: int,
+    engine_seed: int,
+    driver_seed: int,
 ) -> list[CatanAgent]:
     """The module-level ``AgentFactory`` every benchmark arm uses -- picklable
     across ``ProcessPoolExecutor`` workers via ``functools.partial`` over
-    ``mode`` (a plain string), never a closure over constructed agents."""
+    ``mode`` and ``checkpoint`` (both plain strings), never a closure over
+    constructed agents. A checkpoint *path* crosses the process boundary, not
+    a loaded model; ``agents.rl_agent`` caches the load per worker."""
     lineup = MODE_LINEUPS[mode](num_players)
     seat_roles = rotate(lineup, engine_seed)
     seat_order = _recover_seat_order(num_players, engine_seed)
@@ -88,7 +115,9 @@ def benchmark_agent_factory(
     agents: list[CatanAgent | None] = [None] * num_players
     for seat in range(num_players):
         player_id = seat_order[seat]
-        agents[player_id] = _build_role(seat_roles[seat], seat_rng(driver_seed, seat))
+        agents[player_id] = _build_role(
+            seat_roles[seat], seat_rng(driver_seed, seat), checkpoint
+        )
     assert all(a is not None for a in agents)
     return agents  # type: ignore[return-value]
 
@@ -124,7 +153,10 @@ def run_arm(
     engine_seed_base: int,
     driver_seed_base: int,
     workers: int,
+    checkpoint: str | None = None,
 ) -> dict[str, Any]:
+    if mode in RL_MODES and checkpoint is None:
+        raise ValueError(f"mode {mode!r} requires a checkpoint")
     lineup = MODE_LINEUPS[mode](num_players)
 
     played: list[Sequence[GameRecord]] = []
@@ -133,7 +165,7 @@ def run_arm(
         records = run_many(
             num_players,
             pairs,
-            agent_factory=partial(benchmark_agent_factory, mode),
+            agent_factory=partial(benchmark_agent_factory, mode, checkpoint),
             workers=workers,
         )
         played.append(records)
@@ -177,6 +209,7 @@ def run_arm(
         "n_games": n_games,
         "engine_seed_base": engine_seed_base,
         "driver_seed_base": driver_seed_base,
+        "checkpoint": Path(checkpoint).name if checkpoint else None,
         "by_role": by_role,
         "by_seat": gk_payload["by_seat"],
         "comparisons": gk_payload["comparisons"],
@@ -193,6 +226,7 @@ def run_arm(
             "HeuristicAgent is hand-tuned against Phase 2's random-play "
             "results; a rule that helps against random opponents need not "
             "help against a good one. heuristic_vs_heuristic is the check.",
+            *([RL_KNOWN_BIAS] if mode in RL_MODES else []),
         ],
         "non_winner_exceeded_ten_rate": non_winner_exceeded_ten_rate,
     }
@@ -206,6 +240,7 @@ def main() -> None:
     parser.add_argument("--engine-seed-base", type=int, default=1)
     parser.add_argument("--driver-seed-base", type=int, default=1)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--checkpoint", default=None, help="required by the rl_* modes")
     args = parser.parse_args()
 
     payload = run_arm(
@@ -215,6 +250,7 @@ def main() -> None:
         engine_seed_base=args.engine_seed_base,
         driver_seed_base=args.driver_seed_base,
         workers=args.workers,
+        checkpoint=args.checkpoint,
     )
     path = write_result(RESULTS_DIR, f"benchmark_{args.mode}_p{args.players}", payload)
     print(f"wrote {path}")
