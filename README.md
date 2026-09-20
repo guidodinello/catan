@@ -60,8 +60,8 @@ Everything else in `truco-py` (`engine/`, `state_encoder.py`, `reward.py`,
 repo rather than `truco-py` (`truco-py`'s own `Agent` protocol turned out
 near-identical, confirming the shape generalizes, but this repo's
 `mcstats.py`/`benchmark.py` had already gone further). The gym-env-wrapper
-and MC-rollout-agent rows are unbuilt (Phase 5/6). See
-`~/projects/docs/shared-ml-package.md`.
+row shipped as `gamekit.rl` (gamekit v0.2.0); the MC-rollout-agent row is
+still unbuilt. See `~/projects/docs/shared-ml-package.md`.
 
 ### Catan package layout (proposed)
 
@@ -320,11 +320,19 @@ Resolved while planning the web GUI (full detail in
       second reference implementation, cross-checked but not itself
       touched. See `~/projects/docs/shared-ml-package.md`.
 - [ ] **Phase 5 — RL**: gymnasium env, state encoder, MaskablePPO training
-      vs heuristic opponents, self-play with anti-collapse controls. An
-      `[rl]` extra is scoped on `gamekit` for the reusable parts (gym env
-      wrapper, self-play resampling, legal-action masking) — not yet built.
-- [ ] **Phase 6 — Retrofit** `truco-py` / `roulette` onto `gamekit`
-      (only if the extraction holds up).
+      vs heuristic opponents, self-play with anti-collapse controls. Not
+      started. `gamekit`'s `[rl]` extra (`gamekit.rl`: protocols, driver,
+      selfplay, masking, env) shipped in gamekit v0.2.0; Phase 5 would reuse
+      `gamekit.rl.protocols`/`driver`/`selfplay` while writing its own
+      `gym.Env`, since `gamekit.rl.env`'s `SingleAgentEnv` only covers the
+      flat masked-`Discrete` case and catan's action space is spatial/
+      variable (discard multisets, an open-ended trade sentinel). See
+      "`gamekit.rl`" in `~/projects/docs/shared-ml-package.md` for what
+      Phase 5 would supply vs. reuse.
+- [x] **Phase 6 — Retrofit `truco-py` onto `gamekit`**: done in
+      `truco-py` PRs #1 (initial adoption) and #2 (`gamekit.rl` adoption).
+      `roulette` never became a `gamekit` consumer — it's a local notebook
+      with no repo on the account, not a retrofit target.
 - [x] **Tooling — Web GUI**: FastAPI backend (`server/`) wrapping `engine/` +
       a Svelte + Vite frontend (`web/`), so a human can play in a browser
       (hot-seat and/or vs. the Phase 3 agents) instead of only via `cli.py`.
