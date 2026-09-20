@@ -135,7 +135,7 @@ def test_run_many_is_independent_of_which_seats_hold_which_agent() -> None:
 
     a = run_game(3, engine_seed=5, driver_seed=5, agent_factory=unrotated_factory)
     b = run_game(3, engine_seed=5, driver_seed=5, agent_factory=rotated_factory)
-    # Seat 2's draws come from the same underlying stream (hash((5, 1))) in
+    # Seat 2's draws come from the same underlying stream (seat_rng(5, 1)) in
     # both arms -- only which physical seat holds it changes -- so seat 2's
     # trajectory-independent facts (production events driven by seat 2's
     # choices) should carry across. The strong, cheap invariant: both games

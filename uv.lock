@@ -212,8 +212,8 @@ wheels = [
 
 [[package]]
 name = "gamekit"
-version = "0.1.0"
-source = { git = "https://github.com/guidodinello/gamekit?branch=main#47e53320c3122b0a219eb385131f4ec3808488d4" }
+version = "0.2.0"
+source = { git = "https://github.com/guidodinello/gamekit?branch=main#cdc5400af1288e836dbd0c4682575748a0f19b6f" }
 
 [[package]]
 name = "h11"
