@@ -55,6 +55,14 @@ genuinely reusable across games, extracted from `truco-py`:
 Everything else in `truco-py` (`engine/`, `state_encoder.py`, `reward.py`,
 `policy.py`, `mc_tables.py`) is Truco-specific and gets rebuilt per game.
 
+**Update (Phase 4):** the first two rows shipped as
+[`gamekit`](https://github.com/guidodinello/gamekit) — extracted from this
+repo rather than `truco-py` (`truco-py`'s own `Agent` protocol turned out
+near-identical, confirming the shape generalizes, but this repo's
+`mcstats.py`/`benchmark.py` had already gone further). The gym-env-wrapper
+and MC-rollout-agent rows are unbuilt (Phase 5/6). See
+`~/projects/docs/shared-ml-package.md`.
+
 ### Catan package layout (proposed)
 
 ```
@@ -173,10 +181,15 @@ in `experiments/results/`):
     (`ScriptedSetup` in `experiments/rollout.py`); "best first settlement"
     is only well-posed per seat, and seat 0 (first picker, full board) is
     the default.
-13. **A local, stdlib-only `experiments/mcstats.py`**, not a dependency on
-    the sibling `mmo-utils` package — see `~/projects/docs/shared-ml-package.md`'s
-    own verdict that this layer (`mc_tables.py`'s analog) should be rebuilt
-    per game, not extracted. Revisit at Phase 4.
+13. **(Superseded by Phase 4.)** This decision originally kept
+    `experiments/mcstats.py` local and stdlib-only, deliberately not a
+    dependency on the sibling `mmo-utils` package, on the theory that this
+    layer (`mc_tables.py`'s analog) should be rebuilt per game, not
+    extracted. Phase 4 found the opposite: `mcstats.py` turned out to be the
+    most portable module in this repo — zero catan imports, zero
+    third-party imports — and is now `gamekit.mc`
+    (github.com/guidodinello/gamekit), a dependency of this repo. See
+    `~/projects/docs/shared-ml-package.md`.
 14. **Found while building Phase 2, fixed in Phase 1 territory (engine
     correctness, not scope creep):** `_bank_trade_actions`/`_port_trade_
     actions` listed a `TradeBank`/`TradePort` as legal without checking the
@@ -300,11 +313,17 @@ Resolved while planning the web GUI (full detail in
 - [x] **Phase 3 — Agents**: RandomAgent, heuristic agents (settlement
       placement heuristics, build-order policies), benchmark harness. See
       `agents/` and `experiments/benchmark.py`.
-- [ ] **Phase 4 — Shared ML package extraction**: generic `Agent` protocol
-      + benchmark runner extracted from `truco-py`, adopted by Catan.
+- [x] **Phase 4 — Shared ML package extraction**: `gamekit`
+      (github.com/guidodinello/gamekit) — the `Agent` protocol, MC
+      statistics, seat rotation, and a field-free benchmark runner,
+      extracted from this repo and adopted here. `truco-py` served as the
+      second reference implementation, cross-checked but not itself
+      touched. See `~/projects/docs/shared-ml-package.md`.
 - [ ] **Phase 5 — RL**: gymnasium env, state encoder, MaskablePPO training
-      vs heuristic opponents, self-play with anti-collapse controls.
-- [ ] **Phase 6 — Retrofit** `truco-py` / `roulette` onto the shared package
+      vs heuristic opponents, self-play with anti-collapse controls. An
+      `[rl]` extra is scoped on `gamekit` for the reusable parts (gym env
+      wrapper, self-play resampling, legal-action masking) — not yet built.
+- [ ] **Phase 6 — Retrofit** `truco-py` / `roulette` onto `gamekit`
       (only if the extraction holds up).
 - [ ] **Tooling — Web GUI**: FastAPI backend wrapping `engine/` + a Svelte +
       Vite frontend, so a human can play in a browser (hot-seat
@@ -340,5 +359,15 @@ and a benchmark harness with a mode registry and mandatory seat rotation
 with non-overlapping CIs, heuristic-vs-heuristic self-play runs cleanly);
 `_check_win`'s known gap (decision 15) was re-measured and left unfixed
 (decision 19). Results committed under `experiments/results/benchmark_*.json`
-with a hand-written summary in `experiments/results/benchmark.md`. Phase 4+
-(shared ML package extraction, RL) not started.
+with a hand-written summary in `experiments/results/benchmark.md`.
+
+Phase 4 complete: `gamekit` (github.com/guidodinello/gamekit) now owns the
+`Agent` protocol, `experiments/mcstats.py` (as `gamekit.mc`, with two of
+mmo-utils' `DESIGN.md` gaps fixed along the way), seat-keyed RNG/rotation,
+result stamping, and the generic parts of the benchmark runner — consumed
+here as a git dependency (`[tool.uv.sources]`). `experiments/rollout.py`
+and its `GameRecord` stayed local, untouched, since nothing in `gamekit`
+ever names a game's own record type. Every existing test still passes,
+including the golden bit-identity regression test, and the committed
+`experiments/results/benchmark_*.json` files are unchanged and remain
+reproducible from their recorded seeds. Phase 5 (RL) not started.

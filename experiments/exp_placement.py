@@ -20,44 +20,22 @@ Run directly, e.g.:
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 from collections import defaultdict
 from dataclasses import asdict
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from gamekit.mc import wilson_interval
+from gamekit.results import stamp, write_result
 
 from engine.board import NUM_VERTICES
 from engine.game import CatanGame
 from experiments.features import vertex_features
-from experiments.mcstats import wilson_interval
 from experiments.rollout import GameRecord, ScriptedSetup, run_game, run_many
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 DEFAULT_GAMES = 10_000
 DEFAULT_ENGINE_SEED = 1
-
-
-def _git_commit() -> str:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=Path(__file__).resolve().parent,
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError, FileNotFoundError, OSError:
-        return "unknown"
-
-
-def _write_result(name: str, payload: dict[str, Any]) -> Path:
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = RESULTS_DIR / f"{name}.json"
-    path.write_text(json.dumps(payload, indent=2, default=str))
-    return path
 
 
 def _cumulative_resources_through_turn(
@@ -176,18 +154,16 @@ def run_a1(
         reverse=True,
     )
 
-    return {
-        "git_commit": _git_commit(),
-        "generated_at": datetime.now(UTC).isoformat(),
-        "experiment": "A1_fixed_board_vertex_ranking",
-        "engine_seed": engine_seed,
-        "seat": seat,
-        "num_players": num_players,
-        "n_games_per_arm": n_games,
-        "policy": "stratified",
-        "arms": {str(v): summary for v, summary in arms.items()},
-        "ranked_vertices": [v for v, _ in ranked],
-    }
+    return stamp(
+        "A1_fixed_board_vertex_ranking",
+        engine_seed=engine_seed,
+        seat=seat,
+        num_players=num_players,
+        n_games_per_arm=n_games,
+        policy="stratified",
+        arms={str(v): summary for v, summary in arms.items()},
+        ranked_vertices=[v for v, _ in ranked],
+    )
 
 
 def run_a2(
@@ -231,27 +207,25 @@ def run_a2(
     pooled_wins = sum(1 for r in records if r.winning_seat == seat)
     pooled_ci = wilson_interval(pooled_wins, len(records)) if records else None
 
-    return {
-        "git_commit": _git_commit(),
-        "generated_at": datetime.now(UTC).isoformat(),
-        "experiment": "A2_feature_bucketed_random_boards",
-        "seat": seat,
-        "num_players": num_players,
-        "n_games": n_games,
-        "engine_seed_base": engine_seed_base,
-        "policy": "stratified",
-        "pooled_win_rate_over_all_seats_sanity_check": {
+    return stamp(
+        "A2_feature_bucketed_random_boards",
+        seat=seat,
+        num_players=num_players,
+        n_games=n_games,
+        engine_seed_base=engine_seed_base,
+        policy="stratified",
+        pooled_win_rate_over_all_seats_sanity_check={
             "n_games": len(records),
             "wins": pooled_wins,
             "win_rate": pooled_wins / len(records) if records else None,
             "win_rate_wilson_ci": list(pooled_ci) if pooled_ci is not None else None,
             "expected_under_null": 1 / num_players,
         },
-        "by_pip_sum_bucket": {k: bucket_summary(v) for k, v in pip_labeled.items()},
-        "by_distinct_resources": {
+        by_pip_sum_bucket={k: bucket_summary(v) for k, v in pip_labeled.items()},
+        by_distinct_resources={
             str(k): bucket_summary(v) for k, v in sorted(resource_labeled.items())
         },
-    }
+    )
 
 
 def main() -> None:
@@ -282,8 +256,10 @@ def main() -> None:
             n_games=args.games,
             workers=args.workers,
         )
-        path = _write_result(
-            f"a1_seed{args.engine_seed}_seat{args.seat}_p{args.players}", payload
+        path = write_result(
+            RESULTS_DIR,
+            f"a1_seed{args.engine_seed}_seat{args.seat}_p{args.players}",
+            payload,
         )
     else:
         payload = run_a2(
@@ -293,7 +269,7 @@ def main() -> None:
             engine_seed_base=args.engine_seed_base,
             workers=args.workers,
         )
-        path = _write_result(f"a2_seat{args.seat}_p{args.players}", payload)
+        path = write_result(RESULTS_DIR, f"a2_seat{args.seat}_p{args.players}", payload)
 
     print(f"wrote {path}")
 

@@ -28,7 +28,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import server.persistence as persistence_mod
-from agents import Agent
+from agents import CatanAgent
 from engine.actions import Action
 from engine.state import GameState
 from experiments.rollout import AgentFactory, run_game
@@ -69,7 +69,7 @@ class _RecordingAgent:
     game.
     """
 
-    def __init__(self, inner: Agent, shared_log: list[tuple[int, Action]]) -> None:
+    def __init__(self, inner: CatanAgent, shared_log: list[tuple[int, Action]]) -> None:
         self.inner = inner
         self.name = inner.name
         self._shared_log = shared_log
@@ -104,16 +104,18 @@ def _http_parity_factory(
     returns.
     """
 
-    def factory(num_players: int, engine_seed: int, driver_seed: int) -> list[Agent]:
+    def factory(
+        num_players: int, engine_seed: int, driver_seed: int
+    ) -> list[CatanAgent]:
         del engine_seed  # unused: build_agents only needs seat_kinds + driver_seed
         assert num_players == len(seat_kinds)
         agents = build_agents(seat_kinds, driver_seed)
         assert all(a is not None for a in agents), (
             "parity factory is for all-bot lineups only"
         )
-        wrapped = [_RecordingAgent(cast(Agent, a), shared_log) for a in agents]
+        wrapped = [_RecordingAgent(cast(CatanAgent, a), shared_log) for a in agents]
         recorders[:] = wrapped
-        return cast(list[Agent], wrapped)
+        return cast(list[CatanAgent], wrapped)
 
     return factory
 

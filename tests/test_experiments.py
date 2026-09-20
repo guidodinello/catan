@@ -1,18 +1,21 @@
 """Phase 2 experiment-layer tests.
 
-Fast smoke coverage for the rollout driver and mcstats utilities, plus the
-load-bearing correctness check: the analytic ``vertex_production`` table
-must match the actual engine's own ``_produce`` logic exactly (deterministic
-per dice total -- no statistics needed, since production for a fixed total
-has no randomness once ownership is fixed). If this fails, the whole
-experiment layer's ground truth is wrong.
+Fast smoke coverage for the rollout driver, plus the load-bearing correctness
+check: the analytic ``vertex_production`` table must match the actual
+engine's own ``_produce`` logic exactly (deterministic per dice total -- no
+statistics needed, since production for a fixed total has no randomness once
+ownership is fixed). If this fails, the whole experiment layer's ground truth
+is wrong.
+
+mcstats unit tests moved to gamekit's own test suite
+(``tests/test_mc.py``) along with the module itself -- see
+``docs/shared-ml-package.md``.
 
 Full experiment runs (thousands of games) are not exercised here -- they are
 manual, per the Phase 2 plan: ``uv run python -m experiments.exp_placement``.
 """
 
 import random
-import statistics
 
 from agents.base import Agent
 from agents.random_agent import RandomAgent
@@ -20,15 +23,6 @@ from engine.actions import PlaceSettlement
 from engine.board import GEOMETRY, TERRAIN_RESOURCE
 from engine.game import CatanGame, _produce
 from experiments.features import dice_probability, vertex_production
-from experiments.mcstats import (
-    Accumulator,
-    benjamini_hochberg,
-    sample_size_clt,
-    sample_size_hoeffding,
-    two_proportion_sample_size,
-    two_proportion_test,
-    wilson_interval,
-)
 from experiments.rollout import ScriptedSetup, run_game, run_many
 
 STEP_BUDGET = 20_000
@@ -162,74 +156,3 @@ def test_vertex_production_matches_engine_produce_exactly() -> None:
     analytic = vertex_production(state.board, v)
     assert set(analytic) == {resource}
     assert analytic[resource] == dice_probability(token)
-
-
-# ---------------------------------------------------------------------------
-# mcstats unit tests
-# ---------------------------------------------------------------------------
-
-
-def test_wilson_interval_matches_known_reference_values() -> None:
-    # 50/100 successes, 95% CI: standard textbook Wilson bounds ~ (0.404, 0.596).
-    ci = wilson_interval(50, 100)
-    assert round(ci.lower, 3) == 0.404
-    assert round(ci.upper, 3) == 0.596
-    assert ci.width > 0
-
-    # A single 0/n case must stay within [0, 1] and not error (floating
-    # point may leave `lower` a hair above exact zero).
-    ci_zero = wilson_interval(0, 20)
-    assert 0 <= ci_zero.lower < 1e-9
-    assert 0 < ci_zero.upper < 1
-
-
-def test_sample_size_formulas_match_the_plan_table() -> None:
-    # From the Phase 2 plan's sample-size table: p=1/3, 80% power, alpha=0.05.
-    assert two_proportion_sample_size(1 / 3, 0.05) == 1396
-    assert two_proportion_sample_size(1 / 3, 0.02) == 8721
-    assert two_proportion_sample_size(1 / 3, 0.01) == 34884
-
-    assert sample_size_clt(0.05, 0.05) == 385
-    assert sample_size_hoeffding(0.05, 0.05) == 738
-    # Hoeffding (distribution-free) must never require fewer samples than
-    # the CLT approximation for the same (eps, delta).
-    assert sample_size_hoeffding(0.05, 0.05) >= sample_size_clt(0.05, 0.05)
-
-
-def test_two_proportion_test_detects_no_difference_for_identical_arms() -> None:
-    result = two_proportion_test(50, 100, 50, 100)
-    assert result.z == 0.0
-    assert result.p_value == 1.0
-
-
-def test_benjamini_hochberg_flags_only_the_small_p_values() -> None:
-    flags = benjamini_hochberg([0.001, 0.2, 0.03, 0.5], q=0.05)
-    assert flags == [True, False, False, False]
-    assert benjamini_hochberg([]) == []
-
-
-def test_accumulator_matches_stdlib_statistics() -> None:
-    rng = random.Random(0)
-    data = [rng.uniform(0, 10) for _ in range(500)]
-    acc: Accumulator[float] = Accumulator(value=lambda x: x)
-    acc.update_all(data)
-    assert acc.count == len(data)
-    assert round(acc.mean, 9) == round(statistics.mean(data), 9)
-    assert round(acc.variance, 6) == round(statistics.variance(data), 6)
-
-    result = acc.result()
-    ci = result.confidence_interval()
-    assert ci.lower < result.mean < ci.upper
-
-
-def test_accumulator_projects_arbitrary_sample_types() -> None:
-    """Fixes the mmo-utils gap noted in docs/shared-ml-package.md: this
-    Accumulator is not float-only."""
-
-    class Sample:
-        def __init__(self, value: float) -> None:
-            self.value = value
-
-    acc: Accumulator[Sample] = Accumulator(value=lambda s: s.value)
-    acc.update_all(Sample(v) for v in [1.0, 2.0, 3.0])
-    assert acc.mean == 2.0

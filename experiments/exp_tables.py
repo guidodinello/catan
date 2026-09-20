@@ -15,42 +15,21 @@ Run directly:
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from gamekit.mc import wilson_interval
+from gamekit.results import git_commit, write_result
+
 from engine.board import NUM_VERTICES
 from engine.game import CatanGame
 from experiments.features import dice_probability, vertex_production
-from experiments.mcstats import wilson_interval
 from experiments.rollout import GameRecord, run_many
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 MIN_CELL_COUNT = 30  # suppress VP-trajectory cells with fewer samples than this
-
-
-def _git_commit() -> str:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=Path(__file__).resolve().parent,
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError, FileNotFoundError, OSError:
-        return "unknown"
-
-
-def _write_result(name: str, payload: dict[str, Any]) -> Path:
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = RESULTS_DIR / f"{name}.json"
-    path.write_text(json.dumps(payload, indent=2, default=str))
-    return path
 
 
 def analytic_dice_production_table(
@@ -200,7 +179,7 @@ def run_all_tables(
     records = run_many(num_players, pairs, workers=workers)
 
     return {
-        "git_commit": _git_commit(),
+        "git_commit": git_commit(),
         "generated_at": datetime.now(UTC).isoformat(),
         "num_players": num_players,
         "n_games": n_games,
@@ -229,7 +208,7 @@ def main() -> None:
         engine_seed_base=args.engine_seed_base,
         workers=args.workers,
     )
-    path = _write_result(f"tables_p{args.players}", payload)
+    path = write_result(RESULTS_DIR, f"tables_p{args.players}", payload)
     print(f"wrote {path}")
 
 
