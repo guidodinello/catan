@@ -33,6 +33,7 @@ from experiments.benchmark import (  # noqa: E402
     MODE_LINEUPS,
     RL_MODES,
     _build_role,
+    _result_name,
     run_arm,
 )
 from rl.evaluate import (  # noqa: E402
@@ -201,6 +202,37 @@ def test_the_rl_modes_refuse_to_run_without_a_checkpoint() -> None:
         )
     with pytest.raises(ValueError, match="require --checkpoint"):
         _build_role("rl", random.Random(0))
+
+
+def test_result_name_is_unchanged_for_every_non_rl_mode() -> None:
+    """One committed file per non-RL mode always means 'the current result
+    for that mode' -- unaffected by anything checkpoint-related."""
+    for mode in MODE_LINEUPS:
+        if mode in RL_MODES:
+            continue
+        assert _result_name(mode, 4, None) == f"benchmark_{mode}_p4"
+        assert _result_name(mode, 4, "whatever.zip") == f"benchmark_{mode}_p4"
+
+
+def test_result_name_is_unqualified_for_an_rl_mode_with_no_checkpoint() -> None:
+    assert _result_name("rl_vs_random", 4, None) == "benchmark_rl_vs_random_p4"
+
+
+def test_result_name_is_qualified_by_checkpoint_for_an_rl_mode() -> None:
+    """The regression test for a real incident: running a second checkpoint's
+    rl_vs_random benchmark silently overwrote PR #18's committed 81.75%
+    result, because the mode name alone doesn't say which checkpoint
+    produced it."""
+    name = _result_name(
+        "rl_vs_random", 4, "rl_runs/selfplay/catan_selfplay_v2_500000.zip"
+    )
+    assert name == "benchmark_rl_vs_random_p4_catan_selfplay_v2_500000"
+
+
+def test_result_name_never_collides_across_two_different_checkpoints() -> None:
+    a = _result_name("rl_vs_heuristic", 4, "ckpt_1000000.zip")
+    b = _result_name("rl_vs_heuristic", 4, "ckpt_5000000.zip")
+    assert a != b
 
 
 def test_the_non_rl_modes_still_build_without_a_checkpoint() -> None:

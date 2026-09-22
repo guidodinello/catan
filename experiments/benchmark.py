@@ -252,8 +252,32 @@ def main() -> None:
         workers=args.workers,
         checkpoint=args.checkpoint,
     )
-    path = write_result(RESULTS_DIR, f"benchmark_{args.mode}_p{args.players}", payload)
+    path = write_result(
+        RESULTS_DIR, _result_name(args.mode, args.players, args.checkpoint), payload
+    )
     print(f"wrote {path}")
+
+
+def _result_name(mode: str, num_players: int, checkpoint: str | None) -> str:
+    """The stamped result's file stem.
+
+    For every non-RL mode this is unchanged: one committed file per mode
+    tracks that role's canonical numbers over time (a rerun overwrites it, as
+    intended -- benchmark_heuristic_vs_random_p4.json has always meant "the
+    current heuristic_vs_random result", not "one run of it").
+
+    For an RL mode, ``mode`` alone is ambiguous: two different checkpoints
+    both produce ``rl_vs_random``. Without the checkpoint in the name, a
+    second checkpoint's run silently overwrites the first's committed
+    result -- which is exactly what happened running this PR's own
+    self-play checkpoint through ``rl_vs_random`` and clobbering PR #18's
+    committed 81.75% figure before this was added. So an RL mode's result
+    is qualified by the checkpoint's stem, and each trained checkpoint gets
+    its own permanent file.
+    """
+    if mode not in RL_MODES or checkpoint is None:
+        return f"benchmark_{mode}_p{num_players}"
+    return f"benchmark_{mode}_p{num_players}_{Path(checkpoint).stem}"
 
 
 if __name__ == "__main__":

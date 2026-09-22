@@ -276,8 +276,8 @@ wheels = [
 
 [[package]]
 name = "gamekit"
-version = "0.2.0"
-source = { git = "https://github.com/guidodinello/gamekit?branch=main#cdc5400af1288e836dbd0c4682575748a0f19b6f" }
+version = "0.3.0"
+source = { git = "https://github.com/guidodinello/gamekit?branch=main#dab51b13df1b2ebd9aabb498652828af4bb43d39" }
 
 [package.optional-dependencies]
 rl = [
