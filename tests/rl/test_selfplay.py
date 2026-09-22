@@ -27,9 +27,9 @@ from rl.train import (  # noqa: E402
     _checkpoint_dir,
     _resume_step_bookkeeping,
     _seed_selfplay_pool,
+    build_env,
     build_opponent,
     eval_opponent_kind,
-    make_single_env,
 )
 
 # ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ def test_seed_selfplay_pool_is_a_noop_without_both_resume_and_selfplay_dir(
 # ---------------------------------------------------------------------------
 
 
-def test_make_single_env_in_selfplay_mode_builds_a_playable_env_from_an_empty_pool(
+def test_build_env_in_selfplay_mode_builds_a_playable_env_from_an_empty_pool(
     tmp_path: Path,
 ) -> None:
     """An empty pool directory falls back to HeuristicAgent unconditionally
@@ -247,8 +247,7 @@ def test_make_single_env_in_selfplay_mode_builds_a_playable_env_from_an_empty_po
     cfg = TrainConfig(
         selfplay_dir=tmp_path, label="wiring", num_players=4, seed=1, envs=1
     )
-    wrapped = make_single_env(cfg, rank=0)
-    env = wrapped.env  # unwrap ActionMasker
+    env = build_env(cfg, rank=0)
 
     obs, info = env.reset(seed=1)
     assert obs.shape == env.observation_space.shape
@@ -262,13 +261,12 @@ def test_make_single_env_in_selfplay_mode_builds_a_playable_env_from_an_empty_po
             env.reset(seed=rng.randint(0, 2**31 - 1))
 
 
-def test_make_single_env_in_fixed_mode_is_unaffected_by_selfplay_fields() -> None:
+def test_build_env_in_fixed_mode_is_unaffected_by_selfplay_fields() -> None:
     """selfplay_dir=None must still take the PR #18 fixed-opponent path --
     this is the regression test for accidentally always branching to
     self-play."""
     cfg = TrainConfig(opponents="heuristic", selfplay_dir=None, envs=1, seed=2)
-    wrapped = make_single_env(cfg, rank=0)
-    env = wrapped.env
+    env = build_env(cfg, rank=0)
     obs, _ = env.reset(seed=2)
     assert obs.shape == env.observation_space.shape
 

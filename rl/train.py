@@ -155,10 +155,12 @@ def _load_checkpoint_agent(path: Path) -> RLAgent:
     return RLAgent(path, name="selfplay")
 
 
-def make_single_env(cfg: TrainConfig, rank: int) -> Any:
-    """One masked env. Module-level so ``SubprocVecEnv`` can pickle it."""
-    from sb3_contrib.common.wrappers import ActionMasker
-
+def build_env(cfg: TrainConfig, rank: int) -> CatanEnv:
+    """The env itself, with no sb3-contrib dependency -- split out from
+    ``make_single_env`` specifically so the self-play/fixed-opponent wiring
+    (the part worth testing) is exercisable with only the ``rl`` extra
+    installed. ``make_single_env`` is the one that needs the training stack,
+    for the ``ActionMasker`` wrap alone."""
     rng = random.Random(cfg.seed * 7919 + rank)
     reward = ShapedReward(gamma=cfg.gamma)
     seed = cfg.seed * 104_729 + rank
@@ -190,7 +192,14 @@ def make_single_env(cfg: TrainConfig, rank: int) -> Any:
             reward=reward,
             seed=seed,
         )
-    return ActionMasker(env, _action_mask_fn)
+    return env
+
+
+def make_single_env(cfg: TrainConfig, rank: int) -> Any:
+    """One masked env. Module-level so ``SubprocVecEnv`` can pickle it."""
+    from sb3_contrib.common.wrappers import ActionMasker
+
+    return ActionMasker(build_env(cfg, rank), _action_mask_fn)
 
 
 def build_vec_env(cfg: TrainConfig) -> Any:
