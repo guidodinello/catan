@@ -118,6 +118,15 @@ class TrainConfig:
     baseline_mix: float = 0.2
     eval_opponents: str | None = None
 
+    # A warm-started *policy* rather than a resumed *run*: loads BC-clone
+    # weights but keeps step counting at 0 (unlike `resume`, which restores
+    # the model's own cumulative `num_timesteps`). Mutually exclusive with
+    # `resume` -- see `build_parser`.
+    bc_init: Path | None = None
+    # The BC clone's own win rate (e.g. from `rl.bc`'s n=200 sanity eval),
+    # used only to seed `RegressionGuard`'s baseline -- see `train()`.
+    bc_init_rate: float = -1.0
+
     # Automatic stop-on-regression -- see RegressionGuard in rl/evaluate.py.
     regression_margin: float = 0.10
     regression_patience: int = 2
@@ -309,23 +318,55 @@ def _checkpoint_dir(cfg: TrainConfig) -> Path:
 
 
 def _seed_selfplay_pool(cfg: TrainConfig) -> None:
-    """Copy ``--resume`` into the pool's checkpoint directory under its own
-    glob pattern, so self-play has a real opponent from step 0 instead of
-    only ever falling back to ``HeuristicAgent`` until the first eval
-    checkpoint.
+    """Copy ``--resume`` or ``--bc-init`` into the pool's checkpoint directory
+    under its own glob pattern, so self-play has a real opponent from step 0
+    instead of only ever falling back to ``HeuristicAgent`` until the first
+    eval checkpoint.
 
     Skipped if a seed is already there (idempotent across resumed runs) or if
-    there's nothing to seed from.
+    there's nothing to seed from. ``resume`` takes priority when both are set
+    (they are mutually exclusive on the CLI, so in practice only one ever is).
     """
-    if cfg.selfplay_dir is None or cfg.resume is None:
+    source = cfg.resume or cfg.bc_init
+    if cfg.selfplay_dir is None or source is None:
         return
     checkpoint_dir = _checkpoint_dir(cfg)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     seed_path = checkpoint_dir / f"{cfg.label}_seed.zip"
     if seed_path.exists():
         return
-    shutil.copy2(cfg.resume, seed_path)
-    logger.info("seeded self-play pool: %s -> %s", cfg.resume, seed_path)
+    shutil.copy2(source, seed_path)
+    logger.info("seeded self-play pool: %s -> %s", source, seed_path)
+
+
+def build_model(cfg: TrainConfig, vec_env: Any) -> MaskablePPO:
+    """A fresh ``MaskablePPO`` over ``vec_env``, ``cfg``'s own settings.
+
+    Split out from ``train()`` so ``rl/bc.py`` builds the *identical*
+    architecture (same ``net_arch``, gamma, seed) for its cross-entropy
+    pre-training step -- the BC-initialised checkpoint and a from-scratch
+    training run can never drift apart on policy shape, because both go
+    through this one constructor.
+    """
+    from sb3_contrib import MaskablePPO
+
+    return MaskablePPO(
+        "MlpPolicy",
+        vec_env,
+        n_steps=cfg.n_steps,
+        batch_size=cfg.batch_size,
+        n_epochs=cfg.n_epochs,
+        learning_rate=cfg.learning_rate,
+        ent_coef=cfg.ent_coef,
+        gamma=cfg.gamma,
+        gae_lambda=cfg.gae_lambda,
+        clip_range=cfg.clip_range,
+        verbose=0,
+        tensorboard_log=str(cfg.run_dir / "tb"),
+        seed=cfg.seed,
+        device="cpu",
+        policy_kwargs={"net_arch": cfg.net_arch},
+    )
 
 
 def train(cfg: TrainConfig) -> TrainResult:
@@ -352,24 +393,42 @@ def train(cfg: TrainConfig) -> TrainResult:
         # save/load, so a resumed model already knows its own true cumulative
         # step count.
         resumed_from = model.num_timesteps
-    else:
-        model = MaskablePPO(
-            "MlpPolicy",
-            vec_env,
-            n_steps=cfg.n_steps,
-            batch_size=cfg.batch_size,
-            n_epochs=cfg.n_epochs,
-            learning_rate=cfg.learning_rate,
-            ent_coef=cfg.ent_coef,
-            gamma=cfg.gamma,
-            gae_lambda=cfg.gae_lambda,
-            clip_range=cfg.clip_range,
-            verbose=0,
-            tensorboard_log=str(cfg.run_dir / "tb"),
-            seed=cfg.seed,
+    elif cfg.bc_init is not None:
+        logger.info("warm-starting policy from BC checkpoint %s", cfg.bc_init)
+        # A warm *policy*, not a resumed *run*: reuse this invocation's own
+        # lr/ent_coef (never the BC checkpoint's pickled schedule -- BC never
+        # touches `model.policy.optimizer`, so those values are whatever the
+        # PPO constructor that produced the checkpoint happened to use) and
+        # never restore `num_timesteps`, so step counting starts at 0 exactly
+        # as it would for a from-scratch run.
+        model = MaskablePPO.load(
+            cfg.bc_init,
+            env=vec_env,
             device="cpu",
-            policy_kwargs={"net_arch": cfg.net_arch},
+            custom_objects={
+                "learning_rate": cfg.learning_rate,
+                "lr_schedule": lambda progress_remaining: cfg.learning_rate,
+                "ent_coef": cfg.ent_coef,
+            },
         )
+        # Confirmed empirically (rl/train.py's own test suite): a schedule
+        # that isn't constant across a chunk would sawtooth on every one of
+        # `learn()`'s per-chunk progress sweeps.
+        if (
+            model.lr_schedule(0.0) != cfg.learning_rate
+            or model.lr_schedule(1.0) != cfg.learning_rate
+        ):
+            raise RuntimeError(
+                "bc-init lr_schedule override did not take -- expected a "
+                f"constant {cfg.learning_rate}"
+            )
+        if model.ent_coef != cfg.ent_coef:
+            raise RuntimeError(
+                f"bc-init ent_coef override did not take -- expected {cfg.ent_coef}"
+            )
+        resumed_from = None
+    else:
+        model = build_model(cfg, vec_env)
         resumed_from = None
 
     start_step, target_step, reset_num_timesteps = _resume_step_bookkeeping(
@@ -384,8 +443,16 @@ def train(cfg: TrainConfig) -> TrainResult:
     train_seconds = 0.0
     eval_seconds = 0.0
     final_path = checkpoint_dir / f"{cfg.label}_final.zip"
+    # Seeded with the BC clone's own rate/path when warm-starting, so a
+    # fine-tune that immediately regresses below the clone is caught as the
+    # regression it is -- an unseeded guard (best_rate=-1.0) would instead
+    # adopt the first, possibly-worse, post-chunk eval as its new baseline
+    # and never stop until the run fell *another* `margin` below that.
     guard = RegressionGuard(
-        margin=cfg.regression_margin, patience=cfg.regression_patience
+        margin=cfg.regression_margin,
+        patience=cfg.regression_patience,
+        best_rate=cfg.bc_init_rate if cfg.bc_init is not None else -1.0,
+        best_checkpoint=cfg.bc_init,
     )
     eval_opponents = eval_opponent_kind(cfg)
     stopped_early = False
@@ -465,13 +532,35 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--players", type=int, default=defaults.num_players)
     parser.add_argument("--seed", type=int, default=defaults.seed)
     parser.add_argument("--gamma", type=float, default=defaults.gamma)
+    parser.add_argument("--learning-rate", type=float, default=defaults.learning_rate)
     parser.add_argument("--ent-coef", type=float, default=defaults.ent_coef)
     parser.add_argument("--eval-every", type=int, default=defaults.eval_every)
     parser.add_argument("--eval-episodes", type=int, default=defaults.eval_episodes)
     parser.add_argument("--torch-threads", type=int, default=defaults.torch_threads)
     parser.add_argument("--label", default=defaults.label)
     parser.add_argument("--run-dir", type=Path, default=defaults.run_dir)
-    parser.add_argument("--resume", type=Path, default=None)
+    resume_group = parser.add_mutually_exclusive_group()
+    resume_group.add_argument("--resume", type=Path, default=None)
+    resume_group.add_argument(
+        "--bc-init",
+        type=Path,
+        default=None,
+        help=(
+            "warm-start the policy from a BC-clone checkpoint (rl.bc); "
+            "unlike --resume, step counting starts at 0 -- a warm policy, "
+            "not a resumed run. Mutually exclusive with --resume"
+        ),
+    )
+    parser.add_argument(
+        "--bc-init-rate",
+        type=float,
+        default=-1.0,
+        help=(
+            "the BC clone's own win rate (e.g. rl.bc's n=200 sanity eval), "
+            "used only to seed RegressionGuard's baseline when --bc-init "
+            "is set"
+        ),
+    )
     parser.add_argument(
         "--selfplay-dir",
         type=Path,
@@ -515,6 +604,7 @@ def main() -> None:
         num_players=args.players,
         seed=args.seed,
         gamma=args.gamma,
+        learning_rate=args.learning_rate,
         ent_coef=args.ent_coef,
         eval_every=args.eval_every,
         eval_episodes=args.eval_episodes,
@@ -522,6 +612,8 @@ def main() -> None:
         label=args.label,
         run_dir=args.run_dir,
         resume=args.resume,
+        bc_init=args.bc_init,
+        bc_init_rate=args.bc_init_rate,
         selfplay_dir=args.selfplay_dir,
         baseline_mix=args.baseline_mix,
         eval_opponents=args.eval_opponents,
