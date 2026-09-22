@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 from gamekit.agent import Agent
@@ -123,6 +124,53 @@ def masked_ppo_predictor(
         return int(atom)
 
     return predict
+
+
+@dataclass(slots=True)
+class RegressionGuard:
+    """Automatic stop-on-regression, checked once per eval-in-loop call.
+
+    Targets truco-py's actual failure mode directly: both of its self-play
+    collapses ran for hours past the point of no return because nothing was
+    watching the eval curve (April: 85.3% -> 56-57%; June: killed by hand at
+    6.6M steps after entropy and ep_rew_mean had already gone strongly
+    negative). ``rl/train.py``'s eval-in-loop already computes a ``WinRate``
+    every chunk -- this turns that into a stopping rule instead of a log line.
+
+    Two knobs, each guarding against a different false positive:
+
+    - ``margin``: a regression must clear this many points below the best
+      rate seen so far to count at all. Eval noise at n~200 is several points
+      wide (see ``WinRate``'s own docstring on this), so without a margin,
+      ordinary sampling variance around a plateau would trigger a stop.
+    - ``patience``: that many *consecutive* qualifying regressions are
+      required, not just one. A single bad eval a run is still net improving
+      from resets the streak; only a sustained slide -- the actual shape of
+      truco's collapses -- stops training.
+
+    A rate within ``margin`` of the best, even if not a new best, resets the
+    streak rather than merely failing to advance it: it's evidence the run is
+    holding steady, not regressing.
+    """
+
+    margin: float
+    patience: int
+    best_rate: float = -1.0
+    best_checkpoint: Path | None = None
+    _streak: int = field(default=0, repr=False)
+
+    def observe(self, rate: float, checkpoint: Path) -> bool:
+        """Record one eval; return ``True`` if training should stop now."""
+        if rate > self.best_rate:
+            self.best_rate = rate
+            self.best_checkpoint = checkpoint
+            self._streak = 0
+            return False
+        if rate < self.best_rate - self.margin:
+            self._streak += 1
+        else:
+            self._streak = 0
+        return self._streak >= self.patience
 
 
 def random_predictor(seed: int = 0) -> Callable[[np.ndarray, np.ndarray], int]:
