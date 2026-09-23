@@ -72,6 +72,30 @@ def test_parser_defaults_are_usable_numbers() -> None:
     assert isinstance(args.steps, int)
 
 
+def test_learning_rate_is_exposed_on_the_cli() -> None:
+    """Needed for a BC fine-tune at a gentler lr than the TrainConfig default
+    (e.g. 1e-4 instead of 3e-4) -- previously only settable via TrainConfig,
+    not the CLI a real run actually invokes."""
+    args = build_parser().parse_args(["--learning-rate", "1e-4"])
+    assert args.learning_rate == pytest.approx(1e-4)
+
+
+def test_bc_init_and_resume_are_mutually_exclusive() -> None:
+    """A warm *policy* (--bc-init) and a resumed *run* (--resume) are
+    different things -- see rl/train.py's _resume_step_bookkeeping -- so
+    passing both is refused at the CLI rather than silently picking one."""
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--resume", "a.zip", "--bc-init", "b.zip"])
+
+
+def test_bc_init_rate_defaults_to_an_unseeded_guard() -> None:
+    """Absent --bc-init (a from-scratch or --resume run), RegressionGuard
+    must not be seeded by a stale default rate."""
+    args = build_parser().parse_args([])
+    assert args.bc_init is None
+    assert args.bc_init_rate == pytest.approx(-1.0)
+
+
 def test_gamma_defaults_high_enough_for_catan_episode_lengths() -> None:
     """A 4p episode is ~450 learner decisions. truco-py's 0.99 would give a
     ~100-step effective horizon and bury the terminal signal."""

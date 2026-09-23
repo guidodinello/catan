@@ -236,6 +236,17 @@ class CatanEnv(gym.Env[NDArray[np.float32], np.int64]):
     def state(self) -> GameState | None:
         return self._state
 
+    def legal_actions(self) -> list[Action]:
+        """The engine's legal actions at the current decision point.
+
+        Exposed so callers that need the *engine* action (not the atom head)
+        -- BC dataset generation replaying ``HeuristicAgent`` through this env
+        is the motivating case -- never reach into ``self._game``.
+        """
+        if self._state is None:
+            raise RuntimeError("call reset() before legal_actions()")
+        return self._game.legal_actions(self._state)
+
     def _observe(self, state: GameState) -> NDArray[np.float32]:
         return self._encoder.encode(
             state, self._learner_seat, buffer_prefix=self._composer.prefix

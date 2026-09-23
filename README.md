@@ -323,9 +323,10 @@ Resolved while planning the web GUI (full detail in
       vs heuristic opponents, self-play with anti-collapse controls. **In
       progress, gate not yet met**: the env/encoder (PR #17), MaskablePPO
       training vs random (PR #18, 81.75% [80.5%, 82.9%] vs 3 `RandomAgent`s),
-      and self-play with anti-collapse controls (PR #19) have all landed, but
+      self-play with anti-collapse controls (PR #19), and a behaviour-cloning
+      warm start before self-play fine-tuning (PR #21) have all landed, but
       the Phase-5-done bar — beating `HeuristicAgent` — has not: the best
-      self-play attempt reaches **12.075% [11.10%, 13.12%] vs 3
+      attempt so far reaches **16.2% [15.09%, 17.37%] vs 3
       `HeuristicAgent`s**, well short of the >25%-with-CI-excluding-it gate.
       See `docs/experiments/` for every run's numbers, config, and verdict,
       and `~/projects/docs/shared-ml-package.md`'s "`gamekit.rl`" section for
