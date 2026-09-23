@@ -256,6 +256,53 @@ no pipes), and bit-identical to the CPU result on a real dataset (Part C.2).
 **Verdict: adopt as an opt-in `--device cuda` flag**, default stays `cpu` (no CUDA
 dependency for routine BC runs).
 
+### C.6 Regression training run: `--device cuda` doesn't break training
+
+A real correctness bug surfaced running this: the first `_cpu_eval_model` implementation
+(`copy.deepcopy(model.policy)`) raised `RuntimeError` on this run's very first eval chunk
+-- torch's tensor `__deepcopy__` only supports graph-leaf tensors, and an actually-trained
+policy isn't one. Fixed by building a fresh `MaskablePPO` (as `build_model` already does)
+with the *global* RNG state saved and restored around the call, so its own
+`set_random_seed` side effect never escapes -- caught by
+`tests/rl/test_cpu_eval_model.py`, which fails against the deepcopy version's predecessor
+bug (an unguarded `build_model` call) and passes against the fix, verified both ways.
+
+Like-for-like with log 004: fresh label `catan_gpu_ft` (never touching `catan_bc_ft`'s
+files -- `OpponentPool`'s `run_id` scoping keeps them in separate directories under
+`rl_runs/selfplay/`), `--bc-init rl_runs/bc/catan_bc_clone.zip --bc-init-rate 0.10
+--baseline-mix 0.5 --ent-coef 0.01 --learning-rate 1e-4 --envs 8 --seed 3 --eval-opponents
+heuristic --eval-every 250000 --eval-episodes 200 --regression-margin 0.10
+--regression-patience 2`, plus `--device cuda`. One deviation from 004, stated up front:
+**750,000 steps, not 3,000,000** -- three eval points is enough to confirm no regression
+without spending the full budget on a run whose purpose is verification, not a new
+best-checkpoint attempt.
+
+```
+.venv-cuda/bin/python -m rl.train \
+  --bc-init rl_runs/bc/catan_bc_clone.zip --bc-init-rate 0.10 \
+  --selfplay-dir rl_runs/selfplay --label catan_gpu_ft \
+  --baseline-mix 0.5 --ent-coef 0.01 --learning-rate 1e-4 \
+  --envs 8 --seed 3 --device cuda \
+  --eval-opponents heuristic --eval-every 250000 --eval-episodes 200 \
+  --regression-margin 0.10 --regression-patience 2 --steps 750000
+```
+
+| Steps | Win rate vs 3 `HeuristicAgent` | Log 004 at the same step |
+|---|---|---|
+| 250,000 | 11.0% [7.4%, 16.1%] | 17.5% [12.9%, 23.4%] |
+| 500,000 | 11.5% [7.8%, 16.7%] | 14.0% [9.9%, 19.5%] |
+| 750,000 | 12.5% [8.6%, 17.8%] | 12.0% [8.2%, 17.2%] |
+
+All three fall inside 004's overall 10.5-20.0% oscillation band, and every one of this
+run's own confidence intervals overlaps 004's at the same step -- statistically
+indistinguishable from 004, which is exactly the pass condition (`--device cuda` must not
+change what training *does*, only how fast the update step runs). `RegressionGuard` never
+triggered (`stopped_early=False`); `train_fps` measured 602-631, matching the `--envs 8`
+CPU-side range from log 004 (`~599`) and Part C.4's own reconciliation, confirming the
+learner-device change doesn't distort the env-bound majority of wall time. Best checkpoint:
+`rl_runs/selfplay/catan_gpu_ft/catan_gpu_ft_750000.zip` (not committed -- `rl_runs/` is
+gitignored, same convention as every other log in this directory).
+
 ## Overall verdict
 
 | Component | Verdict |
@@ -305,6 +352,15 @@ uv run python -m rl.profile worker --pool rl_runs/gpu005/pool14 --label prof14 \
 uv run python -m experiments.benchmark --mode rl_vs_heuristic --games 400 --players 4 \
   --engine-seed-base 1 --driver-seed-base 1 --workers 16 \
   --checkpoint rl_runs/selfplay/catan_bc_ft/catan_bc_ft_2000000.zip
+
+# Regression training run
+.venv-cuda/bin/python -m rl.train \
+  --bc-init rl_runs/bc/catan_bc_clone.zip --bc-init-rate 0.10 \
+  --selfplay-dir rl_runs/selfplay --label catan_gpu_ft \
+  --baseline-mix 0.5 --ent-coef 0.01 --learning-rate 1e-4 \
+  --envs 8 --seed 3 --device cuda \
+  --eval-opponents heuristic --eval-every 250000 --eval-episodes 200 \
+  --regression-margin 0.10 --regression-patience 2 --steps 750000
 ```
 
 ## Environment
