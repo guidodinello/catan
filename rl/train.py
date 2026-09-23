@@ -79,9 +79,12 @@ from rl.reward import ShapedReward
 
 LOG_DIR = Path("rl_runs")
 OPPONENT_KINDS = ("random", "heuristic")
+INFERENCE_KINDS = ("none", "cpu", "cuda")
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from sb3_contrib import MaskablePPO
+
+    from rl.inference_server import InferenceHandle
 
 logger = logging.getLogger("rl.train")
 
@@ -110,6 +113,10 @@ class TrainConfig:
     label: str = "catan_ppo"
     run_dir: Path = LOG_DIR
     resume: Path | None = None
+    # The PPO model's own device (build_model/resume/bc-init loads). Separate
+    # from opponent_inference below -- see docs/experiments/005-gpu-inference.md
+    # for why the two are independent knobs with independent verdicts.
+    device: str = "cpu"
 
     # Self-play. `opponents` above stops governing training opponents once
     # `selfplay_dir` is set (they come from the pool instead) but keeps
@@ -117,6 +124,12 @@ class TrainConfig:
     selfplay_dir: Path | None = None
     baseline_mix: float = 0.2
     eval_opponents: str | None = None
+    # "none" (default): each worker's RLAgent opponents load their own model
+    # and call MaskablePPO.predict locally, exactly as before this option
+    # existed. "cpu"/"cuda": route every opponent atom decision through a
+    # single InferenceServer instead -- see rl/inference_server.py and
+    # docs/experiments/005-gpu-inference.md for when this actually wins.
+    opponent_inference: str = "none"
 
     # A warm-started *policy* rather than a resumed *run*: loads BC-clone
     # weights but keeps step counting at 0 (unlike `resume`, which restores
@@ -151,7 +164,9 @@ def _action_mask_fn(env: Any) -> Any:
     return env.action_masks()
 
 
-def _load_checkpoint_agent(path: Path) -> RLAgent:
+def _load_checkpoint_agent(
+    path: Path, *, handle: InferenceHandle | None = None
+) -> RLAgent:
     """``gamekit.rl.selfplay.OpponentPool``'s ``load_opponent``.
 
     Constructs a fresh ``RLAgent`` wrapper per call (as the pool expects), but
@@ -160,11 +175,19 @@ def _load_checkpoint_agent(path: Path) -> RLAgent:
     level, which is exactly the "lazy, cached wrapper" gamekit's own
     docstring says a self-play worker needs, since ``sample()`` calls this
     afresh for every non-learner seat of every episode.
+
+    ``handle`` is set only when ``cfg.opponent_inference`` enables the
+    ``InferenceServer`` (see ``build_vec_env``): it is bound via
+    ``functools.partial`` before this is handed to ``OpponentPool`` as its
+    ``load_opponent``, so the pool's own one-arg call signature never has to
+    know inference routing exists.
     """
-    return RLAgent(path, name="selfplay")
+    return RLAgent(path, name="selfplay", inference=handle)
 
 
-def build_env(cfg: TrainConfig, rank: int) -> CatanEnv:
+def build_env(
+    cfg: TrainConfig, rank: int, handle: InferenceHandle | None = None
+) -> CatanEnv:
     """The env itself, with no sb3-contrib dependency -- split out from
     ``make_single_env`` specifically so the self-play/fixed-opponent wiring
     (the part worth testing) is exercisable with only the ``rl`` extra
@@ -178,7 +201,7 @@ def build_env(cfg: TrainConfig, rank: int) -> CatanEnv:
         pool: OpponentPool[GameState, Action] = OpponentPool(
             cfg.selfplay_dir,
             f"{cfg.label}_*.zip",
-            load_opponent=_load_checkpoint_agent,
+            load_opponent=partial(_load_checkpoint_agent, handle=handle),
             baseline_factory=HeuristicAgent,
             baseline_mix=cfg.baseline_mix,
             run_id=cfg.label,
@@ -204,11 +227,13 @@ def build_env(cfg: TrainConfig, rank: int) -> CatanEnv:
     return env
 
 
-def make_single_env(cfg: TrainConfig, rank: int) -> Any:
+def make_single_env(
+    cfg: TrainConfig, rank: int, handle: InferenceHandle | None = None
+) -> Any:
     """One masked env. Module-level so ``SubprocVecEnv`` can pickle it."""
     from sb3_contrib.common.wrappers import ActionMasker
 
-    return ActionMasker(build_env(cfg, rank), _action_mask_fn)
+    return ActionMasker(build_env(cfg, rank, handle), _action_mask_fn)
 
 
 def build_vec_env(cfg: TrainConfig) -> Any:
@@ -218,14 +243,46 @@ def build_vec_env(cfg: TrainConfig) -> Any:
         VecMonitor,
     )
 
+    if cfg.opponent_inference not in INFERENCE_KINDS:
+        raise ValueError(
+            f"opponent_inference must be one of {INFERENCE_KINDS}, "
+            f"got {cfg.opponent_inference!r}"
+        )
+
+    handles: list[InferenceHandle | None]
+    server = None
+    if cfg.opponent_inference == "none":
+        handles = [None] * cfg.envs
+    else:
+        # Pipes must exist before SubprocVecEnv forks -- see
+        # rl/inference_server.py's module docstring on why. Constructed
+        # here, never inside a worker.
+        from rl.inference_server import InferenceServer
+
+        server = InferenceServer(n_envs=cfg.envs, device=cfg.opponent_inference)
+        handles = [server.make_handle(rank) for rank in range(cfg.envs)]
+
     # partial, not a lambda with a default argument: picklable by name, which
     # is what SubprocVecEnv's worker processes need.
     env_fns: list[Callable[[], Any]] = [
-        partial(make_single_env, cfg, rank) for rank in range(cfg.envs)
+        partial(make_single_env, cfg, rank, handles[rank]) for rank in range(cfg.envs)
     ]
+    vec_env: Any
     if cfg.envs == 1:
-        return VecMonitor(DummyVecEnv(env_fns))
-    return VecMonitor(SubprocVecEnv(env_fns, start_method="fork"))
+        vec_env = VecMonitor(DummyVecEnv(env_fns))
+    else:
+        vec_env = VecMonitor(SubprocVecEnv(env_fns, start_method="fork"))
+    # Keeps the server (and its daemon thread) alive for vec_env's lifetime
+    # without changing this function's return type -- every existing caller
+    # (rl/bc.py, tests) passes opponent_inference="none" and gets `server is
+    # None` here, so this is a no-op for them. `vec_env: Any` above (not the
+    # class stable_baselines3 actually returns) so this assignment needs no
+    # `# type: ignore` whose necessity would otherwise depend on whether
+    # stable_baselines3 happens to be installed in the mypy environment
+    # (installed here, deliberately absent from the pre-commit hook's --
+    # see .pre-commit-config.yaml's comment on why).
+    vec_env._inference_server = server
+    return vec_env
 
 
 def eval_opponent_kind(cfg: TrainConfig) -> str:
@@ -242,10 +299,70 @@ def eval_opponent_kind(cfg: TrainConfig) -> str:
     return cfg.eval_opponents if cfg.eval_opponents is not None else cfg.opponents
 
 
+def _cpu_eval_model(cfg: TrainConfig, model: MaskablePPO) -> Any:
+    """A CPU copy of ``model``'s policy for in-loop eval.
+
+    In-loop eval calls ``model.predict`` one observation at a time (see
+    ``rl.evaluate.evaluate_winrate``); ``docs/experiments/005-gpu-inference.md``
+    measured single-sample ``predict`` on CUDA as *slower* than CPU (kernel-
+    launch latency dominates a batch of one), so evaluating directly on
+    ``cfg.device`` when it is "cuda" would be a pure regression, not a
+    convenience. A no-op when ``cfg.device`` is already "cpu".
+
+    Returns the bare policy (``MaskableActorCriticPolicy``), not a second
+    ``MaskablePPO`` -- its own ``predict(observation, state, episode_start,
+    deterministic, action_masks)`` has the identical signature
+    ``masked_ppo_predictor`` calls, so nothing downstream needs to know the
+    difference.
+
+    Built through ``build_model`` (the identical architecture ``model``
+    itself was built with) with the *training run's* global RNG state saved
+    and restored around the call -- not ``copy.deepcopy(model.policy)``,
+    which was tried first and fails on a real (non-leaf) policy: torch's
+    tensor ``__deepcopy__`` only supports graph-leaf tensors, and a policy
+    that has actually been optimized is not one (confirmed empirically,
+    ``RuntimeError: Only Tensors created explicitly by the user (graph
+    leaves) support the deepcopy protocol``, raised from inside a real
+    training run's first eval chunk, not synthetically).
+
+    The RNG save/restore is why ``build_model`` is safe to call here despite
+    its own docstring's warning elsewhere in this module: ``MaskablePPO.__init__``
+    -> ``_setup_model()`` calls SB3's ``set_random_seed`` unconditionally,
+    reseeding the *global* Python/numpy/torch RNGs as a side effect
+    (confirmed in stable-baselines3's source). Left unguarded, that would
+    silently reseed the training run's own randomness (env draws,
+    opponent-pool sampling, PPO's stochastic action sampling) on every
+    in-loop eval chunk, only when ``cfg.device == "cuda"`` -- exactly the bug
+    ``tests/rl/test_cpu_eval_model.py`` pins by asserting the global RNG
+    state is bit-identical before and after this call.
+    """
+    if cfg.device == "cpu":
+        return model
+    import dataclasses
+    import random
+
+    import numpy as np
+    import torch
+
+    random_state = random.getstate()
+    np_state = np.random.get_state()
+    torch_state = torch.get_rng_state()
+    try:
+        cpu_cfg = dataclasses.replace(cfg, device="cpu")
+        cpu_model = build_model(cpu_cfg, model.env)
+        cpu_model.policy.load_state_dict(model.policy.state_dict())
+        return cpu_model.policy
+    finally:
+        random.setstate(random_state)
+        np.random.set_state(np_state)
+        torch.set_rng_state(torch_state)
+
+
 def evaluate(cfg: TrainConfig, model: MaskablePPO) -> WinRate:
     opponents = eval_opponent_kind(cfg)
+    eval_model = _cpu_eval_model(cfg, model)
     return evaluate_winrate(
-        masked_ppo_predictor(model),
+        masked_ppo_predictor(eval_model),
         opponent_factory=lambda rng: build_opponent(opponents, rng),
         num_players=cfg.num_players,
         n_episodes=cfg.eval_episodes,
@@ -364,7 +481,7 @@ def build_model(cfg: TrainConfig, vec_env: Any) -> MaskablePPO:
         verbose=0,
         tensorboard_log=str(cfg.run_dir / "tb"),
         seed=cfg.seed,
-        device="cpu",
+        device=cfg.device,
         policy_kwargs={"net_arch": cfg.net_arch},
     )
 
@@ -388,7 +505,7 @@ def train(cfg: TrainConfig) -> TrainResult:
 
     if cfg.resume is not None:
         logger.info("resuming from %s", cfg.resume)
-        model = MaskablePPO.load(cfg.resume, env=vec_env, device="cpu")
+        model = MaskablePPO.load(cfg.resume, env=vec_env, device=cfg.device)
         # Confirmed empirically: MaskablePPO persists num_timesteps across
         # save/load, so a resumed model already knows its own true cumulative
         # step count.
@@ -404,7 +521,7 @@ def train(cfg: TrainConfig) -> TrainResult:
         model = MaskablePPO.load(
             cfg.bc_init,
             env=vec_env,
-            device="cpu",
+            device=cfg.device,
             custom_objects={
                 "learning_rate": cfg.learning_rate,
                 "lr_schedule": lambda progress_remaining: cfg.learning_rate,
@@ -586,6 +703,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--regression-patience", type=int, default=defaults.regression_patience
     )
+    parser.add_argument(
+        "--device",
+        choices=("cpu", "cuda"),
+        default=defaults.device,
+        help="device for the PPO model itself (build/resume/bc-init loads). "
+        "In-loop eval always runs on a CPU copy regardless -- see "
+        "docs/experiments/005-gpu-inference.md",
+    )
+    parser.add_argument(
+        "--opponent-inference",
+        choices=INFERENCE_KINDS,
+        default=defaults.opponent_inference,
+        help="'none' (default): each worker's RLAgent opponents call "
+        "MaskablePPO.predict locally, as before this option existed. "
+        "'cpu'/'cuda': route opponent-checkpoint inference through a single "
+        "batched InferenceServer -- see rl/inference_server.py",
+    )
     return parser
 
 
@@ -619,6 +753,8 @@ def main() -> None:
         eval_opponents=args.eval_opponents,
         regression_margin=args.regression_margin,
         regression_patience=args.regression_patience,
+        device=args.device,
+        opponent_inference=args.opponent_inference,
     )
     result = train(cfg)
     print(

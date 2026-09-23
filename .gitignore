@@ -8,6 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+# Opt-in CUDA venv (docs/experiments/005-gpu-inference.md): a symlink to a
+# venv on external storage, like truco-py's -- never the actual .venv, never
+# committed.
+.venv-cuda
 
 # Tooling caches
 .pytest_cache/

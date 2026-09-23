@@ -339,7 +339,24 @@ Resolved while planning the web GUI (full detail in
       composition buffer: a multi-parameter action is spelled as a short
       sequence of atoms over consecutive env steps, so a 3-card discard is
       three picks from a 5-wide resource head rather than one choice among
-      197.
+      197. **Torch is CPU-only by default** (`uv sync --extra rl-train`);
+      `docs/experiments/005-gpu-inference.md` measured where a GPU actually
+      helps and found it is *not* opponent-checkpoint inference in
+      self-play (a centralized batched server regresses throughput once the
+      opponent pool holds more than ~1 checkpoint), but *is* BC
+      pre-training and the PPO update step. Opt into CUDA torch for those
+      two with a second, separate venv (the CUDA stack is ~4GB and doesn't
+      fit this machine's `/`):
+      ```
+      ln -s /path/to/external/storage/catan-cuda-venv .venv-cuda   # like truco-py's .venv
+      UV_CACHE_DIR=/path/to/external/storage/uv-cache \
+        UV_PROJECT_ENVIRONMENT=.venv-cuda uv sync --dev --extra rl-train-cuda
+      .venv-cuda/bin/python -m rl.bc train --device cuda ...
+      .venv-cuda/bin/python -m rl.train --device cuda ...
+      ```
+      `rl-train` and `rl-train-cuda` are declared conflicting extras (a
+      `uv sync` can install one or the other, never both into the same
+      venv), and CI's `uv sync --extra rl` never installs either.
 - [x] **Phase 6 — Retrofit `truco-py` onto `gamekit`**: done in
       `truco-py` PRs #1 (initial adoption) and #2 (`gamekit.rl` adoption).
       `roulette` never became a `gamekit` consumer — it's a local notebook
