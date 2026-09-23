@@ -28,6 +28,22 @@ rl-train = [
     "tensorboard>=2.20.0",
     "torch>=2.14",
 ]
+# Opt-in CUDA torch, same deps otherwise. Never installed by CI (see the
+# comment on `rl-train` above) and conflicts with `rl-train` (below) so the
+# two can never resolve into the same environment -- one venv is CPU-only,
+# a second, opt-in one is CUDA-only. See docs/experiments/005-gpu-inference.md
+# for what this measured: opponent-checkpoint inference (self-play) did NOT
+# net a win once the batching server's IPC overhead was measured end-to-end,
+# but BC pre-training (`rl.bc train --device cuda`) and the PPO update step
+# (`rl.train --device cuda`) did. This is why the CUDA path exists at all,
+# and why CPU stays the default.
+rl-train-cuda = [
+    "catan[rl]",
+    "sb3-contrib>=2.9.0",
+    "stable-baselines3>=2.9.0",
+    "tensorboard>=2.20.0",
+    "torch>=2.14",
+]
 
 [project.scripts]
 catan = "main:main"
@@ -62,19 +78,43 @@ select = ["E", "F", "B", "I", "N", "W", "UP"]
 [tool.ruff.lint.isort]
 known-first-party = ["engine", "experiments", "agents", "server", "rl"]
 
+[tool.uv]
+# `rl-train` (CPU torch) and `rl-train-cuda` (CUDA torch) install the same
+# packages from different indexes -- uv would otherwise have to pick one
+# torch build to satisfy both at once. Declaring them conflicting instead
+# means each lives in its own venv (see README.md's "Opting into CUDA").
+conflicts = [
+    [
+        { extra = "rl-train" },
+        { extra = "rl-train-cuda" },
+    ],
+]
+
 [tool.uv.sources]
 gamekit = { git = "https://github.com/guidodinello/gamekit", branch = "main" }
-# CPU-only torch. The default Linux index pulls ~3-4GB of nvidia-*/triton
-# wheels; this one pulls ~250MB and no CUDA at all. Justified empirically:
-# truco-py measured on this same machine that training is CPU-bound --
-# environment simulation dominates network inference -- and catan's engine is
-# pure Python and heavier still. Revisit if self-play turns out bottlenecked
-# on opponent-checkpoint inference.
-torch = { index = "pytorch-cpu" }
+# CPU-only torch by default. The default Linux index pulls ~3-4GB of
+# nvidia-*/triton wheels; this one pulls ~250MB and no CUDA at all. Justified
+# empirically: truco-py measured on this same machine that training is
+# CPU-bound -- environment simulation dominates network inference -- and
+# catan's engine is pure Python and heavier still. `docs/experiments/005-gpu-inference.md`
+# revisited this for opponent-checkpoint inference specifically and confirmed
+# it: a centralized batched inference server (truco-py's design) does not
+# net a win here once its own IPC overhead is measured end-to-end, so CPU
+# stays the default. `rl-train-cuda` is the opt-in path for the two things
+# that measured a real, verified win: BC pre-training and the PPO update step.
+torch = [
+    { index = "pytorch-cpu", extra = "rl-train" },
+    { index = "pytorch-cu130", extra = "rl-train-cuda" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.ruff.format]

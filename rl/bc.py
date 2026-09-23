@@ -395,7 +395,7 @@ class _SplitScore:
 
 
 def _score_split(
-    policy: Any, dataset: Dataset, idx: np.ndarray, chunk: int
+    policy: Any, dataset: Dataset, idx: np.ndarray, chunk: int, device: str = "cpu"
 ) -> _SplitScore:
     """Score ``idx`` in ``chunk``-sized pieces, reading only that piece off
     the memory-mapped dataset arrays at a time."""
@@ -407,13 +407,17 @@ def _score_split(
     with torch.no_grad():
         for start in range(0, len(idx), chunk):
             piece = idx[start : start + chunk]
-            obs_t = torch.as_tensor(np.asarray(dataset.obs[piece], dtype=np.float32))
-            mask_t = torch.as_tensor(np.asarray(dataset.masks[piece], dtype=bool))
+            obs_t = torch.as_tensor(
+                np.asarray(dataset.obs[piece], dtype=np.float32), device=device
+            )
+            mask_t = torch.as_tensor(
+                np.asarray(dataset.masks[piece], dtype=bool), device=device
+            )
             labels_t = torch.as_tensor(
-                np.asarray(dataset.labels[piece], dtype=np.int64)
+                np.asarray(dataset.labels[piece], dtype=np.int64), device=device
             )
             returns_t = torch.as_tensor(
-                np.asarray(dataset.returns[piece], dtype=np.float32)
+                np.asarray(dataset.returns[piece], dtype=np.float32), device=device
             )
 
             raw_logits = policy.action_net(
@@ -455,6 +459,7 @@ def train_bc(
     lr: float = 1e-3,
     seed: int = 0,
     value_loss_weight: float = 0.5,
+    device: str = "cpu",
 ) -> BCMetrics:
     """Cross-entropy pre-train a fresh ``MaskablePPO`` policy on ``dataset``,
     save it to ``save``, and return held-out metrics.
@@ -462,6 +467,14 @@ def train_bc(
     Builds the model through ``rl.train.build_model`` -- the same
     constructor a from-scratch training run uses -- so the architecture can
     never drift between a BC-initialised checkpoint and a cold-started one.
+
+    ``device="cuda"`` moves each mini-batch onto the GPU before the forward
+    pass. Measured (``docs/experiments/005-gpu-inference.md``): ~23x faster
+    per forward+backward+optimizer-step at this batch size and net_arch on
+    this machine's RTX 4050 -- unlike opponent-checkpoint inference (also
+    measured there), BC's larger batches make the GPU an unambiguous win
+    with no IPC round-trip to eat the savings, since everything happens in
+    one process.
     """
     import torch
     import torch.nn.functional as functional
@@ -475,6 +488,7 @@ def train_bc(
         seed=seed,
         gamma=gamma,
         net_arch=net_arch or [256, 256],
+        device=device,
     )
     vec_env = build_vec_env(cfg)
     model = build_model(cfg, vec_env)
@@ -489,10 +503,18 @@ def train_bc(
     )
 
     def _batch(idx: np.ndarray) -> tuple[Any, Any, Any, Any]:
-        obs_t = torch.as_tensor(np.asarray(dataset.obs[idx], dtype=np.float32))
-        mask_t = torch.as_tensor(np.asarray(dataset.masks[idx], dtype=bool))
-        labels_t = torch.as_tensor(np.asarray(dataset.labels[idx], dtype=np.int64))
-        returns_t = torch.as_tensor(np.asarray(dataset.returns[idx], dtype=np.float32))
+        obs_t = torch.as_tensor(
+            np.asarray(dataset.obs[idx], dtype=np.float32), device=device
+        )
+        mask_t = torch.as_tensor(
+            np.asarray(dataset.masks[idx], dtype=bool), device=device
+        )
+        labels_t = torch.as_tensor(
+            np.asarray(dataset.labels[idx], dtype=np.int64), device=device
+        )
+        returns_t = torch.as_tensor(
+            np.asarray(dataset.returns[idx], dtype=np.float32), device=device
+        )
         return obs_t, mask_t, labels_t, returns_t
 
     rng = np.random.default_rng(seed)
@@ -516,7 +538,7 @@ def train_bc(
             optimizer.step()
             epoch_loss += float(loss.item()) * len(batch_idx)
 
-        val_score = _score_split(policy, dataset, val_idx, DEFAULT_EVAL_CHUNK)
+        val_score = _score_split(policy, dataset, val_idx, DEFAULT_EVAL_CHUNK, device)
         logger.info(
             "epoch=%d/%d train_loss=%.4f val_masked_acc=%.1f%% val_value_mse=%.4f",
             epoch + 1,
@@ -542,7 +564,7 @@ def train_bc(
     assert best_state is not None
     policy.load_state_dict(best_state)
 
-    metrics = _compute_metrics(policy, dataset, train_idx, val_idx)
+    metrics = _compute_metrics(policy, dataset, train_idx, val_idx, device=device)
     save.parent.mkdir(parents=True, exist_ok=True)
     model.save(save)
     logger.info("saved BC checkpoint: %s", save)
@@ -556,11 +578,12 @@ def _compute_metrics(
     val_idx: np.ndarray,
     *,
     chunk: int = DEFAULT_EVAL_CHUNK,
+    device: str = "cpu",
 ) -> BCMetrics:
     """Final held-out report, scored in ``chunk``-sized pieces via
     ``_score_split`` -- see its docstring on why."""
-    train_score = _score_split(policy, dataset, train_idx, chunk)
-    val_score = _score_split(policy, dataset, val_idx, chunk)
+    train_score = _score_split(policy, dataset, train_idx, chunk, device)
+    val_score = _score_split(policy, dataset, val_idx, chunk, device)
 
     returns_arr = np.asarray(dataset.returns)
     return BCMetrics(
@@ -630,6 +653,16 @@ def build_parser() -> argparse.ArgumentParser:
     train_p.add_argument("--lr", type=float, default=1e-3)
     train_p.add_argument("--seed", type=int, default=0)
     train_p.add_argument("--sanity-episodes", type=int, default=200)
+    train_p.add_argument(
+        "--device",
+        choices=("cpu", "cuda"),
+        default="cpu",
+        help="device for the cross-entropy pre-training step (forward, "
+        "backward, optimizer.step). Measured ~23x faster than CPU at this "
+        "batch size/net_arch -- see docs/experiments/005-gpu-inference.md. "
+        "The saved checkpoint's own device is unaffected (SB3 saves are "
+        "device-agnostic); --sanity-episodes always evaluates on CPU.",
+    )
     return parser
 
 
@@ -661,6 +694,7 @@ def main() -> None:
             batch_size=args.batch_size,
             lr=args.lr,
             seed=args.seed,
+            device=args.device,
         )
         print(metrics.report())
         win_rate = sanity_eval(

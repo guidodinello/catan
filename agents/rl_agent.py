@@ -32,6 +32,44 @@ from rl.encoder import ObservationEncoder
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from sb3_contrib import MaskablePPO
 
+    from rl.inference_server import InferenceHandle
+
+
+def lean_predict_batch(policy: Any, obs: Any, masks: Any, device: str) -> Any:
+    """Batched masked-argmax inference, bypassing ``MaskablePPO.predict``'s
+    own overhead (distribution object construction, numpy<->tensor
+    conversion on every call).
+
+    Computes exactly the masked logits ``rl.bc._forward`` trains the policy
+    against (``share_features_extractor=True`` layout, pinned by
+    ``tests/rl/test_bc.py::test_forward_matches_inference``) and nothing
+    else -- no value head, no ``Categorical`` distribution -- so it is the
+    cheapest inference path that still matches what training optimises.
+
+    Measured (``docs/experiments/005-gpu-inference.md``): ~2x faster than
+    ``model.predict`` at batch size 1 on CPU even before batching helps at
+    all, and the only path where GPU batching pays off -- ``predict`` on
+    CUDA at B=1 is *slower* than CPU (kernel-launch latency dominates a
+    single sample), but this lean forward is launch-latency-bound and nearly
+    flat with batch size on GPU, so it is what both ``InferenceServer`` and
+    ``rl.profile``'s micro-bench use instead of ``predict``.
+
+    ``obs``/``masks`` are plain arrays (numpy or already a tensor); this
+    function does the torch conversion so callers never import torch
+    themselves.
+    """
+    import torch
+
+    obs_t = torch.as_tensor(np.asarray(obs), dtype=torch.float32, device=device)
+    mask_t = torch.as_tensor(np.asarray(masks), dtype=torch.bool, device=device)
+    with torch.no_grad():
+        features = policy.extract_features(obs_t)
+        latent_pi, _ = policy.mlp_extractor(features)
+        logits = policy.action_net(latent_pi)
+        masked_logits = logits.masked_fill(~mask_t, -1e8)
+        atoms = masked_logits.argmax(dim=-1)
+    return atoms.cpu().numpy()
+
 
 @cache
 def _load_model(checkpoint: str, device: str) -> MaskablePPO:
@@ -75,6 +113,7 @@ class RLAgent:
         deterministic: bool = True,
         device: str = "cpu",
         rng: random.Random | None = None,
+        inference: InferenceHandle | None = None,
     ) -> None:
         self.name = name
         self.checkpoint = str(checkpoint)
@@ -83,6 +122,13 @@ class RLAgent:
         self.rng = rng or random.Random()
         self._encoder: ObservationEncoder | None = None
         self._encoded_board: Any = None
+        # Set only for self-play opponents wired to an InferenceServer
+        # (rl/train.py's --opponent-inference); routes every atom decision
+        # through the batched server instead of a local model.predict call.
+        # `deterministic` must match the server's own serving policy -- see
+        # InferenceServer's docstring -- since this class no longer controls
+        # sampling once `inference` is set.
+        self.inference = inference
 
     @property
     def model(self) -> MaskablePPO:
@@ -105,7 +151,7 @@ class RLAgent:
             self._encoded_board = state.board
 
         composer = ActionComposer()
-        model = self.model
+        model = None if self.inference is not None else self.model
         while True:
             mask = composer.mask(legal_actions, player_idx, num_players)
             if not any(mask):
@@ -114,11 +160,16 @@ class RLAgent:
                     "open-ended trade sentinel, which the atom head reserves"
                 )
             obs = self._encoder.encode(state, player_idx, buffer_prefix=composer.prefix)
-            atom, _ = model.predict(
-                obs,
-                action_masks=np.array(mask, dtype=bool),
-                deterministic=self.deterministic,
-            )
-            emitted = composer.push(int(atom), legal_actions, player_idx, num_players)
+            mask_arr = np.array(mask, dtype=bool)
+            atom: int
+            if self.inference is not None:
+                atom = self.inference.request(self.checkpoint, obs, mask_arr)
+            else:
+                assert model is not None
+                raw_atom, _ = model.predict(
+                    obs, action_masks=mask_arr, deterministic=self.deterministic
+                )
+                atom = int(raw_atom)
+            emitted = composer.push(atom, legal_actions, player_idx, num_players)
             if emitted is not None:
                 return emitted
