@@ -313,21 +313,49 @@ def _cpu_eval_model(cfg: TrainConfig, model: MaskablePPO) -> Any:
     ``MaskablePPO`` -- its own ``predict(observation, state, episode_start,
     deterministic, action_masks)`` has the identical signature
     ``masked_ppo_predictor`` calls, so nothing downstream needs to know the
-    difference. Deliberately *not* built through ``build_model``: that
-    constructs a fresh ``MaskablePPO``, whose ``_setup_model()`` calls SB3's
-    own ``set_random_seed`` -- confirmed in stable-baselines3's source,
-    unconditionally on every construction -- which reseeds the *global*
-    Python/numpy/torch RNGs as a side effect. Since this runs once per
-    in-loop eval chunk during a real training run, that would have silently
-    reseeded the training run's own randomness (env draws, opponent-pool
-    sampling, PPO's stochastic action sampling) every single eval, only
-    when ``cfg.device == "cuda"``. A deep-copied policy touches no RNG.
+    difference.
+
+    Built through ``build_model`` (the identical architecture ``model``
+    itself was built with) with the *training run's* global RNG state saved
+    and restored around the call -- not ``copy.deepcopy(model.policy)``,
+    which was tried first and fails on a real (non-leaf) policy: torch's
+    tensor ``__deepcopy__`` only supports graph-leaf tensors, and a policy
+    that has actually been optimized is not one (confirmed empirically,
+    ``RuntimeError: Only Tensors created explicitly by the user (graph
+    leaves) support the deepcopy protocol``, raised from inside a real
+    training run's first eval chunk, not synthetically).
+
+    The RNG save/restore is why ``build_model`` is safe to call here despite
+    its own docstring's warning elsewhere in this module: ``MaskablePPO.__init__``
+    -> ``_setup_model()`` calls SB3's ``set_random_seed`` unconditionally,
+    reseeding the *global* Python/numpy/torch RNGs as a side effect
+    (confirmed in stable-baselines3's source). Left unguarded, that would
+    silently reseed the training run's own randomness (env draws,
+    opponent-pool sampling, PPO's stochastic action sampling) on every
+    in-loop eval chunk, only when ``cfg.device == "cuda"`` -- exactly the bug
+    ``tests/rl/test_cpu_eval_model.py`` pins by asserting the global RNG
+    state is bit-identical before and after this call.
     """
     if cfg.device == "cpu":
         return model
-    import copy
+    import dataclasses
+    import random
 
-    return copy.deepcopy(model.policy).to("cpu")
+    import numpy as np
+    import torch
+
+    random_state = random.getstate()
+    np_state = np.random.get_state()
+    torch_state = torch.get_rng_state()
+    try:
+        cpu_cfg = dataclasses.replace(cfg, device="cpu")
+        cpu_model = build_model(cpu_cfg, model.env)
+        cpu_model.policy.load_state_dict(model.policy.state_dict())
+        return cpu_model.policy
+    finally:
+        random.setstate(random_state)
+        np.random.set_state(np_state)
+        torch.set_rng_state(torch_state)
 
 
 def evaluate(cfg: TrainConfig, model: MaskablePPO) -> WinRate:
