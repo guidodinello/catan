@@ -1,4 +1,4 @@
-# BC warm start + PPO self-play fine-tune (PR #20)
+# BC warm start + PPO self-play fine-tune (PR #21)
 
 **Date:** 2026-09-21 to 2026-09-22
 **Note:** [gamekit#002 — BC warm start](https://github.com/guidodinello/gamekit/blob/main/docs/research/002-bc-warm-start.md)
