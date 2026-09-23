@@ -335,6 +335,15 @@ def run_train_profile(
                 timing.policy_forward_seconds,
                 wall,
             )
+        server = _get_attr(vec_env, "_inference_server")
+        if server is not None:
+            requests, groups, mean_group = server.stats()
+            logger.info(
+                "InferenceServer stats: %d requests, %d groups, mean_group_size=%.2f",
+                requests,
+                groups,
+                mean_group,
+            )
         vec_env.close()
     finally:
         _set_attr(SubprocVecEnv, "step_wait", original_step_wait)

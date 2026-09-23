@@ -17,13 +17,27 @@ with the vec-env's own control flow for the interpreter lock. A second
 process would need its own IPC hop to reach the main process's vec-env
 loop, buying nothing here.
 
-**Batching is why this exists at all.** ``docs/experiments/005-gpu-inference.md``
-measured ``agents.rl_agent.lean_predict_batch`` at ~100us/call regardless
-of batch size on GPU (launch-latency-bound), while CPU cost scales with
-batch size -- so the win comes from however many concurrent requests
-``connection.wait()`` collects inside one ``_BATCH_WAIT_S`` window, grouped
-by checkpoint path so each distinct model gets one batched forward per
-round, exactly as truco-py's server does.
+**Batching is why this exists at all -- and this port never actually
+batches.** ``docs/experiments/005-gpu-inference.md`` measured
+``agents.rl_agent.lean_predict_batch`` at ~100us/call regardless of batch
+size on GPU (launch-latency-bound), while CPU cost scales with batch size,
+so the whole design depends on how many concurrent requests land in one
+grouped forward. ``connection.wait(conns, timeout)`` below returns as soon
+as *any* connection is ready -- it is a max-wait, not a collection window --
+and measured at a **mean group size of ~1.0-1.3** (i.e. essentially never
+batching) even at 16 concurrent envs and as few as 1 distinct checkpoint.
+
+A fix was attempted and reverted: draining newly-ready connections for the
+rest of the ``_BATCH_WAIT_S`` window (instead of returning on the first
+`wait()`) does turn the timeout into a real collection window, but measured
+as a severe regression, not a fix -- when the *next* concurrent request is
+sparse (the common case here), every single decision now pays close to the
+full window as pure added latency with nothing to show for it, collapsing
+effective server throughput to roughly ``1 / _BATCH_WAIT_S`` requests per
+second server-wide. A correct version would need a short grace period after
+the *first* arrival (well under ``_BATCH_WAIT_S``) rather than a fixed
+deadline regardless of what has already arrived -- untried here; see
+``docs/experiments/005-gpu-inference.md``'s notes.
 
 **Determinism matches ``RLAgent``'s own default.** truco's server served
 ``deterministic=False``; this one serves ``deterministic=True`` (masked
@@ -98,6 +112,12 @@ class InferenceServer:
         self._models: dict[str, MaskablePPO] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
+        # Batch-size accounting: docs/experiments/005-gpu-inference.md's
+        # whole verdict on this design turns on how big the per-checkpoint
+        # groups `_process_batch` actually forms in practice, not on the
+        # micro-benchmark's assumed batch sizes -- see `stats()`.
+        self._total_requests = 0
+        self._total_groups = 0
 
         self._server_conns: list[Connection] = []
         self._client_conns: list[Connection] = []
@@ -118,24 +138,49 @@ class InferenceServer:
     def stop(self) -> None:
         self._stop.set()
 
+    def stats(self) -> tuple[int, int, float]:
+        """``(total_requests, total_groups, mean_group_size)`` since this
+        server started -- one call per ``_process_batch`` invocation grouped
+        by checkpoint path, so ``mean_group_size`` is the actual batch size
+        ``lean_predict_batch`` runs at, not the batch size a micro-benchmark
+        assumed. A mean near 1 means requests are never really batching,
+        regardless of how many env pipes exist."""
+        with self._lock:
+            requests, groups = self._total_requests, self._total_groups
+        mean = requests / groups if groups else float("nan")
+        return requests, groups, mean
+
     def _serve(self) -> None:
         while not self._stop.is_set():
             try:
-                ready = cast(
-                    list[Connection], wait(self._server_conns, timeout=_BATCH_WAIT_S)
-                )
-                if not ready:
-                    continue
-                batch: list[tuple[Connection, str, np.ndarray, np.ndarray]] = []
-                for conn in ready:
-                    try:
-                        checkpoint, obs, mask = conn.recv()
-                        batch.append((conn, checkpoint, obs, mask))
-                    except EOFError, OSError:
-                        pass  # subprocess exited -- skip
-                self._process_batch(batch)
+                self._process_batch(self._collect_batch())
             except Exception:
                 logger.exception("InferenceServer: error in serve loop")
+
+    def _collect_batch(self) -> list[tuple[Connection, str, np.ndarray, np.ndarray]]:
+        """Whatever ``connection.wait`` returns within one ``_BATCH_WAIT_S``
+        window.
+
+        This is the shipped version, not the "collection window" redesign
+        this module's docstring describes and rejects: that version drains
+        newly-ready connections for the rest of the deadline instead of
+        returning on the first signal, which does turn ``_BATCH_WAIT_S``
+        into a real window -- but measured as a severe throughput
+        regression (every request pays close to the full window as added
+        latency when nothing else arrives, which is the common case here).
+        This version has no artificial added latency at all: it returns the
+        moment anything is ready, exactly like a bare ``wait()`` call would,
+        at the cost of the mean group size measured in the module docstring.
+        """
+        ready = cast(list[Connection], wait(self._server_conns, timeout=_BATCH_WAIT_S))
+        batch: list[tuple[Connection, str, np.ndarray, np.ndarray]] = []
+        for conn in ready:
+            try:
+                checkpoint, obs, mask = conn.recv()
+                batch.append((conn, checkpoint, obs, mask))
+            except EOFError, OSError:
+                pass  # subprocess exited -- skip
+        return batch
 
     def _load(self, checkpoint: str) -> MaskablePPO:
         with self._lock:
@@ -169,6 +214,9 @@ class InferenceServer:
         )
         for item in batch:
             groups[item[1]].append(item)
+        with self._lock:
+            self._total_requests += len(batch)
+            self._total_groups += len(groups)
 
         for checkpoint, items in groups.items():
             try:

@@ -121,7 +121,8 @@ server in Part C -- and what Part C's end-to-end measurement then contradicted.
 
 ### C.2 Equivalence (verified before measuring speed)
 
-All pass, in both the CPU `.venv` and the CUDA `.venv-cuda`:
+`tests/rl/test_inference_server.py` (untrained but architecturally real checkpoints), all
+pass in both the CPU `.venv` and the CUDA `.venv-cuda`:
 
 - `lean_predict_batch` picks the identical atom as `model.predict(deterministic=True)`,
   row for row, on 32 random observation/mask pairs.
@@ -129,47 +130,90 @@ All pass, in both the CPU `.venv` and the CUDA `.venv-cuda`:
 - `InferenceHandle.request` through the real pipe/thread machinery matches local `RLAgent`
   inference, including under concurrent requests from 6 simultaneous env threads.
 - CUDA-vs-CPU: identical atoms on 64 rows (test skipped where no CUDA device exists).
-- `rl.bc train --device cuda` on an identical tiny dataset (40 games, seed-fixed) produced
-  **bit-identical** `train_loss`/`val_masked_acc`/`val_value_mse` per epoch to the CPU run --
-  only wall time differed.
+
+Real-data check (not the tests above, a one-off script), 8192 rows sampled from
+`rl_runs/bc/v1`'s `obs.npy`/`masks.npy` -- log 004's actual BC training data -- against the
+real `catan_bc_clone.zip` checkpoint and a real self-play checkpoint
+(`catan_bc_ft_2000000.zip`):
+
+| Comparison | Agreement | Max \|Δlogit\| (finite entries) |
+|---|---|---|
+| SB3 `predict` (CPU) vs lean forward (CPU) | 100.0% | -- |
+| SB3 `predict` (CPU) vs lean forward (CUDA) | 100.0% | -- |
+| lean forward (CPU) vs lean forward (CUDA) | 100.0% | ~1.1-1.3e-5 |
+
+The tiny logit delta is ordinary CPU/CUDA floating-point noise (different reduction
+order), never enough to flip an argmax at these masked-logit magnitudes.
+
+`rl.bc train --device cuda` on an identical tiny dataset (40 games, seed-fixed) produced
+**identical to printed precision** `train_loss`/`val_masked_acc`/`val_value_mse` per epoch
+to the CPU run -- only wall time differed.
 
 ### C.3 End-to-end FPS: opponent-checkpoint inference server (the headline measurement)
 
+**The Amdahl ceiling, stated before the numbers:** opponent-checkpoint inference is 25.8%
+of worker wall time at the default `baseline_mix=0.5` (39.1% at the `baseline_mix=0.0`
+worst case, Part A). Even *eliminating that share's cost entirely* caps the possible
+end-to-end speedup at `1/(1-0.258) ≈ 1.35x` (`1/(1-0.391) ≈ 1.64x` worst case). Truco-py's
+reported 8.8x was never in reach here regardless of implementation quality -- catan's
+engine is heavier, so opponent inference is a much smaller slice of the total.
+
 ```
 uv run python -m rl.profile train --pool rl_runs/gpu005/pool{N} --label prof{N} \
-  --envs 16 --chunk 20000 --chunks 2 [--opponent-inference {cpu,cuda}] [--baseline-mix 0.0]
+  --envs 16 --chunk 20000 --chunks 2 --opponent-inference {cpu,cuda}
 ```
 
-| Pool | baseline_mix | opponent-inference=none (baseline) | =cpu (server) | =cuda (server) |
-|---|---|---|---|---|
-| pool1 (1 ckpt, best case for batching) | 0.5 | 637 fps | 664 fps (+4%, noise-level) | -- |
-| pool14 (12 ckpt) | 0.5 | 626 fps | **514 fps (-18%)** | **573 fps (-8%)** |
-| pool14 (12 ckpt, worst case) | 0.0 | 573 fps | -- | **396 fps and falling (-31%+, chunk cut short)** |
+| Pool | opponent-inference=none (baseline) | =cpu (server) | mean group size |
+|---|---|---|---|
+| pool1 (1 ckpt, best case for batching) | 637 fps | 701 fps (+10%) | **1.28** |
+| pool14 (12 ckpt) | 602-626 fps | 602 fps (~flat) | **1.04** |
 
-**Verdict: reject.** The centralized inference server -- both CPU and CUDA variants --
-does not net a throughput win, and regresses it once the pool holds more than a
-single checkpoint. This directly contradicts the Part A micro-benchmark's promise (which
-measured raw forward-pass compute only). Two things explain the gap:
+**Root cause, found by instrumenting the server's own batch sizes (`InferenceServer.stats()`),
+not by assumption:** `_collect_batch`'s call to `multiprocessing.connection.wait(conns,
+timeout)` returns as soon as *any* connection is ready -- it is a max-wait, not a
+collection window. Measured mean group size is **1.04-1.28**, i.e. this server almost
+never actually batches, regardless of pool size. That single fact, not batch
+fragmentation across distinct checkpoints, is the primary reason the Part A micro-benchmark's
+promised speedup (up to 13x at B=64) never showed up end-to-end: there is effectively no
+batch to speed up.
 
-1. **IPC round-trip cost.** Each atom decision now costs a pipe `send` + `recv` and a
-   thread wake-up that didn't exist when the model lived in the worker process. That
-   per-decision overhead is comparable to, or larger than, the compute this design saves.
-2. **Batch fragmentation.** `OpponentPool.sample()` draws uniformly from every checkpoint
-   in the pool -- 12 distinct paths in `pool14`. `_process_batch` groups by path, so a
-   5ms collection window that might hold 16 concurrent requests fragments into up to 12
-   groups of ~1, defeating the batching the whole design depends on. This gets *worse*,
-   not better, as the pool grows -- the opposite of truco-py's single-checkpoint case,
-   where every request groups into one batch by construction.
+**A fix was attempted and reverted.** Rewriting `_collect_batch` to drain newly-ready
+connections for the rest of the `_BATCH_WAIT_S` window (instead of returning on the first
+signal) does turn the timeout into a real collection window -- but measured as a severe
+regression, not a fix: when the next concurrent request is sparse (the common case here,
+given the mean group size above), every decision now pays close to the full window as
+pure added latency with nothing gained, collapsing effective server throughput to roughly
+`1 / _BATCH_WAIT_S = 200` requests/second server-wide. A training run that completed a
+20,000-step chunk in ~30s at 600+ fps never finished a single chunk under this version
+even after several minutes. Reverted; not shipped. A correct version would need a short
+grace period after the *first* arrival (well under 5ms) rather than a fixed deadline
+applied regardless of what has already arrived -- untried here (see Notes).
 
-Both run in the expected direction: the server helps a little (within noise) at pool
-size 1, and hurts more as the pool fragments requests across more checkpoints -- exactly
-the mechanism above, not a fluke.
+**Verdict: reject as a training-throughput win, but not because centralized servers can't
+transfer across engines -- this specific port never actually batched.** The correct,
+narrower claim: `multiprocessing.connection.wait()`'s first-ready-returns semantics make a
+single call to it an anti-pattern for a batching server, and that -- combined with an
+Amdahl ceiling of ~1.35x even in the best case -- is why this design doesn't pay off here,
+not a general verdict on GPU inference servers. The server is *not* a pure regression
+either: pool1's +10% at mean group size 1.28 is a small, real IPC-and-lean-forward win
+that beats the Amdahl-capped baseline, consistent with the mechanism, not a fluke;
+pool14's ~flat result reflects group size collapsing to ~1.0 as more distinct checkpoints
+compete for the same non-collecting `wait()` call.
 
-**Runtime code is kept, not deleted**, because it is correctness-verified and could still
-help a different workload (fewer, more concurrent envs; a pool capped to one or two
-checkpoints) -- but `--opponent-inference` defaults to `none` and this doc recommends
-leaving it there. `docs/experiments/README.md`'s index and `pyproject.toml`'s torch
-comment both say so.
+**Benchmarks and the RL seat's own inference.** `rl.profile worker --baseline-mix 1.0`
+(all three opponents `HeuristicAgent`, the BC clone driving the learner seat -- the shape
+of `experiments.benchmark --mode rl_vs_heuristic`) measured the RL seat's own single-sample
+CPU inference at 27.1% of worker time, comparable to heuristic scoring (27.2%). Since
+single-sample `predict` measured *slower* on CUDA than CPU (Part A latency table), and a
+benchmark worker plays one game at a time with no natural batch to form, GPU offers no
+plausible win here either. A timed `--mode rl_vs_heuristic --games 400 --workers 16` run
+took ~10s wall clock -- already fast, and not worth chasing further.
+
+**Runtime code is kept, not deleted**, because it is correctness-verified (Part C.2) and
+the underlying idea (batch across concurrent envs) is sound even though this
+implementation doesn't realize it -- but `--opponent-inference` defaults to `none` and
+this doc recommends leaving it there. `docs/experiments/README.md`'s index and
+`pyproject.toml`'s torch comment both say so.
 
 ### C.4 End-to-end FPS: PPO update device (`--device cuda`, opponent inference untouched)
 
@@ -179,14 +223,19 @@ comment both say so.
 # steady-state: fps=713 step_wait=23.0s forward=2.2s wall=28.0s
 ```
 
-**713 fps** vs the `none`/`cpu` baseline's 626-768 fps range across repeated runs on this
-shared, busy laptop -- inside that range, not clearly outside it. The isolated
-forward+backward+`optimizer.step()` micro-benchmark below shows the underlying win is
-real (23x); it is just small relative to the ~69% of wall time spent on
-env+opponent-inference (`step_wait`), which `--device` does not touch. **Verdict: keep as
-an opt-in, verified option** (correct, no regression, small-but-real improvement), not a
-default -- the modest gain doesn't obviously outweigh keeping the simpler all-CPU path for
-routine runs.
+The CPU pair needed for a like-for-like comparison (same pool, same chunk size, same
+`opponent_inference="none"`): `step_wait=23.0s`, `forward=2.2s`, `wall=31.9s` (from Part
+A's main-process split, pool4 -- step_wait/forward are pool-size-insensitive, confirmed
+there). Since `step_wait` (env + opponent inference) is untouched by `--device` and
+measured identical between the two runs (23.0s both), the difference is entirely in the
+PPO update: `wall - step_wait - forward` is `31.9 - 23.0 - 2.2 = 6.7s` on CPU vs.
+`28.0 - 23.0 - 2.2 = 2.8s` on CUDA -- **a 2.4x speedup on the update step itself**, clearing
+the pre-registered `>=2x` rule. Because `step_wait` is identical across the pair, this
+isolates the update-step effect cleanly rather than comparing two noisy end-to-end totals:
+the 12% overall wall-time saving (`31.9s -> 28.0s`) matches Amdahl directly --
+`21% x (1 - 1/2.4) ≈ 12%`, where 21% is the update's measured share of CPU wall time.
+**Verdict: adopt as an opt-in, verified option** -- correct (Part C.2), no regression, a
+real if modest end-to-end win limited by the update's ~21% share of wall time.
 
 ### C.5 BC pre-training device (`rl.bc train --device cuda`)
 
@@ -211,11 +260,11 @@ dependency for routine BC runs).
 
 | Component | Verdict |
 |---|---|
-| Opponent-checkpoint inference (self-play) | **Rejected.** Centralized batched server (CPU or CUDA) regresses throughput once the pool holds more than ~1 checkpoint, due to IPC overhead and batch fragmentation across distinct checkpoints. Code kept as a documented, non-default option (`--opponent-inference {cpu,cuda}`). |
+| Opponent-checkpoint inference (self-play) | **Rejected**, capped at ~1.35x by Amdahl (25.8% share) regardless of implementation, and this implementation never even reached that: measured mean batch size 1.04-1.28 because `wait()` returns on the first ready connection, not a true collection window. A draining fix was tried and reverted (regressed throughput ~3x by adding full-window latency to every sparse request). Code kept as a documented, non-default option (`--opponent-inference {cpu,cuda}`); pool1's own +10% is real and consistent with the mechanism, not a fluke. |
 | Learner inference (rollout) | Rejected outright by the Part A gate (9.2% < 20%) -- never built. |
-| PPO update | **Adopted as opt-in** (`--device cuda`), small-but-real, no regression. Default stays `cpu`. |
-| BC pre-training | **Adopted as opt-in** (`rl.bc train --device cuda`), ~23x on the compute step, bit-identical output. Default stays `cpu`. |
-| Benchmarks with RL opponents | Not separately measured -- `experiments/benchmark.py`'s RL-vs-X paths are unchanged by this PR (they never touch `--opponent-inference`); a candidate follow-up issue if a future benchmark needs many concurrent RL-vs-RL games. |
+| PPO update | **Adopted as opt-in** (`--device cuda`), a measured 2.4x on the update step itself (~12% end-to-end, matching Amdahl at its ~21% wall-time share), no regression. Default stays `cpu`. |
+| BC pre-training | **Adopted as opt-in** (`rl.bc train --device cuda`), ~23x on the compute step, output identical to printed precision vs. CPU. Default stays `cpu`. |
+| Benchmarks with RL opponents | Measured, not adopted: the RL seat's own single-sample CPU inference is 27.1% of worker time (`rl.profile worker --baseline-mix 1.0`), but single-sample `predict` is *slower* on CUDA (Part A), and a benchmark worker forms no natural batch. A 400-game `rl_vs_heuristic` run already completes in ~10s wall clock -- not worth pursuing further. |
 
 **Packaging**: `pytorch-cpu` stays the default install (`rl-train` extra). A new
 `rl-train-cuda` extra (same deps, `torch` sourced from `pytorch-cu130`) is opt-in,
@@ -247,8 +296,15 @@ uv run python -m rl.profile latency --checkpoint rl_runs/bc/catan_bc_clone.zip -
 .venv-cuda/bin/python -m rl.profile latency --checkpoint rl_runs/bc/catan_bc_clone.zip --device cuda
 
 # Equivalence tests (both venvs)
-uv run pytest tests/rl/test_inference_server.py -q
+uv run pytest tests/rl/test_inference_server.py tests/rl/test_cpu_eval_model.py -q
 .venv-cuda/bin/python -m pytest tests/rl/test_inference_server.py -q
+
+# Benchmark timing / RL-seat-inference approximation
+uv run python -m rl.profile worker --pool rl_runs/gpu005/pool14 --label prof14 \
+  --learner rl_runs/bc/catan_bc_clone.zip --steps 20000 --baseline-mix 1.0
+uv run python -m experiments.benchmark --mode rl_vs_heuristic --games 400 --players 4 \
+  --engine-seed-base 1 --driver-seed-base 1 --workers 16 \
+  --checkpoint rl_runs/selfplay/catan_bc_ft/catan_bc_ft_2000000.zip
 ```
 
 ## Environment
@@ -257,21 +313,35 @@ uv run pytest tests/rl/test_inference_server.py -q
 - gamekit `0.3.0`, torch `2.14.0+cpu` (`.venv`) / `2.14.0+cu130` (`.venv-cuda`),
   sb3-contrib `2.9.0`, stable-baselines3 `2.9.0`.
 - Machine: RTX 4050 Laptop (6GB), CUDA 13.2 driver, 20 logical cores, shared with other
-  work during profiling -- FPS numbers vary run-to-run by roughly ±15-20% for nominally
-  identical configs on this machine, which is why every comparison above is stated with
-  that noise band in mind rather than as a single point estimate.
+  interactive work during profiling (other coding-agent sessions were observed at 40-70%
+  CPU each at points during this session) -- FPS numbers vary run-to-run by roughly
+  ±15-20% for nominally identical configs even without that contention, and considerably
+  more under it. Runs used for the C.3/C.4 comparisons were taken when `ps aux` showed no
+  other heavy process competing, specifically to keep that noise out of the numbers
+  reported there; the batch-size (`mean_group_size`) findings are contention-independent
+  (a count, not a timing) and are the load-bearing evidence for the root-cause claim.
 
 ## Notes / follow-up
 
-- The server's `_BATCH_WAIT_S=5ms` collection window and its threading design were not
-  swept -- a shorter window, a process instead of a thread, or capping the pool to 1-2
-  concurrent checkpoints (at the cost of self-play diversity) might change the verdict.
-  Untried here because the measured direction (regression, worsening with pool size) was
-  clear enough to not chase further within this issue's scope.
-- `experiments/benchmark.py`'s RL-vs-RL paths were not wired to `--opponent-inference` or
-  profiled separately; if a future benchmark needs many concurrent RL-vs-RL games, revisit
-  with this doc's method rather than assuming the training-loop verdict transfers.
+- **The real fix, not attempted here:** a grace period after the *first* arrival (e.g.
+  0.5-1ms, well under `_BATCH_WAIT_S`) that extends only while new requests keep arriving,
+  rather than either returning on the first signal (current, mean group size ~1) or always
+  waiting out a fixed deadline regardless of arrivals (tried, regressed ~3x). This needs
+  care to avoid reintroducing the same failure mode at a smaller time constant, and wasn't
+  attempted given the ~1.35x Amdahl ceiling already capping the plausible upside.
+- Even a perfectly-batching server is capped at ~1.35x end-to-end by Amdahl's law at this
+  component's 25.8% wall-time share (Part A) -- worth stating explicitly, since it bounds
+  how much any future fix here could be worth before attempting one.
+- `experiments/benchmark.py`'s RL-vs-RL paths were not wired to `--opponent-inference` --
+  measured instead via the worker-side `--baseline-mix 1.0` proxy and a timed run (Part
+  C.3); if a future benchmark needs many concurrent RL-vs-RL games (larger n, more workers
+  hitting the same checkpoints simultaneously), revisit with this doc's `stats()`-based
+  method rather than assuming this verdict transfers.
 - Candidate gamekit technique note (proposed in this PR's description, not written here):
-  "centralized GPU inference servers don't automatically transfer across engines -- check
-  IPC overhead and opponent-pool fragmentation before porting one," with this doc's
-  numbers as the catan-side evidence and truco-py's opposite result as the contrast case.
+  "compute the Amdahl ceiling before building a batching inference server, and instrument
+  its actual batch size before trusting a micro-benchmark's promise -- `wait(conns,
+  timeout)` returning on the first ready connection, not collecting a window, is an easy
+  way to ship a server that never batches at all." catan's numbers (this doc) as the
+  evidence; truco-py's opposite result as the contrast case worth understanding further --
+  its own session notes don't record a batch-size measurement either, so the two results
+  are not yet reconciled, only both honestly reported.

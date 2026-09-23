@@ -299,8 +299,8 @@ def eval_opponent_kind(cfg: TrainConfig) -> str:
     return cfg.eval_opponents if cfg.eval_opponents is not None else cfg.opponents
 
 
-def _cpu_eval_model(cfg: TrainConfig, model: MaskablePPO) -> MaskablePPO:
-    """A CPU copy of ``model``'s policy weights for in-loop eval.
+def _cpu_eval_model(cfg: TrainConfig, model: MaskablePPO) -> Any:
+    """A CPU copy of ``model``'s policy for in-loop eval.
 
     In-loop eval calls ``model.predict`` one observation at a time (see
     ``rl.evaluate.evaluate_winrate``); ``docs/experiments/005-gpu-inference.md``
@@ -308,15 +308,26 @@ def _cpu_eval_model(cfg: TrainConfig, model: MaskablePPO) -> MaskablePPO:
     launch latency dominates a batch of one), so evaluating directly on
     ``cfg.device`` when it is "cuda" would be a pure regression, not a
     convenience. A no-op when ``cfg.device`` is already "cpu".
+
+    Returns the bare policy (``MaskableActorCriticPolicy``), not a second
+    ``MaskablePPO`` -- its own ``predict(observation, state, episode_start,
+    deterministic, action_masks)`` has the identical signature
+    ``masked_ppo_predictor`` calls, so nothing downstream needs to know the
+    difference. Deliberately *not* built through ``build_model``: that
+    constructs a fresh ``MaskablePPO``, whose ``_setup_model()`` calls SB3's
+    own ``set_random_seed`` -- confirmed in stable-baselines3's source,
+    unconditionally on every construction -- which reseeds the *global*
+    Python/numpy/torch RNGs as a side effect. Since this runs once per
+    in-loop eval chunk during a real training run, that would have silently
+    reseeded the training run's own randomness (env draws, opponent-pool
+    sampling, PPO's stochastic action sampling) every single eval, only
+    when ``cfg.device == "cuda"``. A deep-copied policy touches no RNG.
     """
     if cfg.device == "cpu":
         return model
-    import dataclasses
+    import copy
 
-    cpu_cfg = dataclasses.replace(cfg, device="cpu")
-    cpu_model = build_model(cpu_cfg, model.env)
-    cpu_model.policy.load_state_dict(model.policy.state_dict())
-    return cpu_model
+    return copy.deepcopy(model.policy).to("cpu")
 
 
 def evaluate(cfg: TrainConfig, model: MaskablePPO) -> WinRate:
