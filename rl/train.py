@@ -369,15 +369,53 @@ def _cpu_eval_model(cfg: TrainConfig, model: MaskablePPO) -> Any:
         torch.set_rng_state(torch_state)
 
 
-def evaluate(cfg: TrainConfig, model: MaskablePPO) -> WinRate:
+_EVAL_SEED_OFFSET = 977
+
+
+def in_loop_eval_seeds(cfg: TrainConfig, step: int) -> tuple[int, int]:
+    """``(guard_seed, reported_seed)`` for the in-loop eval at cumulative ``step``.
+
+    The guard seed is fixed for the whole run (and unchanged from 004/006, so
+    guard numbers stay comparable): a fixed game set makes the checkpoint-to-
+    checkpoint comparison paired, which is what a stop-on-regression rule wants.
+    The reported seed advances with ``step`` so the rate that picks the best
+    checkpoint is a fresh sample each time rather than the same 200 setups
+    replayed (issue #25). Derived from ``step`` -- already offset by
+    ``resumed_from`` -- not a loop counter, so a resumed leg never replays the
+    previous leg's seeds. ``step >= 1``, so the two seeds never coincide.
+    """
+    guard = cfg.seed + _EVAL_SEED_OFFSET
+    return guard, guard + step
+
+
+def evaluate(cfg: TrainConfig, eval_model: Any, *, seed: int) -> WinRate:
     opponents = eval_opponent_kind(cfg)
-    eval_model = _cpu_eval_model(cfg, model)
     return evaluate_winrate(
         masked_ppo_predictor(eval_model),
         opponent_factory=lambda rng: build_opponent(opponents, rng),
         num_players=cfg.num_players,
         n_episodes=cfg.eval_episodes,
-        seed=cfg.seed + 977,
+        seed=seed,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class InLoopEval:
+    """Both in-loop rates for one checkpoint. ``guard`` (fixed game set) only
+    drives the stop decision; ``reported`` (fresh seed) alone picks the best
+    checkpoint. Max-over-evals selection bias remains either way -- n=4000
+    confirmation is still mandatory (docs/experiments/README.md)."""
+
+    guard: WinRate
+    reported: WinRate
+
+
+def evaluate_in_loop(cfg: TrainConfig, model: MaskablePPO, step: int) -> InLoopEval:
+    guard_seed, reported_seed = in_loop_eval_seeds(cfg, step)
+    eval_model = _cpu_eval_model(cfg, model)  # built once, used for both evals
+    return InLoopEval(
+        guard=evaluate(cfg, eval_model, seed=guard_seed),
+        reported=evaluate(cfg, eval_model, seed=reported_seed),
     )
 
 
@@ -385,7 +423,9 @@ def evaluate(cfg: TrainConfig, model: MaskablePPO) -> WinRate:
 class TrainResult:
     """What a run produced, and which checkpoint the gate benchmark should
     actually use -- not necessarily ``final_checkpoint``, if training stopped
-    early on a regression or simply kept training a little past its peak."""
+    early on a regression or simply kept training a little past its peak.
+    ``best_*`` come from the fresh-seed in-loop rate, not the guard's fixed
+    game set; still a max over noisy evals, so confirm at n=4000."""
 
     final_checkpoint: Path
     best_checkpoint: Path
@@ -653,6 +693,9 @@ def train(cfg: TrainConfig) -> TrainResult:
     # adopt the first, possibly-worse, post-chunk eval as its new baseline
     # and never stop until the run fell *another* `margin` below that.
     guard = _make_guard(cfg)
+    # Picks the checkpoint handed to n=4000; the guard above only decides stops.
+    # `observe()`'s stop verdict is deliberately ignored.
+    best = _make_guard(cfg)
     eval_opponents = eval_opponent_kind(cfg)
     stopped_early = False
 
@@ -669,22 +712,26 @@ def train(cfg: TrainConfig) -> TrainResult:
         _save_new(model, checkpoint)
 
         t0 = time.perf_counter()
-        win_rate = evaluate(cfg, model)
+        ev = evaluate_in_loop(cfg, model, done)
         eval_seconds += time.perf_counter() - t0
-        should_stop = guard.observe(win_rate.rate, checkpoint)
+        should_stop = guard.observe(ev.guard.rate, checkpoint)
+        best.observe(ev.reported.rate, checkpoint)
 
         logger.info(
-            "steps=%d/%d train_fps=%.0f train=%.1fmin eval=%.1fmin vs_%s=%s "
-            "best=%.1f%%@%s -> %s",
+            "steps=%d/%d train_fps=%.0f train=%.1fmin eval=%.1fmin "
+            "vs_%s reported=%s guard(fixed)=%s "
+            "best=%.1f%%@%s guard_best=%.1f%% -> %s",
             done,
             target_step,
             (done - start_step) / train_seconds,
             train_seconds / 60,
             eval_seconds / 60,
             eval_opponents,
-            win_rate,
+            ev.reported,
+            ev.guard,
+            best.best_rate * 100,
+            best.best_checkpoint.name if best.best_checkpoint else "-",
             guard.best_rate * 100,
-            guard.best_checkpoint.name if guard.best_checkpoint else "-",
             checkpoint.name,
         )
 
@@ -692,13 +739,14 @@ def train(cfg: TrainConfig) -> TrainResult:
             logger.warning(
                 "stopping early at steps=%d: vs_%s win rate regressed more than "
                 "%.0f points below its best (%.1f%%) for %d consecutive evals -- "
-                "possible self-play collapse. Best checkpoint was %s",
+                "possible self-play collapse (fixed guard set). Best checkpoint "
+                "by the fresh-seed rate was %s",
                 done,
                 eval_opponents,
                 cfg.regression_margin * 100,
                 guard.best_rate * 100,
                 cfg.regression_patience,
-                guard.best_checkpoint,
+                best.best_checkpoint,
             )
             stopped_early = True
             break
@@ -708,8 +756,8 @@ def train(cfg: TrainConfig) -> TrainResult:
     logger.info("saved %s", final_path)
     return TrainResult(
         final_checkpoint=final_path,
-        best_checkpoint=guard.best_checkpoint or final_path,
-        best_win_rate=max(guard.best_rate, 0.0),
+        best_checkpoint=best.best_checkpoint or final_path,
+        best_win_rate=max(best.best_rate, 0.0),
         steps_completed=done,
         stopped_early=stopped_early,
     )

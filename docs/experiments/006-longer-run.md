@@ -214,6 +214,8 @@ unchecked.
   positions -- not verified against `evaluate_winrate`'s internals. If true, the in-loop
   curve's smoothness and its overshoot vs n=4000 would partly come from one fixed sample of
   games, which is worth checking before anyone reads the in-loop curve as a learning curve.
+  Verified and addressed in issue #25 / its fix PR: it was true; see
+  [README §In-loop eval caveats](README.md#in-loop-eval-caveats).
 - Natural next steps this result motivates:
   [gamekit#010](https://github.com/guidodinello/gamekit/blob/main/docs/research/010-entropy-schedule.md)
   and [#011](https://github.com/guidodinello/gamekit/blob/main/docs/research/011-kl-guard.md),
