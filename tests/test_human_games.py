@@ -55,8 +55,10 @@ def test_schedule_is_the_preregistered_balanced_design() -> None:
     assert len(schedule) == 24
     assert [s.game_no for s in schedule] == list(range(1, 25))
     for kind in hg.BOT_KINDS:
-        seats = [s.human_seat for s in schedule if s.bot_kind == kind]
-        assert sorted(seats) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+        positions = [s.turn_position for s in schedule if s.bot_kind == kind]
+        assert sorted(positions) == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+    for s in schedule:  # the player id really sits at that turn position
+        assert hg.turn_order(s.engine_seed)[s.turn_position] == s.human_seat
     # paired boards: each seed appears once per bot kind, same seat
     for seed in {s.engine_seed for s in schedule}:
         pair = [s for s in schedule if s.engine_seed == seed]

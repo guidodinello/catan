@@ -35,6 +35,8 @@ from typing import Any
 from gamekit.mc import two_proportion_test, wilson_interval
 from gamekit.results import stamp, write_result
 
+from engine.game import CatanGame
+
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 GAMES_DIR = Path(__file__).resolve().parent.parent / ".catan-games"
 
@@ -50,24 +52,38 @@ class Slot:
     game_no: int
     bot_kind: str
     engine_seed: int
-    human_seat: int
+    human_seat: int  # player id -- the GUI's "Seat i"
+    turn_position: int  # 0 = moves first in setup; ``(k-1) mod 4``
+
+
+def turn_order(engine_seed: int) -> tuple[int, ...]:
+    """``turn_order(seed)[position] == player id`` -- the engine draws the
+    setup order from the seed (same as ``benchmark._recover_seat_order``), so
+    player id and turn position only coincide by luck.
+    """
+    state = CatanGame(num_players=NUM_PLAYERS).reset(seed=engine_seed)
+    return tuple(state.setup_sequence[:NUM_PLAYERS])
 
 
 def build_schedule() -> tuple[Slot, ...]:
-    """Pair ``k`` (1..12): engine seed ``7000+k``, human seat ``(k-1) mod 4``,
-    played once against each bot kind on the same board; the order within a
-    pair alternates (rl first on odd pairs, heuristic first on even ones).
+    """Pair ``k`` (1..12): engine seed ``7000+k``; the human takes turn
+    position ``(k-1) mod 4`` (so each position gets 3 pairs), i.e. whichever
+    player id that seed puts there. Each pair is played once against each bot
+    kind on the same board; the order within a pair alternates (rl first on
+    odd pairs, heuristic first on even ones).
     """
     slots: list[Slot] = []
     for k in range(1, PAIRS + 1):
         order = BOT_KINDS if k % 2 == 1 else BOT_KINDS[::-1]
+        position = (k - 1) % NUM_PLAYERS
         for kind in order:
             slots.append(
                 Slot(
                     game_no=len(slots) + 1,
                     bot_kind=kind,
                     engine_seed=ENGINE_SEED_BASE + k,
-                    human_seat=(k - 1) % NUM_PLAYERS,
+                    human_seat=turn_order(ENGINE_SEED_BASE + k)[position],
+                    turn_position=position,
                 )
             )
     return tuple(slots)
@@ -181,9 +197,9 @@ def tabulate(records: list[dict[str, Any]]) -> dict[str, Any]:
         finished = [r for r in played if r["status"] == "finished"]
         wins = sum(1 for r in played if r["human_won"])
         by_seat = {}
-        for seat in range(NUM_PLAYERS):
-            seat_games = [r for r in played if r["human_seat"] == seat]
-            by_seat[str(seat)] = {
+        for position in range(NUM_PLAYERS):
+            seat_games = [r for r in played if r["turn_position"] == position]
+            by_seat[str(position)] = {
                 "n": len(seat_games),
                 "human_wins": sum(1 for r in seat_games if r["human_won"]),
             }
@@ -203,7 +219,7 @@ def tabulate(records: list[dict[str, Any]]) -> dict[str, Any]:
             "human_win_rate": wins / len(played) if played else None,
             "human_win_rate_wilson95": _interval(wins, len(played)),
             "verdict_vs_chance_25pct": _verdict(wins, len(played)),
-            "human_wins_by_seat": by_seat,
+            "human_wins_by_turn_position": by_seat,
             "mean_human_true_vp": sum(human_vp) / len(human_vp) if human_vp else None,
             "mean_turn_count": (
                 sum(r["turn_count"] for r in finished) / len(finished)

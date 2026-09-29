@@ -103,10 +103,11 @@ class RLSeatAgent:
     """``RLAgent`` for everything except domestic-trade responses.
 
     ``RLAgent`` masks only the ``ProposeTrade``/``CounterTrade`` sentinels;
-    the accept/reject atoms are live, but no training opponent ever proposed
-    a trade, so that head is untrained. Responses go to ``HeuristicAgent``
-    (always reject) instead -- matching the conditions of the n=4000
-    benchmarks. Temporary until an agent learns to trade (catan #28).
+    the accept/reject atoms are live, but in this checkpoint's lineage (BC,
+    then self-play against heuristic/rl opponents) nobody ever proposed a
+    trade to it, so that head is untrained. Responses go to ``HeuristicAgent``
+    (always reject) instead -- matching the n=4000 rl-vs-heuristic benchmark.
+    Temporary until an agent learns to trade (catan #28).
     """
 
     trade_policy = TRADE_POLICY
