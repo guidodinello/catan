@@ -46,9 +46,9 @@ Question, per bot kind: **does one human beat 3 bots of that kind more often tha
 
 **Human, self-assessed level** (written by the human before game 1; not filled in by anyone else):
 
-- Level (novice / casual / intermediate / experienced): **`<TO BE FILLED IN BEFORE GAME 1>`**
-- Approximate lifetime games of Catan: **`<TO BE FILLED IN BEFORE GAME 1>`**
-- Date filled in: **`<TO BE FILLED IN BEFORE GAME 1>`**
+- Level (novice / casual / intermediate / experienced): **intermediate**
+- Approximate lifetime games of Catan: **~15**
+- Date filled in: **2026-09-29**
 
 **Practice.** Practice games are fine, but only with `CATAN_EXPERIMENT` unset and never on seeds 7001-7012; any tagged game on a scheduled slot counts (a repeat is reported as a deviation).
 
