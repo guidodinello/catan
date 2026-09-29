@@ -13,6 +13,7 @@ touches the real ``.catan-sessions/``.
 
 from __future__ import annotations
 
+import dataclasses
 import pickle
 import random
 import time
@@ -96,6 +97,8 @@ def test_fingerprint_mismatch_is_discarded_others_still_load(
         num_players=3,
         seat_kinds=["human", "human", "human"],
         state=bad_session.state,
+        turn_count=0,
+        rl_checkpoint=None,
     )
     with _snapshot_path(bad_id).open("wb") as f:
         pickle.dump(snapshot, f)
@@ -120,6 +123,8 @@ def test_expired_snapshot_is_dropped_on_load() -> None:
         num_players=snapshot.num_players,
         seat_kinds=snapshot.seat_kinds,
         state=snapshot.state,
+        turn_count=snapshot.turn_count,
+        rl_checkpoint=snapshot.rl_checkpoint,
     )
     with path.open("wb") as f:
         pickle.dump(stale, f)
@@ -155,4 +160,31 @@ def test_shape_fingerprint_is_stable_across_calls() -> None:
 def test_load_all_returns_empty_when_directory_does_not_exist(tmp_path: Path) -> None:
     empty_dir = tmp_path / "does-not-exist"
     persistence_mod.SESSION_DIR = empty_dir
+    assert load_all() == {}
+
+
+def test_a_snapshot_with_an_unavailable_rl_seat_is_skipped_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from server.bots import RLSeatUnavailableError
+
+    game_id, session = _bot_session()
+    save_session(game_id, session)
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise RLSeatUnavailableError("no torch here")
+
+    monkeypatch.setattr(persistence_mod, "build_agents", refuse)
+    assert load_all() == {}
+
+
+def test_a_version_1_snapshot_is_discarded() -> None:
+    game_id, session = _bot_session()
+    save_session(game_id, session)
+    path = _snapshot_path(game_id)
+    with path.open("rb") as f:
+        snapshot: _Snapshot = pickle.load(f)
+    old = dataclasses.replace(snapshot, format_version=1)
+    with path.open("wb") as f:
+        pickle.dump(old, f)
     assert load_all() == {}

@@ -52,26 +52,39 @@ accepted scope limit for this local dev/demo tool, not an oversight.
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 import os
 import pickle
 import secrets
+import subprocess
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from engine.board import Board, PortType, Resource, Terrain
-from engine.game import CatanGame
+from engine.game import CatanGame, true_victory_points, victory_points
 from engine.state import DevCard, GameState, Phase, PlayerState, TradeOffer
 
-from .bots import SeatKind, build_agents
+from .bots import (
+    EXPERIMENT_ENV,
+    TRADE_POLICY,
+    RLSeatUnavailableError,
+    SeatKind,
+    build_agents,
+    rl_checkpoint_id,
+)
 from .sessions import _TTL_SECONDS, GameSession
 
 logger = logging.getLogger(__name__)
 
 SESSION_DIR = Path(__file__).resolve().parent.parent / ".catan-sessions"
-FORMAT_VERSION = 1
+# One JSON record per human-involved game (see ``write_game_record``);
+# gitignored raw data, tabulated by ``experiments/human_games.py``.
+GAMES_DIR = Path(__file__).resolve().parent.parent / ".catan-games"
+FORMAT_VERSION = 2
 
 _FINGERPRINTED_DATACLASSES = (GameState, PlayerState, DevCard, TradeOffer, Board)
 _FINGERPRINTED_ENUMS = (Phase, Resource, Terrain, PortType)
@@ -111,6 +124,8 @@ class _Snapshot:
     num_players: int
     seat_kinds: list[SeatKind]  # "human", or agent.name for a bot seat
     state: GameState
+    turn_count: int
+    rl_checkpoint: str | None  # rebuilt with this, not the current env var
 
 
 def _snapshot_path(game_id: str) -> Path:
@@ -142,6 +157,8 @@ def save_session(game_id: str, session: GameSession) -> None:
         num_players=len(session.agents),
         seat_kinds=_seat_kinds(session),
         state=session.state,
+        turn_count=session.turn_count,
+        rl_checkpoint=session.rl_checkpoint,
     )
     path = _snapshot_path(game_id)
     tmp_path = path.with_suffix(".pickle.tmp")
@@ -193,8 +210,22 @@ def _load_one(path: Path) -> tuple[str, GameSession] | None:
     # see the whole seat_kinds list at once (not one seat at a time) so each
     # bot seat's RNG is keyed by its real seat index, not always seat 0.
     driver_seed = secrets.randbits(63)
-    agents = build_agents(snapshot.seat_kinds, driver_seed)
-    session = GameSession(game=game, state=snapshot.state, agents=agents)
+    try:
+        agents = build_agents(
+            snapshot.seat_kinds,
+            driver_seed,
+            Path(snapshot.rl_checkpoint) if snapshot.rl_checkpoint else None,
+        )
+    except RLSeatUnavailableError as exc:
+        logger.warning("skipping session %r: rl seat unavailable: %s", game_id, exc)
+        return None
+    session = GameSession(
+        game=game,
+        state=snapshot.state,
+        agents=agents,
+        turn_count=snapshot.turn_count,
+        rl_checkpoint=snapshot.rl_checkpoint,
+    )
     return game_id, session
 
 
@@ -214,3 +245,73 @@ def load_all() -> dict[str, GameSession]:
             game_id, session = loaded
             sessions[game_id] = session
     return sessions
+
+
+def _record_path(game_id: str) -> Path:
+    return GAMES_DIR / f"{game_id}.json"
+
+
+def _git_commit() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+        return out.stdout.strip()
+    except OSError, subprocess.CalledProcessError:
+        return "unknown"
+
+
+def write_game_record(
+    game_id: str, session: GameSession, meta: dict[str, Any] | None = None
+) -> None:
+    """Write/refresh the on-disk record for a human-involved game.
+
+    ``status`` is ``"started"`` until the game is terminal, then
+    ``"finished"`` with the outcome. ``meta`` (``engine_seed``,
+    ``driver_seed``, given at creation) is merged into any existing record,
+    so later calls -- including after a restart -- keep it. Games with no
+    human seat are not recorded. A game deleted before it finishes keeps its
+    ``"started"`` record on purpose: that is what "abandoned" means to the
+    tabulator.
+    """
+    if all(agent is not None for agent in session.agents):
+        return
+    path = _record_path(game_id)
+    record: dict[str, Any] = {}
+    if path.is_file():
+        record = json.loads(path.read_text())
+    if meta:
+        record.update(meta)
+    state = session.state
+    kinds = _seat_kinds(session)
+    now = datetime.now(UTC).isoformat()
+    record.setdefault("game_id", game_id)
+    record.setdefault("created_at", now)
+    record.setdefault("git_commit", _git_commit())
+    record.setdefault("experiment", os.environ.get(EXPERIMENT_ENV))
+    record.update(
+        num_players=len(kinds),
+        seat_kinds=list(kinds),
+        human_seats=[i for i, k in enumerate(kinds) if k == "human"],
+        trade_policy=TRADE_POLICY,
+        rl_checkpoint=(
+            rl_checkpoint_id(session.rl_checkpoint) if session.rl_checkpoint else None
+        ),
+        turn_count=session.turn_count,
+    )
+    finished = session.game.is_terminal(state)
+    record["status"] = "finished" if finished else "started"
+    if finished:
+        record.setdefault("finished_at", now)
+        record["winner"] = state.winner
+        record["winner_kind"] = None if state.winner is None else kinds[state.winner]
+        record["vp_true"] = [true_victory_points(state, i) for i in range(len(kinds))]
+        record["vp_public"] = [victory_points(state, i) for i in range(len(kinds))]
+    GAMES_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(record, indent=2))
+    os.replace(tmp_path, path)

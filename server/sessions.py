@@ -33,6 +33,12 @@ class GameSession:
     state: GameState
     agents: list[Agent | None]  # one per player_id; ``None`` marks a human seat
     last_touched: float = field(default_factory=time.monotonic)
+    # Turns played so far, by ``experiments/rollout.py``'s definition (1 once
+    # setup ends, +1 per ``EndTurn``) -- maintained by ``server/bots.py``.
+    turn_count: int = 0
+    # Path of the checkpoint any ``rl`` seat was built from (``None`` if there
+    # is no rl seat) -- persisted so a restore rebuilds the same model.
+    rl_checkpoint: str | None = None
 
     def seat_kind(self, player_id: int) -> Literal["human", "bot"]:
         return "human" if self.agents[player_id] is None else "bot"
@@ -52,7 +58,10 @@ def _sweep_expired(now: float) -> None:
 
 
 def create_session(
-    num_players: int, agents: list[Agent | None], seed: int | None = None
+    num_players: int,
+    agents: list[Agent | None],
+    seed: int | None = None,
+    rl_checkpoint: str | None = None,
 ) -> tuple[str, GameSession]:
     """Start a new game and store it, returning its ``game_id``.
 
@@ -66,7 +75,9 @@ def create_session(
     game = CatanGame(num_players=num_players)
     state = game.reset(seed=seed)
     game_id = secrets.token_urlsafe(16)
-    _SESSIONS[game_id] = GameSession(game=game, state=state, agents=agents)
+    _SESSIONS[game_id] = GameSession(
+        game=game, state=state, agents=agents, rl_checkpoint=rl_checkpoint
+    )
     return game_id, _SESSIONS[game_id]
 
 

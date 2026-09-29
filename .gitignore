@@ -29,3 +29,4 @@ wheels/
 # stamped experiments/results/benchmark_rl_*.json, the same convention Phase 2
 # and Phase 3 already use for benchmark_*.json.
 rl_runs/
+.catan-games/
