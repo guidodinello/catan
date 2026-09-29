@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { SeatKind } from "./api";
+  import { onMount } from "svelte";
+  import { getSeatKinds, type SeatKind, type SeatKindsResponse } from "./api";
   import { loadLastGame } from "./lastGame";
 
   const SEAT_KIND_OPTIONS: { value: SeatKind; label: string }[] = [
@@ -7,7 +8,33 @@
     { value: "random", label: "Bot: Random" },
     { value: "stratified_random", label: "Bot: Stratified Random" },
     { value: "heuristic", label: "Bot: Heuristic" },
+    { value: "rl", label: "Bot: RL" },
   ];
+
+  // The rl seat needs torch and a local checkpoint, so the server says
+  // whether it can be built (GET /api/seat_kinds). Until that answers -- or
+  // if it fails -- rl stays disabled rather than offering a seat that 400s.
+  let seatInfo = $state<SeatKindsResponse | null>(null);
+  let seatInfoError = $state(false);
+  onMount(async () => {
+    try {
+      seatInfo = await getSeatKinds();
+    } catch {
+      seatInfoError = true;
+    }
+  });
+  const rlInfo = $derived(seatInfo?.kinds.find((k) => k.kind === "rl"));
+  const rlAvailable = $derived(rlInfo?.available ?? false);
+  const rlReason = $derived(
+    seatInfoError
+      ? "server did not report RL availability"
+      : (rlInfo?.reason ?? (seatInfo ? null : "checking...")),
+  );
+  const rlLabel = $derived(
+    seatInfo?.rl_checkpoint
+      ? `Bot: RL (${seatInfo.rl_checkpoint.stem})`
+      : "Bot: RL",
+  );
 
   export interface NewGameConfig {
     num_players: number;
@@ -55,6 +82,7 @@
     defaultBotKind(1),
   ]);
   let seed: number | undefined = $state(1);
+  const anyBot = $derived(seatKinds.some((k) => k !== "human"));
 
   // Keep seatKinds' length in sync with numPlayers, defaulting any newly
   // added seat to the next kind in the round-robin cycle and trimming from
@@ -97,12 +125,34 @@
         Seat {i}:
         <select bind:value={seatKinds[i]}>
           {#each SEAT_KIND_OPTIONS as opt (opt.value)}
-            <option value={opt.value}>{opt.label}</option>
+            <option value={opt.value} disabled={opt.value === "rl" && !rlAvailable}>
+              {opt.value === "rl"
+                ? rlAvailable
+                  ? rlLabel
+                  : `Bot: RL (unavailable)`
+                : opt.label}
+            </option>
           {/each}
         </select>
       </label>
     {/each}
   </fieldset>
+
+  {#if !rlAvailable && rlReason}
+    <p class="hint">RL seat unavailable: {rlReason}</p>
+  {/if}
+
+  {#if seatInfo?.experiment}
+    <p class="badge">Experiment {seatInfo.experiment} mode: human games are logged.</p>
+  {/if}
+
+  {#if anyBot}
+    <p class="hint">
+      Bot seats never propose and always reject domestic trades. For the RL seat
+      this is temporary, until a trade-learning agent exists (#28). Bank and
+      port trades work normally.
+    </p>
+  {/if}
 
   <p class="hint">
     Multiple "Human" seats are all playable from this browser tab -- a
@@ -176,6 +226,11 @@
   .hint {
     color: var(--text-muted);
     font-size: var(--fs-sm);
+  }
+
+  .badge {
+    font-size: var(--fs-sm);
+    font-weight: 600;
   }
 
   input,

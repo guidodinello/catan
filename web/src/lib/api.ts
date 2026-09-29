@@ -7,7 +7,12 @@
 
 const API_BASE = "/api";
 
-export type SeatKind = "human" | "random" | "stratified_random" | "heuristic";
+export type SeatKind =
+  | "human"
+  | "random"
+  | "stratified_random"
+  | "heuristic"
+  | "rl";
 
 export interface CreateGameRequest {
   num_players: number;
@@ -153,6 +158,7 @@ export interface TrailEntry {
 
 export interface CreateGameResponse {
   game_id: string;
+  engine_seed: number;
   geometry: Geometry;
   state: GameStateView;
   action_trail: TrailEntry[];
@@ -258,5 +264,27 @@ export type BuildCosts = Record<string, Record<string, number>>;
 export function getBuildCosts(): Promise<BuildCosts> {
   return fetch(`${API_BASE}/build_costs`).then((r) =>
     parseJsonOrThrow<BuildCosts>(r),
+  );
+}
+
+// server/app.py's GET /api/seat_kinds: which seat kinds the server can build
+// right now. `rl` needs torch and a local checkpoint, so it can be
+// unavailable -- `reason` says why.
+export interface SeatKindInfo {
+  kind: SeatKind;
+  label: string;
+  available: boolean;
+  reason: string | null;
+}
+
+export interface SeatKindsResponse {
+  kinds: SeatKindInfo[];
+  rl_checkpoint: { stem: string; sha256_12: string } | null;
+  experiment: string | null;
+}
+
+export function getSeatKinds(): Promise<SeatKindsResponse> {
+  return fetch(`${API_BASE}/seat_kinds`).then((r) =>
+    parseJsonOrThrow<SeatKindsResponse>(r),
   );
 }

@@ -58,6 +58,10 @@
 <div class="trade-form panel">
   <h3>{heading}</h3>
   <p>Up to {MAX_TRADE_OFFER_SIDE} cards per side, no shared resource type.</p>
+  <p class="notice">
+    Bot seats always reject domestic trades (and never propose them). For the RL
+    seat this is temporary, until a trade-learning agent exists (#28).
+  </p>
   <div class="columns">
     <div>
       <h4>You give</h4>
@@ -115,6 +119,11 @@
     color: var(--text);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
+  }
+
+  .notice {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
   }
 
   .error {

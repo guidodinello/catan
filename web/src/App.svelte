@@ -245,6 +245,10 @@
 
   onDestroy(stopPolling);
 
+  // Shown on the game-over panel so a logged game (experiment 007) can be
+  // checked against its scheduled seed. Unknown for a resumed game.
+  let engineSeed: number | null = $state(null);
+
   async function startGame(config: NewGameConfig) {
     status = "loading";
     errorMessage = "";
@@ -253,6 +257,7 @@
     try {
       const created = await createGame(config);
       gameId = created.game_id;
+      engineSeed = created.engine_seed;
       geometry = created.geometry;
       saveCachedGeometry(geometry);
       // createGame's own response is a spectator view (viewer=None) --
@@ -553,6 +558,9 @@
           </p>
         {:else}
           <p>Game over.</p>
+        {/if}
+        {#if engineSeed !== null}
+          <p class="seed">Engine seed: {engineSeed}</p>
         {/if}
         <button onclick={playAgain}>New game</button>
       </div>

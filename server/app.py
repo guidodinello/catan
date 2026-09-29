@@ -9,6 +9,7 @@ those -- it never decides whether a move is legal itself.
 
 from __future__ import annotations
 
+import os
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -21,8 +22,23 @@ from engine.actions import CounterTrade, ProposeTrade
 from engine.board import Resource
 from engine.game import IllegalActionError
 from engine.state import acting_player
-from server.bots import SeatKind, apply_and_record, build_agents, step_bots
-from server.persistence import delete_snapshot, load_all, save_session
+from server.bots import (
+    EXPERIMENT_ENV,
+    RLSeatUnavailableError,
+    SeatKind,
+    apply_to_session,
+    build_agents,
+    rl_availability,
+    rl_checkpoint_id,
+    rl_checkpoint_path,
+    step_bots,
+)
+from server.persistence import (
+    delete_snapshot,
+    load_all,
+    save_session,
+    write_game_record,
+)
 from server.serialize import (
     player_view,
     serialize_build_costs,
@@ -64,6 +80,7 @@ class CreateGameRequest(BaseModel):
 class CreateGameResponse(BaseModel):
     game_id: str
     driver_seed: int
+    engine_seed: int
     geometry: dict[str, Any]
     state: dict[str, Any]
     action_trail: list[dict[str, Any]]
@@ -117,10 +134,22 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
     # restore -- bot RNG is deliberately not persisted -- so that replay only
     # holds for the lifetime of one process.
     driver_seed = secrets.randbits(63)
-    agents = build_agents(request.seat_kinds, driver_seed)
+    # game.reset(seed=None) draws an unrecoverable seed, and the game record
+    # needs one -- so draw it here.
+    engine_seed = request.seed if request.seed is not None else secrets.randbits(63)
+    rl_path = rl_checkpoint_path() if "rl" in request.seat_kinds else None
+    try:
+        agents = build_agents(request.seat_kinds, driver_seed, rl_path)
+    except RLSeatUnavailableError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"rl seat unavailable: {exc}"
+        ) from exc
     try:
         game_id, session = create_session(
-            request.num_players, agents, seed=request.seed
+            request.num_players,
+            agents,
+            seed=engine_seed,
+            rl_checkpoint=str(rl_path) if rl_path else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -128,9 +157,15 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
     # After step_bots, not before -- a save made inside create_session would
     # snapshot a state already stale by whatever bot turns just ran.
     save_session(game_id, session)
+    write_game_record(
+        game_id,
+        session,
+        {"engine_seed": engine_seed, "driver_seed": driver_seed},
+    )
     return CreateGameResponse(
         game_id=game_id,
         driver_seed=driver_seed,
+        engine_seed=engine_seed,
         geometry=serialize_geometry(),
         state=player_view(session.state, viewer=None),
         action_trail=serialize_trail(initial_trail),
@@ -196,15 +231,57 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
     # helper step_bots uses for bot actions, so dice_roll/production are
     # captured identically either way.
     try:
-        human_entry = apply_and_record(state, game, actor, action)
+        human_entry = apply_to_session(session, actor, action)
     except IllegalActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     trail = [human_entry, *step_bots(session)]
     save_session(game_id, session)
+    if game.is_terminal(state):
+        write_game_record(game_id, session)
     response = player_view(state, viewer=actor)
     response["action_trail"] = serialize_trail(trail)
     return response
+
+
+SEAT_KIND_LABELS: dict[str, str] = {
+    "human": "Human (this browser)",
+    "random": "Bot: Random",
+    "stratified_random": "Bot: Stratified Random",
+    "heuristic": "Bot: Heuristic",
+    "rl": "Bot: RL",
+}
+
+
+@app.get("/api/seat_kinds")
+def get_seat_kinds() -> dict[str, Any]:
+    """Which seat kinds this server can build right now -- the ``rl`` kind
+    depends on torch and a local (gitignored) checkpoint. Never imports
+    torch.
+    """
+    rl_ok, rl_reason = rl_availability()
+    kinds = [
+        {
+            "kind": kind,
+            "label": label,
+            "available": kind != "rl" or rl_ok,
+            "reason": rl_reason if kind == "rl" and not rl_ok else None,
+        }
+        for kind, label in SEAT_KIND_LABELS.items()
+    ]
+    return {
+        "kinds": kinds,
+        "rl_checkpoint": (
+            {
+                k: v
+                for k, v in rl_checkpoint_id(str(rl_checkpoint_path())).items()
+                if k != "path"
+            }
+            if rl_ok
+            else None
+        ),
+        "experiment": os.environ.get(EXPERIMENT_ENV),
+    }
 
 
 @app.get("/api/build_costs")

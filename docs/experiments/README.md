@@ -18,6 +18,7 @@ there links forward to the log(s) that tested it).
 | [004](004-bc-warm-start.md) | BC warm start + PPO self-play fine-tune (PR #21) | validated (technique-level), gate not met | [002](https://github.com/guidodinello/gamekit/blob/main/docs/research/002-bc-warm-start.md) |
 | [005](005-gpu-inference.md) | GPU (CUDA) for Phase 5 RL -- opponent-checkpoint inference, PPO update, BC training | opponent-checkpoint inference server **rejected** (regresses throughput); PPO update and BC training **adopted as opt-in** `--device cuda` | (candidate, not yet filed) "GPU inference servers don't automatically transfer across engines" |
 | [006](006-longer-run.md) | Longer run / resume from 004's best checkpoint (+10M steps, PR #24) | inconclusive under the pre-registered rule (significant gain, +6M/+8M/+10M plateau at ~20-21%, last-three-monotone clause failed by 0.82 pt) | [009](https://github.com/guidodinello/gamekit/blob/main/docs/research/009-longer-runs-and-resume.md) |
+| [007](007-human-games.md) | Human vs bots in the web GUI (issue #26): 12 games each vs `rl` and `heuristic` | pending (pre-registered, no games played yet) | [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/) (statistics); new note proposed |
 
 ## In-loop eval caveats
 
