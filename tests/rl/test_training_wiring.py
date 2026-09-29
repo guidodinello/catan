@@ -47,6 +47,7 @@ from rl.train import (  # noqa: E402
     TrainConfig,
     build_opponent,
     build_parser,
+    config_from_args,
 )
 
 
@@ -93,7 +94,50 @@ def test_bc_init_rate_defaults_to_an_unseeded_guard() -> None:
     must not be seeded by a stale default rate."""
     args = build_parser().parse_args([])
     assert args.bc_init is None
-    assert args.bc_init_rate == pytest.approx(-1.0)
+    assert config_from_args(build_parser(), []).init_rate == pytest.approx(-1.0)
+
+
+def test_init_rate_seeds_the_guard_on_either_warm_start_path() -> None:
+    for flag in ("--resume", "--bc-init"):
+        cfg = config_from_args(build_parser(), [flag, "a.zip", "--init-rate", "0.162"])
+        assert cfg.init_rate == pytest.approx(0.162)
+        assert cfg.init_best is None
+
+
+def test_bc_init_rate_is_still_accepted_as_an_alias() -> None:
+    """Log 004's documented command line must keep working."""
+    cfg = config_from_args(
+        build_parser(), ["--bc-init", "a.zip", "--bc-init-rate", "0.10"]
+    )
+    assert cfg.init_rate == pytest.approx(0.10)
+
+
+def test_init_rate_and_init_best_require_a_warm_start() -> None:
+    for extra in (["--init-rate", "0.1"], ["--init-best", "b.zip"]):
+        with pytest.raises(SystemExit):
+            config_from_args(build_parser(), extra)
+
+
+def test_init_best_is_carried_into_the_config() -> None:
+    cfg = config_from_args(
+        build_parser(), ["--resume", "a.zip", "--init-best", "b.zip"]
+    )
+    assert cfg.init_best == Path("b.zip")
+
+
+def test_only_explicitly_passed_hyperparameters_are_marked_explicit() -> None:
+    """The lr/ent_coef mismatch check on --resume must not fire on inherited
+    defaults, only on values the user actually typed."""
+    implicit = config_from_args(build_parser(), ["--resume", "a.zip"])
+    assert implicit.explicit_hparams == frozenset()
+    assert implicit.learning_rate == TrainConfig().learning_rate
+
+    explicit = config_from_args(
+        build_parser(),
+        ["--resume", "a.zip", "--learning-rate", "1e-4", "--n-steps", "256"],
+    )
+    assert explicit.explicit_hparams == {"learning_rate", "n_steps"}
+    assert explicit.n_steps == 256
 
 
 def test_gamma_defaults_high_enough_for_catan_episode_lengths() -> None:

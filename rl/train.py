@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import random
 import shutil
 import sys
@@ -136,9 +137,19 @@ class TrainConfig:
     # the model's own cumulative `num_timesteps`). Mutually exclusive with
     # `resume` -- see `build_parser`.
     bc_init: Path | None = None
-    # The BC clone's own win rate (e.g. from `rl.bc`'s n=200 sanity eval),
-    # used only to seed `RegressionGuard`'s baseline -- see `train()`.
-    bc_init_rate: float = -1.0
+    # The loaded checkpoint's own win rate (the BC clone's, or the previous
+    # leg's authoritative n=4000 rate on `resume`), used only to seed
+    # `RegressionGuard`'s baseline -- see `train()`. -1.0 means unseeded.
+    init_rate: float = -1.0
+    # Which checkpoint that rate belongs to; defaults to the one loaded
+    # (`resume` or `bc_init`). Set it when the rate was measured on a
+    # different checkpoint than the one being resumed from.
+    init_best: Path | None = None
+    # Names of the hyperparameters (learning_rate / ent_coef / n_steps) the
+    # user passed explicitly on the CLI, as opposed to inherited defaults.
+    # Only explicit ones are checked against, or applied over, a resumed
+    # checkpoint's pickled values -- see `_load_resumed_model`.
+    explicit_hparams: frozenset[str] = frozenset()
 
     # Automatic stop-on-regression -- see RegressionGuard in rl/evaluate.py.
     regression_margin: float = 0.10
@@ -456,6 +467,81 @@ def _seed_selfplay_pool(cfg: TrainConfig) -> None:
     logger.info("seeded self-play pool: %s -> %s", source, seed_path)
 
 
+def _save_new(model: MaskablePPO, path: Path) -> None:
+    """``model.save`` that refuses to replace an existing file.
+
+    Checkpoints are the experiment's only durable output, and a previous
+    leg's files sit in the same directory as a resumed leg's (see
+    ``_resume_step_bookkeeping`` for the incident this guards against).
+    """
+    if path.exists():
+        raise FileExistsError(f"refusing to overwrite existing checkpoint {path}")
+    model.save(path)
+
+
+def _load_resumed_model(cfg: TrainConfig, vec_env: Any) -> MaskablePPO:
+    """``MaskablePPO.load`` for ``--resume``, with no silent hyperparameters.
+
+    A plain load keeps the pickled ``learning_rate`` / ``ent_coef`` and
+    ignores the CLI's. That is right for a same-config continuation but a
+    trap otherwise, so: an *explicitly passed* ``--learning-rate`` /
+    ``--ent-coef`` that differs from the pickled value is a ``RuntimeError``
+    (gamekit#009), and ``--n-steps`` -- a rollout-shape knob, not something
+    to refuse -- is applied over the pickled value. The effective values are
+    always logged.
+    """
+    from sb3_contrib import MaskablePPO
+
+    assert cfg.resume is not None
+    custom_objects: dict[str, Any] = {}
+    if "n_steps" in cfg.explicit_hparams:
+        custom_objects["n_steps"] = cfg.n_steps
+    model = MaskablePPO.load(
+        cfg.resume, env=vec_env, device=cfg.device, custom_objects=custom_objects
+    )
+    pickled = {
+        "learning_rate": model.lr_schedule(1.0),
+        "ent_coef": model.ent_coef,
+    }
+    for name, value in pickled.items():
+        wanted = getattr(cfg, name)
+        if name in cfg.explicit_hparams and not math.isclose(
+            value, wanted, rel_tol=1e-9
+        ):
+            raise RuntimeError(
+                f"--{name.replace('_', '-')}={wanted} differs from the resumed "
+                f"checkpoint's pickled {name}={value}; a resume keeps the "
+                "pickled value, so refusing to run different hyperparameters "
+                "than the command line says"
+            )
+    if model.n_steps != model.rollout_buffer.buffer_size:
+        raise RuntimeError("n_steps override did not reach the rollout buffer")
+    logger.info(
+        "resumed hyperparameters: learning_rate=%s (lr_schedule(0)=%s "
+        "lr_schedule(1)=%s) ent_coef=%s n_steps=%d n_envs=%d num_timesteps=%d",
+        model.learning_rate,
+        model.lr_schedule(0.0),
+        model.lr_schedule(1.0),
+        model.ent_coef,
+        model.n_steps,
+        model.n_envs,
+        model.num_timesteps,
+    )
+    return model
+
+
+def _make_guard(cfg: TrainConfig) -> RegressionGuard:
+    """Seeded from ``init_rate`` / ``init_best`` on either warm-start path
+    (``resume`` or ``bc_init``); unseeded (-1.0) for a from-scratch run."""
+    warm_start = cfg.resume or cfg.bc_init
+    return RegressionGuard(
+        margin=cfg.regression_margin,
+        patience=cfg.regression_patience,
+        best_rate=cfg.init_rate if warm_start is not None else -1.0,
+        best_checkpoint=cfg.init_best or warm_start,
+    )
+
+
 def build_model(cfg: TrainConfig, vec_env: Any) -> MaskablePPO:
     """A fresh ``MaskablePPO`` over ``vec_env``, ``cfg``'s own settings.
 
@@ -505,7 +591,7 @@ def train(cfg: TrainConfig) -> TrainResult:
 
     if cfg.resume is not None:
         logger.info("resuming from %s", cfg.resume)
-        model = MaskablePPO.load(cfg.resume, env=vec_env, device=cfg.device)
+        model = _load_resumed_model(cfg, vec_env)
         # Confirmed empirically: MaskablePPO persists num_timesteps across
         # save/load, so a resumed model already knows its own true cumulative
         # step count.
@@ -560,17 +646,13 @@ def train(cfg: TrainConfig) -> TrainResult:
     train_seconds = 0.0
     eval_seconds = 0.0
     final_path = checkpoint_dir / f"{cfg.label}_final.zip"
-    # Seeded with the BC clone's own rate/path when warm-starting, so a
-    # fine-tune that immediately regresses below the clone is caught as the
+    # Seeded with the loaded checkpoint's own rate/path (BC clone, or the
+    # previous leg's n=4000 result on --resume), so a run that immediately
+    # regresses below its start is caught as the
     # regression it is -- an unseeded guard (best_rate=-1.0) would instead
     # adopt the first, possibly-worse, post-chunk eval as its new baseline
     # and never stop until the run fell *another* `margin` below that.
-    guard = RegressionGuard(
-        margin=cfg.regression_margin,
-        patience=cfg.regression_patience,
-        best_rate=cfg.bc_init_rate if cfg.bc_init is not None else -1.0,
-        best_checkpoint=cfg.bc_init,
-    )
+    guard = _make_guard(cfg)
     eval_opponents = eval_opponent_kind(cfg)
     stopped_early = False
 
@@ -584,7 +666,7 @@ def train(cfg: TrainConfig) -> TrainResult:
         train_seconds += time.perf_counter() - t0
         done += this_chunk
         checkpoint = checkpoint_dir / f"{cfg.label}_{done}.zip"
-        model.save(checkpoint)
+        _save_new(model, checkpoint)
 
         t0 = time.perf_counter()
         win_rate = evaluate(cfg, model)
@@ -621,7 +703,7 @@ def train(cfg: TrainConfig) -> TrainResult:
             stopped_early = True
             break
 
-    model.save(final_path)
+    _save_new(model, final_path)
     vec_env.close()
     logger.info("saved %s", final_path)
     return TrainResult(
@@ -649,8 +731,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--players", type=int, default=defaults.num_players)
     parser.add_argument("--seed", type=int, default=defaults.seed)
     parser.add_argument("--gamma", type=float, default=defaults.gamma)
-    parser.add_argument("--learning-rate", type=float, default=defaults.learning_rate)
-    parser.add_argument("--ent-coef", type=float, default=defaults.ent_coef)
+    # None sentinels: whether these were passed explicitly matters on --resume
+    # (see _load_resumed_model); main() falls back to TrainConfig's defaults.
+    parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument("--ent-coef", type=float, default=None)
+    parser.add_argument(
+        "--n-steps",
+        type=int,
+        default=None,
+        help="rollout length per env; on --resume, overrides the pickled value "
+        "(e.g. 256 with --envs 16 keeps a 4096-step rollout)",
+    )
     parser.add_argument("--eval-every", type=int, default=defaults.eval_every)
     parser.add_argument("--eval-episodes", type=int, default=defaults.eval_episodes)
     parser.add_argument("--torch-threads", type=int, default=defaults.torch_threads)
@@ -669,14 +760,21 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--init-rate",
         "--bc-init-rate",
+        dest="init_rate",
         type=float,
-        default=-1.0,
-        help=(
-            "the BC clone's own win rate (e.g. rl.bc's n=200 sanity eval), "
-            "used only to seed RegressionGuard's baseline when --bc-init "
-            "is set"
-        ),
+        default=None,
+        help="win rate of the checkpoint loaded by --bc-init or --resume "
+        "(the BC clone's, or the previous leg's authoritative n=4000 rate), "
+        "used only to seed RegressionGuard's baseline",
+    )
+    parser.add_argument(
+        "--init-best",
+        type=Path,
+        default=None,
+        help="the checkpoint --init-rate was measured on, if not the one "
+        "loaded; defaults to the --resume / --bc-init checkpoint",
     )
     parser.add_argument(
         "--selfplay-dir",
@@ -723,23 +821,39 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def config_from_args(
+    parser: argparse.ArgumentParser, argv: list[str] | None = None
+) -> TrainConfig:
+    """Parse ``argv`` into a ``TrainConfig``, validating cross-flag rules
+    argparse can't express. Split from ``main`` so it is unit-testable."""
+    args = parser.parse_args(argv)
+    warm_start = args.resume or args.bc_init
+    if warm_start is None and (
+        args.init_rate is not None or args.init_best is not None
+    ):
+        parser.error("--init-rate / --init-best require --resume or --bc-init")
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)-7s %(name)s - %(message)s",
-        stream=sys.stdout,
+    defaults = TrainConfig()
+    explicit = frozenset(
+        name
+        for name in ("learning_rate", "ent_coef", "n_steps")
+        if getattr(args, name) is not None
     )
-    cfg = TrainConfig(
+
+    def pick(name: str) -> Any:
+        value = getattr(args, name)
+        return getattr(defaults, name) if value is None else value
+
+    return TrainConfig(
         steps=args.steps,
         envs=args.envs,
         opponents=args.opponents,
         num_players=args.players,
         seed=args.seed,
         gamma=args.gamma,
-        learning_rate=args.learning_rate,
-        ent_coef=args.ent_coef,
+        learning_rate=pick("learning_rate"),
+        ent_coef=pick("ent_coef"),
+        n_steps=pick("n_steps"),
         eval_every=args.eval_every,
         eval_episodes=args.eval_episodes,
         torch_threads=args.torch_threads,
@@ -747,7 +861,9 @@ def main() -> None:
         run_dir=args.run_dir,
         resume=args.resume,
         bc_init=args.bc_init,
-        bc_init_rate=args.bc_init_rate,
+        init_rate=defaults.init_rate if args.init_rate is None else args.init_rate,
+        init_best=args.init_best,
+        explicit_hparams=explicit,
         selfplay_dir=args.selfplay_dir,
         baseline_mix=args.baseline_mix,
         eval_opponents=args.eval_opponents,
@@ -755,6 +871,16 @@ def main() -> None:
         regression_patience=args.regression_patience,
         device=args.device,
         opponent_inference=args.opponent_inference,
+    )
+
+
+def main() -> None:
+    cfg = config_from_args(build_parser())
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s - %(message)s",
+        stream=sys.stdout,
     )
     result = train(cfg)
     print(
