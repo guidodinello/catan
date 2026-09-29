@@ -19,6 +19,34 @@ there links forward to the log(s) that tested it).
 | [005](005-gpu-inference.md) | GPU (CUDA) for Phase 5 RL -- opponent-checkpoint inference, PPO update, BC training | opponent-checkpoint inference server **rejected** (regresses throughput); PPO update and BC training **adopted as opt-in** `--device cuda` | (candidate, not yet filed) "GPU inference servers don't automatically transfer across engines" |
 | [006](006-longer-run.md) | Longer run / resume from 004's best checkpoint (+10M steps, PR #24) | inconclusive under the pre-registered rule (significant gain, +6M/+8M/+10M plateau at ~20-21%, last-three-monotone clause failed by 0.82 pt) | [009](https://github.com/guidodinello/gamekit/blob/main/docs/research/009-longer-runs-and-resume.md) |
 
+## In-loop eval caveats
+
+The in-loop eval (`rl/train.py:evaluate_in_loop`, n=200 by default) is a monitoring signal and
+a checkpoint *shortlist*, never a result. Cite this section from a log's Environment section
+("in-loop eval: seed scheme per README §In-loop eval caveats, catan commit `<sha>`").
+
+- **Seed scheme (from issue #25's fix).** Every chunk runs two n=200 evals from one CPU model
+  copy. The **guard** eval uses the fixed seed `cfg.seed + 977`; only `RegressionGuard`'s stop
+  decision reads it. The **reported** eval uses `cfg.seed + 977 + step` (`step` = cumulative
+  `num_timesteps`-based `done`, so a `--resume` leg never replays the previous leg's seeds);
+  it alone picks `TrainResult.best_checkpoint` / `best_win_rate`. Both rates are logged
+  (`reported=` and `guard(fixed)=`).
+- **Experiments 001-006 used the fixed seed for everything**, including best-checkpoint
+  selection: every in-loop eval replayed the same 200 setups. Their in-loop rates are biased
+  toward checkpoints that suit those boards (004: 20.0% in-loop vs 16.2% at n=4000; 006: 27.5%
+  vs 19.9%).
+- **Why the guard stays fixed.** With independent draws at a flat true rate of 21%, the guard
+  (margin 0.10, patience 2, seeded at 16.2%) falsely stops in ~24% of 40-eval runs and ~64% of
+  93-eval runs (pure-Python simulation, iid n=200 binomials -- an upper bound, since a fixed
+  set is only partly paired: dice and steals share the game RNG, so they drift once policies
+  differ; board, dev deck, starting player, seat and opponent seeds stay fixed).
+- **This does not close the winner's-curse gap.** The best reported rate is still the max over
+  ~40 noisy n=200 evals, so it stays biased upward. **n=4000 confirmation of the chosen
+  checkpoint remains mandatory.**
+- **Cost.** The second eval doubles in-loop eval time: ~31 s per n=200 eval (006: 20.4 min over
+  40 evals vs 185.7 min training), so about +20 min on a 10M-step run (~4% of an 8 h budget),
+  or ~9% fewer training steps on a timeout-bound 8 h run.
+
 ## Current best (Phase 5, as of 2026-09-29)
 
 **20.72% [19.50%, 22.01%] win rate vs 3 `HeuristicAgent`s**, n=4000,
