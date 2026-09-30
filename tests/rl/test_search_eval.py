@@ -10,8 +10,10 @@ from typing import Any
 
 import pytest
 
-from experiments import critic_calibration as cc
-from experiments import search_eval as se
+pytest.importorskip("numpy")  # critic_calibration needs the rl extra
+
+from experiments import critic_calibration as cc  # noqa: E402
+from experiments import search_eval as se  # noqa: E402
 
 
 def _overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:

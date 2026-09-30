@@ -9,12 +9,14 @@ import dataclasses
 import random
 from typing import Any, cast
 
-import numpy as np
 import pytest
 
+pytest.importorskip("numpy")
 pytest.importorskip("gymnasium")
 pytest.importorskip("sb3_contrib")
 torch = pytest.importorskip("torch")
+
+import numpy as np  # noqa: E402
 
 from agents.heuristic import HeuristicAgent  # noqa: E402
 from agents.ismcts import SearchConfig, keyed_actions  # noqa: E402
