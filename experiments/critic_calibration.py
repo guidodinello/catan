@@ -69,6 +69,10 @@ SEED_RANGES: dict[str, tuple[int, int]] = {
 }
 OFF_LIMITS: tuple[tuple[int, int], ...] = ((1, 10_000), (90_001, 100_000))
 
+# CPU cap. 6 when pre-registered (shared machine); raised to 10 on 2026-09-30
+# (scheduling only: every game is seeded and results are ordered by seed).
+MAX_WORKERS = 10
+
 HEADLINE_SALT = 0x9E3779B1
 FORK_SALT = 0x85EBCA6B
 FORK_STEP_BUDGET = 20_000
@@ -524,8 +528,8 @@ def main() -> None:
     games = args.games or n_default
     engine_base = args.engine_seed_base or base
     driver_base = args.driver_seed_base or base
-    if args.workers > 6:
-        raise SystemExit("CPU cap for this experiment is 6 workers")
+    if args.workers > MAX_WORKERS:
+        raise SystemExit(f"CPU cap for this experiment is {MAX_WORKERS} workers")
 
     t0 = time.perf_counter()
     payload, samples = collect(

@@ -82,7 +82,7 @@ OMP_NUM_THREADS=1 .venv/bin/python -m experiments.critic_calibration --arm vs_tr
   --games 4000 --workers 6 --probe-games 4000 --forks-per-offer 16 --checkpoint <same>
 ```
 
-Run from the worktree `../catan-37-calib` with the main checkout's `.venv` (the editable install points at the main checkout; the run uses the worktree's modules through the working directory, and the result JSON's `module_paths` records where the workers actually imported `agents`, `engine`, `rl`, `experiments` from; the driver aborts if any is outside the worktree). 6 workers (CPU cap), one arm at a time. Result JSONs: `experiments/results/critic_calibration_<arm>_p4_catan_bc_ft_long_10031616.json`; raw per-state rows in `rl_runs/critic_calibration/*.npz` (gitignored).
+Run from the worktree `../catan-37-calib` with the main checkout's `.venv` (the editable install points at the main checkout; the run uses the worktree's modules through the working directory, and the result JSON's `module_paths` records where the workers actually imported `agents`, `engine`, `rl`, `experiments` from; the driver aborts if any is outside the worktree). 6 workers as pre-registered (10 in the measured runs, see Deviations), one arm at a time. Result JSONs: `experiments/results/critic_calibration_<arm>_p4_catan_bc_ft_long_10031616.json`; raw per-state rows in `rl_runs/critic_calibration/*.npz` (gitignored).
 
 ## Smoke runs (disclosed; not results)
 
@@ -110,6 +110,8 @@ _Pending._
 ## Deviations / disclosures
 
 - A first start of the measured runs on 2026-09-29 ~23:1x (from pre-registration commit `4652f9f`) was aborted at ~23:38 for a laptop shutdown. Progress at the abort: arm H had completed all 4000 games and written its result (never opened or read), and arm T had run ~23 minutes with no partial output (results are only written at the end of an arm). Its outputs were not used (moved unread to `rl_runs/critic_calibration/aborted_2026-09-29/`, gitignored); the runs were restarted from scratch.
+
+- **Workers 6 → 10 (2026-09-30).** The pre-registration and the aborted first start used `--workers 6` (the CPU cap at the time). The measured runs use `--workers 10` because the machine is free of other work except a ~9-core training run (20 cores, 15 GB RAM). This changes scheduling only: every game and every fork is seeded by its `(engine_seed, driver_seed)` and results are collected in seed order, so the numbers do not depend on the worker count. The harness's hard cap (`MAX_WORKERS`) was raised from 6 to 10 in the same commit; nothing else in the code or the frozen analysis changed. Every other flag is as pre-registered.
 
 ## Notes / follow-up
 
