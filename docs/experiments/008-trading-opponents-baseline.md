@@ -1,9 +1,9 @@
 # Trading opponents: baselines for trade learning (issue #28, slice 1)
 
-**Date:** pre-registered 2026-09-29; n=4000 runs not yet started
+**Date:** pre-registered 2026-09-29 (commit `951bedc`); n=4000 runs 2026-09-29
 **Note:** [gamekit#005 — Eval statistics: Wilson intervals](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) (statistics). Prerequisite for [012 — trade heads](https://github.com/guidodinello/gamekit/blob/main/docs/research/012-trade-heads.md) (end-to-end path) and [020 — modular trade agent](https://github.com/guidodinello/gamekit/blob/main/docs/research/020-modular-trade-agent.md) (modular path); see also [019](https://github.com/guidodinello/gamekit/blob/main/docs/research/019-human-catan-game-data.md). Neither note is *tested* by this log: it builds the opponents and records the baseline they need. A gamekit follow-up (link both notes here) is proposed in the PR, not edited there.
 
-**Status: pre-registered, no n=4000 results.** Everything under [Result](#result) is empty on purpose. The only numbers that exist are the trade-activity smoke run below, which was used to check the opponent trades at all and looked at no win rates.
+**Status: complete.** The pre-registration and the opponent's constants were committed (`951bedc`) before the n=4000 runs; the result JSONs carry that `git_commit`. The smoke run below looked at no win rates.
 
 ## Hypothesis
 
@@ -70,15 +70,35 @@ Both clear the 0.5 floor. A run of 200 games took 2-6 s.
 
 ## Environment
 
-To be filled in at run time: catan commit of the runs, torch and sb3-contrib versions, wall clock per arm.
+- catan commit `951bedc` (recorded in every result JSON); existing `.venv`, CPU, 10 workers on a 20-core machine. Wall clock per arm was not recorded.
+- Checkpoint sha256 prefix `e8001d3e81ba`.
 
 ## Result
 
-*Empty: the n=4000 runs have not been started.*
+n=4000 per arm, Wilson 95% intervals. JSONs: `experiments/results/benchmark_trading_heuristic_2v2_p4.json`, `benchmark_heuristic_vs_trading_heuristic_p4.json`, `benchmark_rl_reject_vs_trading_heuristic_p4_catan_bc_ft_long_10031616.json`. No arm had a no-winner game, and no trader ever made more than 2 proposals in one turn.
+
+| arm | headline | rate | 95% CI | completed trades / game | trader proposals accepted |
+|---|---|---|---|---|---|
+| A: 2 TH + 2 H | share of games won by a TH seat (2136/4000) | **53.4%** | [51.85%, 54.94%] | 0.74 | 3.9% [3.75%, 4.02%] |
+| B: 1 H + 3 TH | heuristic win rate (861/4000) | **21.5%** | [20.28%, 22.83%] | 1.79 | 6.7% [6.52%, 6.81%] |
+| C: 1 rl (forced reject) + 3 TH | rl win rate (756/4000) | **18.9%** | [17.72%, 20.14%] | 1.73 | 6.4% [6.25%, 6.54%] |
+
+Every accepted trade was between two trading-heuristic seats, as designed (`accepted_by_responder_role`). Counters: 0 (the agent never counters, and the other roles never propose).
+
+Descriptive comparisons (not verdict rules):
+
+- C vs 006's 20.72% [19.50%, 22.01%] vs 3 `HeuristicAgent` on the same boards: 18.9% vs 20.7%, z = -2.05, p = 0.041; the intervals overlap.
+- B vs C, heuristic vs rl as the lone non-trader among 3 TH: 21.5% vs 18.9%, z = 2.92, p = 0.0035.
+- gamekit's per-role `two_proportion_test` in the JSONs treats dependent seats as independent (see known biases in each JSON); A's 53.4% above is the pre-registered statistic.
+
+**`PlayVictoryPoint` (for #34):** plays per legal decision is **1.0 for every role in every arm**, including the RL seat (3854 plays in 3854 legal decisions). The RL agent, having cloned the heuristic, reveals a VP card every time it can.
 
 ## Verdict
 
-*Pending.*
+- **A: trading helps a heuristic.** The lower bound (51.85%) is above 50%, so by the pre-registered rule trading-heuristic seats beat plain heuristic seats at the same table. The effect is small (+3.4 points); the trade-aware floor (0.5 completed trades / game) was met (0.74).
+- **B:** a lone heuristic at a trading table wins 21.5%, below the 25% chance rate (upper bound 22.83%).
+- **C: the baseline for every trade stage is 18.9% [17.72%, 20.14%]** (rl, trade responses forced to reject, vs 3 trading heuristics; 1.73 trades / game, so the arm is trade-aware). It is nominally lower than the 20.7% against non-trading heuristics but the intervals overlap, so this log does not claim the trading table is harder for the RL agent. A trade stage should beat this with a non-overlapping interval.
+- Caveat: the opponent is a minimal hand-written rule with a low acceptance rate (4-7% of proposals), not a model of human trading.
 
 ## Notes / follow-up
 
