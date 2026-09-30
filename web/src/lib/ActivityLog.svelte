@@ -48,11 +48,15 @@
 </div>
 
 <style>
+  /* A usable floor (~5 log lines): flex-basis and min-height keep the panel
+     from being squeezed to its header when the panels above it grow -- the
+     sidebar scrolls instead. Above the floor it still grows into spare
+     height, and its own list scrolls (ul: overflow-y auto). */
   .activity-log {
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    flex: 1;
+    flex: 1 1 10rem;
+    min-height: 10rem;
   }
 
   .panel-label {

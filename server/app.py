@@ -42,6 +42,7 @@ from server.persistence import (
 from server.serialize import (
     player_view,
     serialize_build_costs,
+    serialize_dice_history,
     serialize_geometry,
     serialize_legal_actions,
     serialize_trail,
@@ -99,6 +100,18 @@ def _get_session_or_404(game_id: str) -> GameSession:
         raise HTTPException(
             status_code=404, detail=f"no such game {game_id!r}"
         ) from exc
+
+
+def _session_view(session: GameSession, viewer: int | None) -> dict[str, Any]:
+    """``player_view`` plus the session's dice-roll history, which lives on
+    the session rather than the engine state.
+    """
+    return {
+        **player_view(session.state, viewer),
+        "dice_history": serialize_dice_history(
+            session.dice_rolls, session.dice_history_complete
+        ),
+    }
 
 
 def _resource_bundle_from_wire(bundle: dict[str, int] | None) -> dict[Resource, int]:
@@ -167,7 +180,7 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
         driver_seed=driver_seed,
         engine_seed=engine_seed,
         geometry=serialize_geometry(),
-        state=player_view(session.state, viewer=None),
+        state=_session_view(session, viewer=None),
         action_trail=serialize_trail(initial_trail),
     )
 
@@ -175,7 +188,7 @@ def create_game(request: CreateGameRequest) -> CreateGameResponse:
 @app.get("/api/games/{game_id}/state")
 def get_state(game_id: str, viewer: int | None = None) -> dict[str, Any]:
     session = _get_session_or_404(game_id)
-    return player_view(session.state, viewer)
+    return _session_view(session, viewer)
 
 
 @app.get("/api/games/{game_id}/legal_actions")
@@ -239,7 +252,7 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
     save_session(game_id, session)
     if game.is_terminal(state):
         write_game_record(game_id, session)
-    response = player_view(state, viewer=actor)
+    response = _session_view(session, viewer=actor)
     response["action_trail"] = serialize_trail(trail)
     return response
 

@@ -135,6 +135,26 @@ def load_records(games_dir: Path, experiment: str) -> list[dict[str, Any]]:
     return [r for r in records if r.get("experiment") == experiment]
 
 
+def _dice_totals(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Descriptive dice luck over finished games with a complete roll
+    history: observed count per total vs. fair-dice expectation. ``None`` if
+    no such game. Not part of the verdict.
+    """
+    games = [r for r in rows if r.get("dice_history_complete") and r["dice_counts"]]
+    if not games:
+        return None
+    counts = {
+        str(t): sum(r["dice_counts"][str(t)] for r in games) for t in range(2, 13)
+    }
+    n_rolls = sum(counts.values())
+    return {
+        "n_games": len(games),
+        "n_rolls": n_rolls,
+        "counts": counts,
+        "expected": {str(t): n_rolls * (6 - abs(t - 7)) / 36 for t in range(2, 13)},
+    }
+
+
 def tabulate(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Pure function of the records: the result payload minus the stamp."""
     by_slot = {(s.bot_kind, s.engine_seed): s for s in SCHEDULE_007}
@@ -187,6 +207,10 @@ def tabulate(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "vp_true": found.get("vp_true"),
                 "turn_count": found["turn_count"] if finished else None,
                 "trade_policy": found["trade_policy"],
+                # Absent from records written before dice tracking, and from
+                # games that never finished.
+                "dice_counts": found.get("dice_counts"),
+                "dice_history_complete": found.get("dice_history_complete", False),
             }
         )
 
@@ -247,6 +271,7 @@ def tabulate(records: list[dict[str, Any]]) -> dict[str, Any]:
         "rl_checkpoint": checkpoint,
         "trade_policy": "reject_all",
         "arms": arms,
+        "dice_totals": _dice_totals(rows),
         "rl_vs_heuristic": comparison,
         "abandoned": [r["game_id"] for r in rows if r["status"] == "abandoned"],
         "missing_game_nos": [r["game_no"] for r in rows if r["status"] == "missing"],

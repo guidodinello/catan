@@ -568,3 +568,37 @@ def test_a_game_survives_an_app_restart() -> None:
 
         legal = restart_client.get(f"/api/games/{game_id}/legal_actions").json()
         assert legal or after["phase"] != before["phase"]
+
+
+def test_state_endpoints_expose_the_dice_history() -> None:
+    created = client.post(
+        "/api/games",
+        json={
+            "num_players": 3,
+            "seat_kinds": ["human", "heuristic", "heuristic"],
+            "seed": 2,
+        },
+    ).json()
+    game_id = created["game_id"]
+    assert created["state"]["dice_history"]["complete"] is True
+    trail_rolls = 0
+    for _ in range(40):
+        response = client.post(f"/api/games/{game_id}/action", json={"index": 0})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        trail_rolls += sum(1 for e in body["action_trail"] if e["kind"] == "RollDice")
+        if body["winner"] is not None:
+            break
+    for view in (
+        body,
+        client.get(f"/api/games/{game_id}/state").json(),
+        client.get(f"/api/games/{game_id}/state", params={"viewer": 0}).json(),
+    ):
+        history = view["dice_history"]
+        assert history["complete"] is True
+        assert all(
+            1 <= a <= 6 and 1 <= b <= 6
+            for a, b in (r["dice"] for r in history["rolls"])
+        )
+    # the initial bot batch may hold rolls of its own; the history covers all
+    assert len(body["dice_history"]["rolls"]) >= trail_rolls > 0

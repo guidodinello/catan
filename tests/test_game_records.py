@@ -115,6 +115,8 @@ def test_a_human_game_gets_a_started_record(_games_dir: Path) -> None:
     assert record["trade_policy"] == "reject_all"
     assert record["rl_checkpoint"] is None
     assert "winner" not in record
+    # no all-zero dice counts that would look like real data
+    assert "dice_counts" not in record
 
 
 def test_a_bot_only_game_gets_no_record(_games_dir: Path) -> None:
@@ -146,6 +148,15 @@ def test_a_finished_game_record_has_the_outcome(_games_dir: Path) -> None:
     assert max(record["vp_true"]) >= 10
     assert record["turn_count"] > 0
     assert record["engine_seed"] == 1
+    # dice luck, checkable per game (experiment 007)
+    assert record["dice_history_complete"] is True
+    assert len(record["dice_rolls"]) > 0
+    assert sum(record["dice_counts"].values()) == len(record["dice_rolls"])
+    for turn, player_id, d1, d2 in record["dice_rolls"]:
+        assert turn >= 1 and 0 <= player_id < 3 and 1 <= d1 <= 6 and 1 <= d2 <= 6
+    assert record["dice_counts"]["7"] == sum(
+        1 for _, _, d1, d2 in record["dice_rolls"] if d1 + d2 == 7
+    )
 
 
 def test_turn_count_matches_the_rollout_definition() -> None:

@@ -137,3 +137,36 @@ def test_main_writes_a_stamped_result_and_nothing_when_empty(
     assert written["experiment"] == "human_games"
     assert written["arms"]["rl"]["human_wins"] == 1
     assert len(written["games"]) == 24
+
+
+def _with_dice(
+    rec: dict[str, Any], counts: dict[str, int], complete: bool = True
+) -> dict[str, Any]:
+    full = {str(t): 0 for t in range(2, 13)} | {k: v for k, v in counts.items()}
+    return rec | {"dice_counts": full, "dice_history_complete": complete}
+
+
+def test_dice_totals_aggregate_only_complete_finished_games() -> None:
+    s1, s2, s3, s4 = hg.SCHEDULE_007[:4]
+    records = [
+        _with_dice(_record(s1), {"7": 4, "6": 2}),
+        _with_dice(_record(s2), {"7": 1, "12": 3}),
+        _with_dice(_record(s3), {"2": 9}, complete=False),  # partial history
+        _record(s4),  # an old record: no dice fields at all
+    ]
+    payload = hg.tabulate(records)
+    totals = payload["dice_totals"]
+    assert totals["n_games"] == 2
+    assert totals["n_rolls"] == 10
+    assert totals["counts"]["7"] == 5 and totals["counts"]["2"] == 0
+    assert sum(totals["expected"].values()) == pytest.approx(10)
+    assert totals["expected"]["7"] == max(totals["expected"].values())
+    rows = {r["game_no"]: r for r in payload["games"]}
+    assert rows[s3.game_no]["dice_history_complete"] is False
+    assert rows[s4.game_no]["dice_counts"] is None
+    assert rows[s4.game_no]["dice_history_complete"] is False
+
+
+def test_dice_totals_are_none_without_complete_games() -> None:
+    payload = hg.tabulate([_record(hg.SCHEDULE_007[0])])
+    assert payload["dice_totals"] is None
