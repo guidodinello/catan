@@ -107,6 +107,10 @@ _Pending: filled in after the measured runs._
 
 _Pending._
 
+## Deviations / disclosures
+
+- A first start of the measured runs on 2026-09-29 ~23:1x (from pre-registration commit `4652f9f`) was aborted at ~23:38 for a laptop shutdown. Progress at the abort: arm H had completed all 4000 games and written its result (never opened or read), and arm T had run ~23 minutes with no partial output (results are only written at the end of an arm). Its outputs were not used (moved unread to `rl_runs/critic_calibration/aborted_2026-09-29/`, gitignored); the runs were restarted from scratch.
+
 ## Notes / follow-up
 
 - Feeds catan [#38](https://github.com/guidodinello/catan/issues/38) (`rl_value_trade`, margin tuning on the reserved seeds) and the decision-time search idea (gamekit 021).
