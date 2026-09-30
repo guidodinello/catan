@@ -7,16 +7,21 @@ name (it accepts offers, so trade probes and forks actually fire).
 
 from __future__ import annotations
 
-import numpy as np
+import pytest
 
-from agents import CatanAgent, TradingHeuristicAgent
-from engine.actions import ProposeTrade
-from engine.board import Resource
-from engine.game import CatanGame
-from engine.state import Phase
-from experiments import calibration_stats as cs
-from experiments.calibration_analysis import analyze
-from experiments.critic_calibration import (
+# numpy comes with the `rl` extra; the plain "Tests (Python)" job has none.
+pytest.importorskip("numpy")
+
+import numpy as np  # noqa: E402
+
+from agents import CatanAgent, TradingHeuristicAgent  # noqa: E402
+from engine.actions import ProposeTrade  # noqa: E402
+from engine.board import Resource  # noqa: E402
+from engine.game import CatanGame  # noqa: E402
+from engine.state import Phase  # noqa: E402
+from experiments import calibration_stats as cs  # noqa: E402
+from experiments.calibration_analysis import analyze  # noqa: E402
+from experiments.critic_calibration import (  # noqa: E402
     OFF_LIMITS,
     SEED_RANGES,
     Job,
@@ -24,7 +29,7 @@ from experiments.critic_calibration import (
     play_and_record,
     stack_samples,
 )
-from experiments.rollout import run_game
+from experiments.rollout import run_game  # noqa: E402
 
 NUM_PLAYERS = 4
 RL_SEAT = 0
