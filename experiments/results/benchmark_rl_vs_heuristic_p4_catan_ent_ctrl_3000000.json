@@ -1,0 +1,146 @@
+{
+  "git_commit": "b20f5017e3d474c67bd1d5c2514bbf8de4be1841",
+  "generated_at": "2026-09-30T20:56:48.965248+00:00",
+  "experiment": "benchmark",
+  "mode": "rl_vs_heuristic",
+  "num_players": 4,
+  "n_games": 4000,
+  "engine_seed_base": 1,
+  "driver_seed_base": 1,
+  "checkpoint": "catan_ent_ctrl_3000000.zip",
+  "by_role": {
+    "heuristic": {
+      "n_seat_occupancies": 12000,
+      "wins": 3348,
+      "win_rate": 0.279,
+      "win_rate_wilson_ci": [
+        0.2710470262787053,
+        0.2870944221738232
+      ],
+      "mean_resources_through_turn_10": 5.529916666666667,
+      "seat_occupancy_counts": {
+        "0": 3000,
+        "1": 3000,
+        "2": 3000,
+        "3": 3000
+      }
+    },
+    "rl": {
+      "n_seat_occupancies": 4000,
+      "wins": 652,
+      "win_rate": 0.163,
+      "win_rate_wilson_ci": [
+        0.1518777065302152,
+        0.17476895824704364
+      ],
+      "mean_resources_through_turn_10": 4.3335,
+      "seat_occupancy_counts": {
+        "0": 1000,
+        "1": 1000,
+        "2": 1000,
+        "3": 1000
+      }
+    }
+  },
+  "by_seat": {
+    "0": {
+      "n_games": 4000,
+      "wins": 972,
+      "win_rate": 0.243,
+      "win_rate_wilson_ci": [
+        0.2299593141236553,
+        0.2565338397272513
+      ],
+      "expected_under_null": 0.25
+    },
+    "1": {
+      "n_games": 4000,
+      "wins": 987,
+      "win_rate": 0.24675,
+      "win_rate_wilson_ci": [
+        0.23363687830391547,
+        0.26034907972231836
+      ],
+      "expected_under_null": 0.25
+    },
+    "2": {
+      "n_games": 4000,
+      "wins": 1005,
+      "win_rate": 0.25125,
+      "win_rate_wilson_ci": [
+        0.2380517448680815,
+        0.264925578168545
+      ],
+      "expected_under_null": 0.25
+    },
+    "3": {
+      "n_games": 4000,
+      "wins": 1036,
+      "win_rate": 0.259,
+      "win_rate_wilson_ci": [
+        0.24565960610258758,
+        0.2728028455630486
+      ],
+      "expected_under_null": 0.25
+    }
+  },
+  "comparisons": {
+    "heuristic_vs_rl": {
+      "z": 14.672968343181283,
+      "p_value": 0.0
+    }
+  },
+  "trade_stats": {
+    "n_games": 4000,
+    "completed_trades": 0,
+    "completed_trades_per_game": 0.0,
+    "by_role": {
+      "heuristic": {
+        "proposals": 0,
+        "counters": 0,
+        "proposals_accepted": 0,
+        "responses": 0,
+        "accepted_as_responder": 0,
+        "cards_given": 0,
+        "cards_received": 0,
+        "accepted_by_responder_role": {},
+        "max_proposals_in_one_turn": 0,
+        "acceptance_rate": null,
+        "acceptance_rate_ci95": null
+      },
+      "rl": {
+        "proposals": 0,
+        "counters": 0,
+        "proposals_accepted": 0,
+        "responses": 0,
+        "accepted_as_responder": 0,
+        "cards_given": 0,
+        "cards_received": 0,
+        "accepted_by_responder_role": {},
+        "max_proposals_in_one_turn": 0,
+        "acceptance_rate": null,
+        "acceptance_rate_ci95": null
+      }
+    }
+  },
+  "vp_card_stats": {
+    "heuristic": {
+      "legal_decisions": 10568,
+      "plays": 10568,
+      "plays_per_legal_decision": 1.0
+    },
+    "rl": {
+      "legal_decisions": 2726,
+      "plays": 2726,
+      "plays_per_legal_decision": 1.0
+    }
+  },
+  "no_winner_games": 0,
+  "known_biases": [
+    "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- every agent reveals VP cards immediately. This no longer affects win timing (engine.game.true_victory_points/_check_win auto-wins on a hidden VP card the instant the true total reaches 10, independent of when/whether it's revealed); it's noted here only as a residual agent-behavior quirk, not a win-timing bias.",
+    "Bank shortage (_produce) skips a resource when the bank cannot cover all claimants; heuristic agents produce more, so they hit this more often than random agents did in Phase 2.",
+    "HeuristicAgent is hand-tuned against Phase 2's random-play results; a rule that helps against random opponents need not help against a good one. heuristic_vs_heuristic is the check.",
+    "The RL agent never *proposes* a domestic trade: rl/action_space.py reserves the ProposeTrade/CounterTrade atoms and masks them off, since the give/receive bundle product is not enumerable (README decision 5). It does still accept and reject offers, so it is not excluded from trading entirely -- but against 3 RandomAgents, which do propose, it gives up the initiative half of a rule random play uses constantly."
+  ],
+  "non_winner_exceeded_ten_rate": 0.0015
+}
