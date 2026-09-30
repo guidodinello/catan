@@ -89,6 +89,55 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 logger = logging.getLogger("rl.train")
 
+# ((step, value), ...) breakpoints, steps strictly increasing.
+EntSchedule = tuple[tuple[int, float], ...]
+
+
+def parse_ent_schedule(text: str) -> EntSchedule:
+    """``"0:0.005,1000000:0.02"`` -> ``((0, 0.005), (1000000, 0.02))``."""
+    points: list[tuple[int, float]] = []
+    for part in text.split(","):
+        step_text, sep, value_text = part.strip().partition(":")
+        if not sep:
+            raise ValueError(f"ent schedule point {part!r} is not STEP:VALUE")
+        points.append((int(step_text), float(value_text)))
+    if any(step < 0 or value < 0 for step, value in points):
+        raise ValueError("ent schedule steps and values must be non-negative")
+    if any(a[0] >= b[0] for a, b in zip(points, points[1:], strict=False)):
+        raise ValueError("ent schedule steps must be strictly increasing")
+    return tuple(points)
+
+
+def ent_coef_at(schedule: EntSchedule, step: int) -> float:
+    """Piecewise-linear value at cumulative ``step``, clamped outside the
+    first/last breakpoint. Keyed on absolute ``num_timesteps`` (never SB3's
+    per-``learn()`` ``progress_remaining``), so chunked training and
+    ``--resume`` see one continuous schedule."""
+    if step <= schedule[0][0]:
+        return schedule[0][1]
+    for (s0, v0), (s1, v1) in zip(schedule, schedule[1:], strict=False):
+        if step <= s1:
+            return v0 + (v1 - v0) * (step - s0) / (s1 - s0)
+    return schedule[-1][1]
+
+
+def _ent_schedule_callback(schedule: EntSchedule) -> Any:
+    """A ``BaseCallback`` that sets ``model.ent_coef`` before every rollout
+    (so before the update that consumes it), overwriting any pickled value.
+    Built lazily so this module keeps importing without stable-baselines3."""
+    from stable_baselines3.common.callbacks import BaseCallback
+
+    class EntScheduleCallback(BaseCallback):
+        def _on_rollout_start(self) -> None:
+            value = ent_coef_at(schedule, self.model.num_timesteps)
+            self.model.ent_coef = value
+            self.logger.record("train/ent_coef_effective", value)
+
+        def _on_step(self) -> bool:
+            return True
+
+    return EntScheduleCallback()
+
 
 @dataclass(slots=True)
 class TrainConfig:
@@ -105,6 +154,9 @@ class TrainConfig:
     batch_size: int = 2048
     n_epochs: int = 4
     ent_coef: float = 0.01
+    # Overrides `ent_coef` per rollout when set (`ent_coef` is then its value
+    # at step 0, which is what bc-init loads with).
+    ent_schedule: EntSchedule | None = None
     clip_range: float = 0.2
     gae_lambda: float = 0.95
     net_arch: list[int] = field(default_factory=lambda: [256, 256])
@@ -652,6 +704,9 @@ def train(cfg: TrainConfig) -> TrainResult:
                 "learning_rate": cfg.learning_rate,
                 "lr_schedule": lambda progress_remaining: cfg.learning_rate,
                 "ent_coef": cfg.ent_coef,
+                # The clone pickles a relative tensorboard_log; give every run
+                # its own TB dir instead of cwd's.
+                "tensorboard_log": str(cfg.run_dir / "tb"),
             },
         )
         # Confirmed empirically (rl/train.py's own test suite): a schedule
@@ -699,11 +754,27 @@ def train(cfg: TrainConfig) -> TrainResult:
     eval_opponents = eval_opponent_kind(cfg)
     stopped_early = False
 
+    ent_callback = (
+        _ent_schedule_callback(cfg.ent_schedule) if cfg.ent_schedule else None
+    )
+    if cfg.ent_schedule:
+        logger.info(
+            "ent_coef schedule %s (model.ent_coef=%s before the first rollout "
+            "is overwritten by schedule(num_timesteps=%d)=%s)",
+            cfg.ent_schedule,
+            model.ent_coef,
+            model.num_timesteps,
+            ent_coef_at(cfg.ent_schedule, model.num_timesteps),
+        )
+
     while done < target_step:
         this_chunk = min(chunk, target_step - done)
         t0 = time.perf_counter()
         model.learn(
-            this_chunk, reset_num_timesteps=reset_num_timesteps, progress_bar=False
+            this_chunk,
+            callback=ent_callback,
+            reset_num_timesteps=reset_num_timesteps,
+            progress_bar=False,
         )
         reset_num_timesteps = False  # never reset again after the first chunk
         train_seconds += time.perf_counter() - t0
@@ -782,7 +853,18 @@ def build_parser() -> argparse.ArgumentParser:
     # None sentinels: whether these were passed explicitly matters on --resume
     # (see _load_resumed_model); main() falls back to TrainConfig's defaults.
     parser.add_argument("--learning-rate", type=float, default=None)
-    parser.add_argument("--ent-coef", type=float, default=None)
+    ent_group = parser.add_mutually_exclusive_group()
+    ent_group.add_argument("--ent-coef", type=float, default=None)
+    ent_group.add_argument(
+        "--ent-schedule",
+        type=parse_ent_schedule,
+        default=None,
+        metavar="STEP:VALUE,...",
+        help="piecewise-linear entropy coefficient over cumulative "
+        "num_timesteps, e.g. 0:0.005,1000000:0.02 (clamped outside the "
+        "breakpoints); applied per rollout, survives --resume. --ent-coef "
+        "is the constant shorthand",
+    )
     parser.add_argument(
         "--n-steps",
         type=int,
@@ -892,6 +974,10 @@ def config_from_args(
         value = getattr(args, name)
         return getattr(defaults, name) if value is None else value
 
+    ent_coef = pick("ent_coef")
+    if args.ent_schedule is not None:
+        ent_coef = ent_coef_at(args.ent_schedule, 0)
+
     return TrainConfig(
         steps=args.steps,
         envs=args.envs,
@@ -900,7 +986,8 @@ def config_from_args(
         seed=args.seed,
         gamma=args.gamma,
         learning_rate=pick("learning_rate"),
-        ent_coef=pick("ent_coef"),
+        ent_coef=ent_coef,
+        ent_schedule=args.ent_schedule,
         n_steps=pick("n_steps"),
         eval_every=args.eval_every,
         eval_episodes=args.eval_episodes,
