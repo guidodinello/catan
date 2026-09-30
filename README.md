@@ -257,6 +257,8 @@ Resolved while planning the web GUI (full detail in
     its own gate.
 21. **Legal actions cross the wire by index, with one exception.** The
     server lists `legal_actions(state)` as an indexed, render-hinted array;
+    the human view omits `PlayVictoryPoint` (VP cards count automatically and stay
+    hidden), so indices are the engine's and the list may have gaps;
     the client posts back `{index}` and never constructs an
     `engine/actions.py` dataclass itself. `ProposeTrade`'s open-ended
     sentinel (decisions 5/10/18) is the one action that needs a
