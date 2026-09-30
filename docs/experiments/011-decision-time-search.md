@@ -1,0 +1,120 @@
+# Decision-time search over the current checkpoint (issue #41)
+
+**Date:** pre-registered 2026-09-30 (commit: see Status); measured runs pending
+**Note:** [gamekit#021 — Decision-time search: ISMCTS with the trained policy/value network as priors](https://github.com/guidodinello/gamekit/blob/main/docs/research/021-decision-time-search.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Builds on [009 — critic calibration](009-critic-calibration.md), whose Verdict says how the critic may be used as a leaf. A gamekit follow-up (link this log from 021, record the design departures below) is proposed in the PR, not edited there.
+
+**Status: pre-registered, not yet measured.** The smoke/timing runs below were committed to fix the budget *before* any measured run; they read no win rate. The commit that carries this file is the pre-registration commit; the result JSONs will carry that `git_commit` or a later one.
+
+## Hypothesis
+
+A short determinized ISMCTS at decision time, using the trained policy as the move prior and its critic as the leaf evaluator (no retraining), raises the win rate of `catan_bc_ft_long_10031616` against 3 `HeuristicAgent`s above the no-search baseline (20.72% in 006), and possibly above the 25% Phase 5 gate. Tested as the same checkpoint with vs without search at a fixed per-move budget, reporting decision latency.
+
+**How the critic is used (from 009's Verdict).** Leaves are scored by **V⁺ = V + own public VP / 10**, a *ranking score, not a probability*, weak early in the game (AUC ≈ 0.69 before own turn 12, ≈ 0.86 late), whose sibling differences (≈ 0.01) are small against its range (≈ −1 to +0.2).
+
+## Two arms that answer different questions
+
+The search must simulate the opponents somehow. They are not searched, only played by a fixed model:
+
+- **`heur` — search with a known opponent model (an upper bound).** Opponents in the search are `HeuristicAgent`, the same kind of agent the benchmark pits it against. This shows what search can add when the opponent model is right; it is *not* a number that transfers to other opponents.
+- **`self` — the transferable number (exploratory).** Opponents in the search are the checkpoint's own greedy policy, which assumes nothing about who is at the table. Smaller n because each simulation costs several network forwards per opponent move.
+
+## Design (frozen)
+
+Code: `agents/ismcts.py` (torch-free search core), `agents/rl_search.py` (`RLSearchAgent`, the policy/critic evaluator, the self-model opponent), benchmark role `rl_search` / mode `rl_search_vs_heuristic`, driver `experiments/search_eval.py`. `engine/` and `agents/heuristic.py` are untouched (README decision 10).
+
+- **Tree.** Open-loop, single observer. A node is one of the rl seat's *top-level* decisions (every decision except a domestic-trade response); edges are composed actions (`ActionKey` = the atom sequence, with the two orderings of a Road Building pair merged). No game states are stored.
+- **Simulation.** Each simulation starts from a fresh determinization of the live state, descends by PUCT over the currently legal children, and plays opponents through the opponent model until the rl seat's next top-level decision (its own trade responses are rejected; opponents here never propose).
+- **Determinization (public information only).** The opponents' combined holding of each resource is `19 − bank − own`, dealt uniformly into their public hand sizes; the unseen dev-card multiset (full deck − own hand − publicly played knights/VP/progress counts, with the played progress types drawn uniformly among those the seat does not hold) is dealt into their public hand-slot counts (keeping each card's `bought_this_turn` flag) and the deck; a deal giving an opponent ≥ 10 true VP is redealt; the copy's RNG is reseeded from the agent's own `seat_rng`, so dice, steals and draws are sampled chance. This is weaker than card counting (it ignores, e.g., what a steal revealed). The module never reads an opponent's composition, the deck order or `state.rng`; `tests/test_ismcts.py` asserts this (two states identical in public information and different in hidden information give the same decision and visit counts).
+- **Prior.** The product of the atom probabilities along a composed action's atom path, from one fused, batched policy+value forward over the trie of legal atom prefixes, renormalized over the legal actions.
+- **Leaf (one rule for every leaf).** The rl seat's next top-level decision, valued by V⁺ from the empty-buffer observation; a terminal state is +1 if the rl seat won, else −1. Backup is single-seat.
+- **Selection.** PUCT with `c_puct = 1.25`; Q min-max normalized over the tree (MuZero's `MinMaxStats`); an unvisited child is valued at the parent's mean normalized Q; no noise, no temperature. The move is the most-visited root child (ties: higher prior).
+- **Not searched.** A decision with one legal composed action (53% of top-level decisions), and trade responses, go to the greedy `RLAgent`; with budget 0 the agent *is* `RLAgent` (tested: identical `GameRecord`s). Setup, discard, robber and steal decisions are searched.
+
+**Departures from 021's sketch** (stated, not hidden): (1) backup is single-seat rather than per-seat multi-player UCT, because opponents are played by a fixed model rather than searched; (2) the tree is open-loop over the rl seat's decisions (opponent moves are simulated, not tree nodes); (3) Q is min-max normalized; (4) the first-play value of an unvisited child is the parent's mean normalized Q, where MuZero's pseudocode uses 0, and the exploration term uses `sqrt(N+1)`; `c_puct = 1.25` is MuZero's `pb_c_init` (its `log((N + 19652 + 1)/19652)` addend is < 0.007 at these visit counts), checked against the published pseudocode; (5) trades stay masked, as today.
+
+**A property worth knowing before reading results.** When a rollout can end the game (an opponent near 10 VP), a terminal ±1 enters the tree-wide min-max range and compresses V⁺ differences between siblings, so in such endgame positions the prior dominates more. This is the normalization working as designed (a loss is worth more than any 0.01 gap), not a bug; it is why the unit test that checks "values override a lopsided prior" uses a position where no opponent can win inside the horizon.
+
+## Smoke / timing runs (disclosed; not results)
+
+On seeds **4000001–4000100** (48 for the last row), disjoint from every range used elsewhere (`tests/rl/test_search_eval.py` asserts this against 009's ranges and the off-limits 1..10000 and 90001..100000). `--timing-only`: the driver records **no outcome** for these games, so no win rate exists to read. Read: wall time, latency, simulations per second, worker RSS, override rate against the greedy action, skip rate, module paths, and the leaf-noise check below. 16 workers on the 20-core laptop, #40 finished.
+
+| arm | S | worker-s/game | mean ms / searched decision | p95 | max | sims/s | override | peak RSS |
+|---|---|---|---|---|---|---|---|---|
+| none | – | 1.5 | – | – | – | – | – | 353 MB |
+| heur | 16 | 4.0 | 66 | 129 | 323 | 243 | 8.6% | 358 MB |
+| heur | 32 | 8.7 | 158 | 305 | 720 | 203 | 8.1% | 357 MB |
+| heur | 64 | 20.0 | 360 | 671 | 1640 | 178 | 8.7% | 363 MB |
+| heur | **128** | **43.2** | **794** | **1469** | **2727** | 161 | **9.9%** | 365 MB |
+| heur | 256 | 93.2 | 1774 | 3188 | 5506 | 144 | 10.4% | 363 MB |
+| self | 32 | 37.4 | 713 | 1617 | 4485 | 45 | 8.8% | 360 MB |
+| self | 128 (48 games) | 378.9 | 7795 | 14780 | 27031 | 16 | 9.1% | 358 MB |
+
+- 53% of the rl seat's top-level decisions have a single legal action and are not searched (`skip_rate`). The override rate is among the searched ones; at S = 128 it is 14.5% in MAIN, 6% at the robber, 12% at the first settlement, and 0% for the setup road.
+- `state.copy()` costs about 20 µs; one isolated single-process game ran at about 2.5 ms per simulation, and 4–7 ms under 16 concurrent workers, so the latencies above are for a loaded machine (an upper-ish figure).
+- Memory: one worker peaks at about 0.36 GB (the model is shared, the tree stores no states), so 16 workers take about 6 GB.
+- **Leaf-noise check (the horizon asymmetry).** An `EndTurn` leaf is scored after three sampled opponent turns, a build leaf is scored at once. The SD of leaf values across determinizations at `EndTurn` edges is **0.061 (S=16) to 0.099 (S=256)** on average, against **0.024–0.028** for the SD of the sibling edges' mean values. So per-sample `EndTurn` noise is about 3.5× the spread between sibling moves, and only averaging over many simulations makes the comparison usable. This is reported, not fixed: the leaf rule above is frozen.
+- The smoke run died once after `self_s32` (no traceback; the two remaining rows were rerun detached), and `experiments/search_eval.py` was refactored once while it ran (`_map_jobs` extracted; no logic change).
+
+## Pre-registration
+
+**Seeds.** The benchmark boards, as in 006: `engine_seed_base = driver_seed_base = 1`, consecutive seeds, seat-rotated by `engine_seed % 4`.
+
+**Budget rule (applied to the table above).** Ladder S ∈ {16, 32, 64, 128, 256} simulations per searched decision. **S\*** is the largest S whose estimated n = 4000 wall time is ≤ 6 h at 10 workers, i.e. ≤ 60 worker-hours (conservative: with 16–18 workers it is ~3–4 h). Escalate to Guido instead of choosing if S = 16 does not fit, or if the override rate at S\* is below 2% of searched decisions.
+- heur: 43.2 worker-s/game × 4000 = 48 worker-h at S = 128, 103 worker-h at S = 256 → **S\* = 128**. Override rate there: 9.9% → no escalation.
+- self: 379 worker-s/game at S = 128 → 105 worker-h for n = 1000, over the cap; interpolating the measured S = 32 (37.4) and S = 128 (379) gives ≈ 119 worker-s at S = 64 (≈ 33 worker-h for n = 1000), which fits. So the `self` arm uses **S = 64**, disclosed: it is half the heur arm's budget.
+
+**Arms and run order** (all vs 3 `HeuristicAgent`, `RLAgent` is the same checkpoint `rl_runs/selfplay/catan_bc_ft_long/catan_bc_ft_long_10031616.zip`, sha256 prefix `e8001d3e81ba`):
+
+| id | arm | what | n (seeds) |
+|---|---|---|---|
+| A0 | `none` | `RLAgent`, no search (the driver's own rerun; must reproduce 006's 829/4000 exactly, it is deterministic) | 4000 (1..4000) |
+| A1 | `heur`, S = 128 | **primary**: search with a known opponent model (upper bound) | 4000 (1..4000) |
+| A2 | `self`, S = 64 | exploratory, **the transferable number** | 1000 (1..1000) |
+| C1, C2 | `heur`, S = 32 and S = 64 | exploratory budget curve (with A1 at 128: three points) | 1000 (1..1000) |
+
+If A0 does not give exactly 829/4000, stop and find out why before running anything else.
+
+**Statistics (α = 0.05, two-sided).**
+- **Primary:** A1 vs A0, `gamekit.mc.testing.two_proportion_test` (n = 4000 each). MDE at 80% power ≈ 2.5 points (p ≈ 0.207). Secondary: exact McNemar on the per-board discordant pairs (same boards), and Wilson intervals throughout.
+- A2 and C1/C2 vs A0 on the same first 1000 boards (MDE ≈ 5.1 points at n = 1000): descriptive, with intervals, no gate claim.
+- The 25% gate needs p̂ ≳ 26.4% at n = 4000 for the Wilson lower bound to clear 25%.
+
+**Verdict rules.**
+- **Search helps, with a known opponent model:** A1 beats A0 (p < 0.05 and a positive difference). Always worded as an upper bound.
+- **Phase 5 gate:** A1's Wilson lower bound is above 25%. Reported with the known-opponent-model qualifier; whether it counts toward the gate is Guido's call.
+- **Transferable:** A2 vs A0, reported as exploratory with its interval.
+- Also reported: mean, p95 and max decision latency (per searched decision, and per top-level decision including skipped ones), simulations per second, override rate overall and by phase, skip rate, peak RSS, and the budget curve.
+- 006's 20.72% is the best of five fixed points, so A0 (the same 4000 boards) carries its winner's-curse bias in the absolute level; 009 measured the same checkpoint at 20.575% [19.35, 21.86] on fresh boards. The A1 − A0 comparison is paired on the same boards, so the bias cancels in the difference but not in the level compared with 25%.
+
+## Config
+
+```
+cd ../catan-41-search     # the worktree; never `uv run` here (no new venv)
+export PYTHONPATH=$PWD OMP_NUM_THREADS=1
+PY=/home/guido/projects/catan/.venv/bin/python
+CK=/home/guido/projects/catan/rl_runs/selfplay/catan_bc_ft_long/catan_bc_ft_long_10031616.zip
+$PY -m experiments.search_eval run --arm none --games 4000 --workers 16 --checkpoint $CK
+$PY -m experiments.search_eval run --arm heur --sims 128 --games 4000 --workers 16 --checkpoint $CK
+$PY -m experiments.search_eval run --arm self --sims 64  --games 1000 --workers 16 --checkpoint $CK
+$PY -m experiments.search_eval run --arm heur --sims 32  --games 1000 --workers 16 --checkpoint $CK
+$PY -m experiments.search_eval run --arm heur --sims 64  --games 1000 --workers 16 --checkpoint $CK
+$PY -m experiments.search_eval analyze none heur_s128 self_s64 heur_s32 heur_s64 --baseline none --write search_eval_011
+```
+
+Games run in chunks of 200 seeds, each written atomically to `rl_runs/search_eval/<arm>/chunk_<base>.json` (gitignored); `run` skips finished chunks, so a laptop shutdown loses at most one chunk, and it refuses to resume under a different config and refuses a measured run from a dirty worktree. Every game is seeded by its `(engine_seed, driver_seed)`, so results do not depend on the worker count or on where a run was resumed. The driver records every worker's module paths and aborts if any is outside the worktree. Result JSON: `experiments/results/search_eval_011.json`.
+
+## Environment
+
+catan commit: the result JSON records `git_commit`; existing main-checkout `.venv` (torch CPU, `sb3-contrib`, gamekit as installed), run from the worktree `../catan-41-search` with `PYTHONPATH=$PWD`; 20 cores, 15 GB RAM, up to 16 workers (the 18-worker cap is for headroom), laptop used in the daytime only.
+
+## Result
+
+Not yet measured.
+
+## Verdict
+
+Pending.
+
+## Notes / follow-up
+
+- Proposed gamekit change (not edited here): in note 021, set Status/Result to link this log, record the five design departures above, and state that the `heur` arm is an upper bound and the `self` arm the transferable number.

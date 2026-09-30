@@ -48,6 +48,7 @@ from gamekit.results import write_result
 from gamekit.seats import rotate, seat_rng
 
 from agents import CatanAgent, HeuristicAgent, RandomAgent, TradingHeuristicAgent
+from agents.ismcts import SearchConfig
 from engine.game import CatanGame
 from experiments.rollout import GameRecord, run_many
 
@@ -66,6 +67,8 @@ MODE_LINEUPS: dict[str, Callable[[int], tuple[str, ...]]] = {
     "heuristic_vs_heuristic": lambda n: tuple(["heuristic"] * n),
     "rl_vs_random": lambda n: ("rl",) + tuple(["random"] * (n - 1)),
     "rl_vs_heuristic": lambda n: ("rl",) + tuple(["heuristic"] * (n - 1)),
+    # Decision-time search over the same checkpoint (catan #41, log 011).
+    "rl_search_vs_heuristic": lambda n: ("rl_search",) + tuple(["heuristic"] * (n - 1)),
     # Trading-opponent modes (catan #28). HeuristicAgent never proposes and
     # always rejects, so a lone TradingHeuristic among 3 Heuristics can never
     # complete a trade (it replays heuristic_vs_heuristic exactly); the
@@ -82,7 +85,10 @@ MODE_LINEUPS: dict[str, Callable[[int], tuple[str, ...]]] = {
 RL_MODES = frozenset({"rl_vs_random", "rl_vs_heuristic"})
 
 # Every mode that loads a checkpoint (result names are qualified by its stem).
-CHECKPOINT_MODES = RL_MODES | {"rl_reject_vs_trading_heuristic"}
+CHECKPOINT_MODES = RL_MODES | {
+    "rl_reject_vs_trading_heuristic",
+    "rl_search_vs_heuristic",
+}
 
 RL_REJECT_KNOWN_BIAS = (
     "The rl_reject seat is server.bots.RLSeatAgent, exactly as the web GUI "
@@ -113,8 +119,20 @@ RL_KNOWN_BIAS = (
 )
 
 
+RL_SEARCH_KNOWN_BIAS = (
+    "rl_search is decision-time ISMCTS over the same checkpoint as rl "
+    "(agents/ismcts.py). Its default opponent model inside the search is "
+    "HeuristicAgent -- the very opponent it is benchmarked against -- so this "
+    "mode is an upper bound (search with a known opponent model), not a "
+    "transferable number; see docs/experiments/011-decision-time-search.md."
+)
+
+
 def _build_role(
-    role: str, rng: random.Random, checkpoint: str | None = None
+    role: str,
+    rng: random.Random,
+    checkpoint: str | None = None,
+    search: SearchConfig | None = None,
 ) -> CatanAgent:
     if role == "heuristic":
         return HeuristicAgent(name="heuristic")
@@ -138,6 +156,12 @@ def _build_role(
         from agents.rl_agent import RLAgent
 
         return RLAgent(checkpoint, name="rl", rng=rng)
+    if role == "rl_search":
+        if checkpoint is None:
+            raise ValueError("the rl_* modes require --checkpoint")
+        from agents.rl_search import RLSearchAgent
+
+        return RLSearchAgent(checkpoint, config=search, name="rl_search", rng=rng)
     raise ValueError(f"unknown role {role!r}")
 
 
@@ -155,6 +179,7 @@ def benchmark_agent_factory(
     num_players: int,
     engine_seed: int,
     driver_seed: int,
+    search: SearchConfig | None = None,
 ) -> list[CatanAgent]:
     """The module-level ``AgentFactory`` every benchmark arm uses -- picklable
     across ``ProcessPoolExecutor`` workers via ``functools.partial`` over
@@ -169,7 +194,7 @@ def benchmark_agent_factory(
     for seat in range(num_players):
         player_id = seat_order[seat]
         agents[player_id] = _build_role(
-            seat_roles[seat], seat_rng(driver_seed, seat), checkpoint
+            seat_roles[seat], seat_rng(driver_seed, seat), checkpoint, search
         )
     assert all(a is not None for a in agents)
     return agents  # type: ignore[return-value]
@@ -367,7 +392,12 @@ def run_arm(
             "HeuristicAgent is hand-tuned against Phase 2's random-play "
             "results; a rule that helps against random opponents need not "
             "help against a good one. heuristic_vs_heuristic is the check.",
-            *([RL_KNOWN_BIAS] if mode in RL_MODES else []),
+            *(
+                [RL_KNOWN_BIAS]
+                if mode in RL_MODES or mode == "rl_search_vs_heuristic"
+                else []
+            ),
+            *([RL_SEARCH_KNOWN_BIAS] if mode == "rl_search_vs_heuristic" else []),
             *(
                 [RL_REJECT_KNOWN_BIAS]
                 if mode == "rl_reject_vs_trading_heuristic"
