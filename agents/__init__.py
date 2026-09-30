@@ -6,3 +6,4 @@ from .heuristic import HeuristicAgent as HeuristicAgent
 from .human import HumanAgent as HumanAgent
 from .random_agent import RandomAgent as RandomAgent
 from .random_agent import StratifiedRandomAgent as StratifiedRandomAgent
+from .trading_heuristic import TradingHeuristicAgent as TradingHeuristicAgent
