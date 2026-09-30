@@ -19,14 +19,18 @@ import random
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from typing import Literal
 
 from agents import Agent, StratifiedRandomAgent
 from engine.actions import (
+    AcceptTrade,
     Action,
     CounterTrade,
     EndTurn,
     PlaceSettlement,
+    PlayVictoryPoint,
     ProposeTrade,
+    RejectTrade,
     RollDice,
 )
 from engine.board import Cube, Resource
@@ -64,6 +68,22 @@ class ProductionEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class TradeEvent:
+    """One domestic-trade action. ``actor`` is who took the action;
+    ``proposer``/``give``/``receive``/``counter_of`` describe the offer it
+    concerns (for accept/reject, the offer being responded to; for a counter,
+    the new offer, whose ``counter_of`` is the original proposer)."""
+
+    turn: int
+    kind: Literal["propose", "counter", "accept", "reject"]
+    actor: int
+    proposer: int
+    give: dict[Resource, int]
+    receive: dict[Resource, int]
+    counter_of: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class GameRecord:
     engine_seed: int
     driver_seed: int
@@ -93,6 +113,11 @@ class GameRecord:
     agent_names: tuple[str, ...] = ()  # indexed by player id
     treatment_seat: int | None = None
     treatment_vertex: int | None = None
+    trade_events: tuple[TradeEvent, ...] = ()
+    # Indexed by player id: decisions where PlayVictoryPoint was legal, and
+    # decisions where the agent chose it (catan #34).
+    vp_card_legal_decisions: tuple[int, ...] = ()
+    vp_card_plays: tuple[int, ...] = ()
 
 
 def default_agent_factory(
@@ -144,6 +169,9 @@ def run_game(
     max_vp_observed_by = -1
     non_winner_exceeded_ten = False
     first_settlement_vertex: list[int | None] = [None] * num_players
+    trade_events: list[TradeEvent] = []
+    vp_legal = [0] * num_players
+    vp_plays = [0] * num_players
 
     while not game.is_terminal(state) and step_count < step_budget:
         legal = game.legal_actions(state)
@@ -163,6 +191,10 @@ def run_game(
                 )
         else:
             action = agent_list[actor].choose_action(state, legal, actor)
+            if any(isinstance(a, PlayVictoryPoint) for a in legal):
+                vp_legal[actor] += 1
+            if isinstance(action, PlayVictoryPoint):
+                vp_plays[actor] += 1
             if (
                 isinstance(action, ProposeTrade | CounterTrade)
                 and not action.give
@@ -176,6 +208,11 @@ def run_game(
                 )
 
         pre_phase = state.phase
+        offer_before = (
+            state.trade_offer
+            if isinstance(action, AcceptTrade | RejectTrade | CounterTrade)
+            else None
+        )
         pre_setup_position = state.setup_position
         pre_resources: list[dict[Resource, int]] | None = None
         if isinstance(action, RollDice):
@@ -183,6 +220,43 @@ def run_game(
 
         game.apply_action(state, action)
         step_count += 1
+
+        trade_turn = max(turn_count, 1)
+        if isinstance(action, ProposeTrade):
+            trade_events.append(
+                TradeEvent(
+                    trade_turn,
+                    "propose",
+                    actor,
+                    actor,
+                    dict(action.give),
+                    dict(action.receive),
+                )
+            )
+        elif isinstance(action, CounterTrade) and offer_before is not None:
+            trade_events.append(
+                TradeEvent(
+                    trade_turn,
+                    "counter",
+                    actor,
+                    actor,
+                    dict(action.give),
+                    dict(action.receive),
+                    counter_of=offer_before.proposer,
+                )
+            )
+        elif isinstance(action, AcceptTrade | RejectTrade) and offer_before is not None:
+            trade_events.append(
+                TradeEvent(
+                    trade_turn,
+                    "accept" if isinstance(action, AcceptTrade) else "reject",
+                    actor,
+                    offer_before.proposer,
+                    dict(offer_before.give),
+                    dict(offer_before.receive),
+                    counter_of=offer_before.counter_of,
+                )
+            )
 
         if (
             isinstance(action, PlaceSettlement)
@@ -254,6 +328,9 @@ def run_game(
         treatment_vertex=(
             scripted_setup.vertex_id if scripted_setup is not None else None
         ),
+        trade_events=tuple(trade_events),
+        vp_card_legal_decisions=tuple(vp_legal),
+        vp_card_plays=tuple(vp_plays),
     )
 
 

@@ -36,21 +36,29 @@ from __future__ import annotations
 
 import argparse
 import random
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Any
 
 from gamekit.benchmark import run_arm as _gk_run_arm
+from gamekit.mc import wilson_interval
 from gamekit.results import write_result
 from gamekit.seats import rotate, seat_rng
 
-from agents import CatanAgent, HeuristicAgent, RandomAgent
+from agents import CatanAgent, HeuristicAgent, RandomAgent, TradingHeuristicAgent
 from engine.game import CatanGame
 from experiments.rollout import GameRecord, run_many
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
+
+
+def _trading_2v2_lineup(n: int) -> tuple[str, ...]:
+    if n != 4:
+        raise ValueError("trading_heuristic_2v2 is a 4-player mode")
+    return ("trading_heuristic",) * 2 + ("heuristic",) * 2
+
 
 MODE_LINEUPS: dict[str, Callable[[int], tuple[str, ...]]] = {
     "random_vs_random": lambda n: tuple(["random"] * n),
@@ -58,9 +66,42 @@ MODE_LINEUPS: dict[str, Callable[[int], tuple[str, ...]]] = {
     "heuristic_vs_heuristic": lambda n: tuple(["heuristic"] * n),
     "rl_vs_random": lambda n: ("rl",) + tuple(["random"] * (n - 1)),
     "rl_vs_heuristic": lambda n: ("rl",) + tuple(["heuristic"] * (n - 1)),
+    # Trading-opponent modes (catan #28). HeuristicAgent never proposes and
+    # always rejects, so a lone TradingHeuristic among 3 Heuristics can never
+    # complete a trade (it replays heuristic_vs_heuristic exactly); the
+    # meaningful lineups need >= 2 traders.
+    "trading_heuristic_2v2": _trading_2v2_lineup,
+    "heuristic_vs_trading_heuristic": lambda n: (
+        ("heuristic",) + tuple(["trading_heuristic"] * (n - 1))
+    ),
+    "rl_reject_vs_trading_heuristic": lambda n: (
+        ("rl_reject",) + tuple(["trading_heuristic"] * (n - 1))
+    ),
 }
 
 RL_MODES = frozenset({"rl_vs_random", "rl_vs_heuristic"})
+
+# Every mode that loads a checkpoint (result names are qualified by its stem).
+CHECKPOINT_MODES = RL_MODES | {"rl_reject_vs_trading_heuristic"}
+
+RL_REJECT_KNOWN_BIAS = (
+    "The rl_reject seat is server.bots.RLSeatAgent, exactly as the web GUI "
+    "builds it: the policy plays everything except domestic-trade responses, "
+    "which always reject (its accept/reject atoms were never trained). It "
+    "never proposes either (propose/counter atoms are masked), so this is the "
+    "no-trading RL baseline at a table whose other seats do trade."
+)
+
+TRADING_KNOWN_BIAS = (
+    "TradingHeuristicAgent (agents/trading_heuristic.py) proposes at most 2 "
+    "trades a turn toward its next build target and accepts only offers that "
+    "strictly cut its own shortfall to it; it never counters. HeuristicAgent "
+    "and the rl_reject seat always reject, so in the mixed modes only "
+    "trading_heuristic seats can complete a trade, and only with each other. "
+    "Two seats of one role in a game cannot both win, so per-role win-rate "
+    "intervals in a role with several seats treat dependent seat outcomes as "
+    "independent."
+)
 
 RL_KNOWN_BIAS = (
     "The RL agent never *proposes* a domestic trade: rl/action_space.py "
@@ -77,8 +118,20 @@ def _build_role(
 ) -> CatanAgent:
     if role == "heuristic":
         return HeuristicAgent(name="heuristic")
+    if role == "trading_heuristic":
+        return TradingHeuristicAgent(name="trading_heuristic")
     if role == "random":
         return RandomAgent(rng, name="random")
+    if role == "rl_reject":
+        if checkpoint is None:
+            raise ValueError("the rl_* modes require --checkpoint")
+        # Reused as-is so the benchmark matches the GUI's forced-reject seat.
+        # Imported lazily; server.bots imports no fastapi.
+        from server.bots import RLSeatAgent
+
+        agent = RLSeatAgent(Path(checkpoint), rng)
+        agent.name = "rl_reject"  # must equal the role: record.agent_names keys by it
+        return agent
     if role == "rl":
         if checkpoint is None:
             raise ValueError("the rl_* modes require --checkpoint")
@@ -146,6 +199,91 @@ def _mean_resources_through_turn_10_by_role(
     return {role: sum(values) / len(values) for role, values in by_role.items()}
 
 
+def _trade_stats_by_role(records: Sequence[GameRecord]) -> dict[str, Any]:
+    """Domestic-trade statistics per role, from ``GameRecord.trade_events``.
+
+    ``proposals`` are fresh ``ProposeTrade``s (a proposal is offered to every
+    other seat in turn and accepted by at most one, so the acceptance rate is
+    per proposal). ``responses``/``accepted_as_responder`` count every
+    accept/reject a role's seats made, counters to their own proposals
+    included.
+    """
+    roles = sorted({name for r in records for name in r.agent_names})
+    stats: dict[str, dict[str, Any]] = {
+        role: {
+            "proposals": 0,
+            "counters": 0,
+            "proposals_accepted": 0,
+            "responses": 0,
+            "accepted_as_responder": 0,
+            "cards_given": 0,
+            "cards_received": 0,
+            "accepted_by_responder_role": Counter(),
+            "max_proposals_in_one_turn": 0,
+        }
+        for role in roles
+    }
+    completed = 0
+    for r in records:
+        per_turn: Counter[tuple[int, int]] = Counter()
+        for e in r.trade_events:
+            actor_role = r.agent_names[e.actor]
+            proposer_role = r.agent_names[e.proposer]
+            if e.kind == "propose":
+                stats[actor_role]["proposals"] += 1
+                per_turn[(e.actor, e.turn)] += 1
+            elif e.kind == "counter":
+                stats[actor_role]["counters"] += 1
+            else:
+                stats[actor_role]["responses"] += 1
+                if e.kind == "accept":
+                    completed += 1
+                    stats[actor_role]["accepted_as_responder"] += 1
+                    stats[proposer_role]["cards_given"] += sum(e.give.values())
+                    stats[proposer_role]["cards_received"] += sum(e.receive.values())
+                    stats[actor_role]["cards_given"] += sum(e.receive.values())
+                    stats[actor_role]["cards_received"] += sum(e.give.values())
+                    if e.counter_of is None:
+                        stats[proposer_role]["proposals_accepted"] += 1
+                        stats[proposer_role]["accepted_by_responder_role"][
+                            actor_role
+                        ] += 1
+        for (actor, _), n in per_turn.items():
+            role = r.agent_names[actor]
+            stats[role]["max_proposals_in_one_turn"] = max(
+                stats[role]["max_proposals_in_one_turn"], n
+            )
+    for s in stats.values():
+        n, k = s["proposals"], s["proposals_accepted"]
+        s["acceptance_rate"] = k / n if n else None
+        s["acceptance_rate_ci95"] = list(wilson_interval(k, n)) if n else None
+        s["accepted_by_responder_role"] = dict(s["accepted_by_responder_role"])
+    return {
+        "n_games": len(records),
+        "completed_trades": completed,
+        "completed_trades_per_game": completed / len(records),
+        "by_role": stats,
+    }
+
+
+def _vp_card_stats_by_role(records: Sequence[GameRecord]) -> dict[str, Any]:
+    """How often each role chose ``PlayVictoryPoint`` when it was legal
+    (catan #34: the action is dominated, so any positive rate is a leak)."""
+    totals: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    for r in records:
+        for pid, name in enumerate(r.agent_names):
+            totals[name][0] += r.vp_card_legal_decisions[pid]
+            totals[name][1] += r.vp_card_plays[pid]
+    return {
+        role: {
+            "legal_decisions": legal,
+            "plays": plays,
+            "plays_per_legal_decision": plays / legal if legal else None,
+        }
+        for role, (legal, plays) in sorted(totals.items())
+    }
+
+
 def run_arm(
     mode: str,
     num_players: int,
@@ -155,7 +293,7 @@ def run_arm(
     workers: int,
     checkpoint: str | None = None,
 ) -> dict[str, Any]:
-    if mode in RL_MODES and checkpoint is None:
+    if mode in CHECKPOINT_MODES and checkpoint is None:
         raise ValueError(f"mode {mode!r} requires a checkpoint")
     lineup = MODE_LINEUPS[mode](num_players)
 
@@ -213,6 +351,9 @@ def run_arm(
         "by_role": by_role,
         "by_seat": gk_payload["by_seat"],
         "comparisons": gk_payload["comparisons"],
+        "trade_stats": _trade_stats_by_role(records),
+        "vp_card_stats": _vp_card_stats_by_role(records),
+        "no_winner_games": sum(1 for r in records if r.winner is None),
         "known_biases": [
             "PlayVictoryPoint is not gated by has_played_dev_card_this_turn -- "
             "every agent reveals VP cards immediately. This no longer affects "
@@ -227,6 +368,12 @@ def run_arm(
             "results; a rule that helps against random opponents need not "
             "help against a good one. heuristic_vs_heuristic is the check.",
             *([RL_KNOWN_BIAS] if mode in RL_MODES else []),
+            *(
+                [RL_REJECT_KNOWN_BIAS]
+                if mode == "rl_reject_vs_trading_heuristic"
+                else []
+            ),
+            *([TRADING_KNOWN_BIAS] if "trading_heuristic" in lineup else []),
         ],
         "non_winner_exceeded_ten_rate": non_winner_exceeded_ten_rate,
     }
@@ -275,7 +422,7 @@ def _result_name(mode: str, num_players: int, checkpoint: str | None) -> str:
     is qualified by the checkpoint's stem, and each trained checkpoint gets
     its own permanent file.
     """
-    if mode not in RL_MODES or checkpoint is None:
+    if mode not in CHECKPOINT_MODES or checkpoint is None:
         return f"benchmark_{mode}_p{num_players}"
     return f"benchmark_{mode}_p{num_players}_{Path(checkpoint).stem}"
 

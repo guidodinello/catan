@@ -30,6 +30,7 @@ from agents.random_agent import (  # noqa: E402
     StratifiedRandomAgent,
 )
 from experiments.benchmark import (  # noqa: E402
+    CHECKPOINT_MODES,
     MODE_LINEUPS,
     RL_MODES,
     _build_role,
@@ -276,7 +277,7 @@ def test_result_name_is_unchanged_for_every_non_rl_mode() -> None:
     """One committed file per non-RL mode always means 'the current result
     for that mode' -- unaffected by anything checkpoint-related."""
     for mode in MODE_LINEUPS:
-        if mode in RL_MODES:
+        if mode in CHECKPOINT_MODES:
             continue
         assert _result_name(mode, 4, None) == f"benchmark_{mode}_p4"
         assert _result_name(mode, 4, "whatever.zip") == f"benchmark_{mode}_p4"
