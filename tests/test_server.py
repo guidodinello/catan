@@ -3,7 +3,8 @@
 gui-web-frontend.md``'s verification story).
 
 Rule under test: the HTTP API is a thin wrapper -- it never decides
-legality itself, redacts hidden information per viewer, and a game played
+legality itself (its one presentation filter: humans are never offered
+``PlayVictoryPoint``), redacts hidden information per viewer, and a game played
 purely through HTTP calls reaches the same kind of outcome
 (``is_terminal``/``winner``) a direct ``engine.game.CatanGame`` game would.
 """
@@ -17,10 +18,12 @@ from fastapi.testclient import TestClient
 
 import server.persistence as persistence_mod
 from agents import RandomAgent
+from engine.actions import PlayVictoryPoint
 from engine.board import Resource
 from engine.game import CITY_COST, DEV_CARD_COST, ROAD_COST, SETTLEMENT_COST
-from engine.state import Phase
+from engine.state import DevCard, DevCardType, Phase
 from server.app import app
+from server.bots import step_bots
 from server.sessions import get_session
 
 client = TestClient(app)
@@ -602,3 +605,64 @@ def test_state_endpoints_expose_the_dice_history() -> None:
         )
     # the initial bot batch may hold rolls of its own; the history covers all
     assert len(body["dice_history"]["rolls"]) >= trail_rolls > 0
+
+
+def _human_game_holding_a_vp_card() -> tuple[str, Any, int]:
+    body = _create_game(3, ["human", "human", "human"], seed=1)
+    game_id = body["game_id"]
+    session = get_session(game_id)
+    session.state.phase = Phase.MAIN
+    actor = session.state.current_player
+    session.state.players[actor].dev_hand = [
+        DevCard(DevCardType.VICTORY_POINT, bought_this_turn=False)
+    ]
+    engine_legal = session.game.legal_actions(session.state)
+    vp_index = next(
+        i for i, a in enumerate(engine_legal) if isinstance(a, PlayVictoryPoint)
+    )
+    return game_id, session, vp_index
+
+
+def test_get_legal_actions_hides_play_victory_point_from_humans() -> None:
+    game_id, session, _ = _human_game_holding_a_vp_card()
+    engine_legal = session.game.legal_actions(session.state)
+    assert any(isinstance(a, PlayVictoryPoint) for a in engine_legal)
+
+    served = client.get(f"/api/games/{game_id}/legal_actions").json()
+    assert served
+    assert all(a["kind"] != "PlayVictoryPoint" for a in served)
+    # Indices stay the engine's (the list has a gap), so a posted index
+    # still means the same action.
+    for entry in served:
+        assert type(engine_legal[entry["index"]]).__name__ == entry["kind"]
+
+
+def test_post_action_rejects_play_victory_point_from_a_human() -> None:
+    game_id, session, vp_index = _human_game_holding_a_vp_card()
+    actor = session.state.current_player
+
+    response = client.post(f"/api/games/{game_id}/action", json={"index": vp_index})
+
+    assert response.status_code == 400
+    assert "PlayVictoryPoint" in response.json()["detail"]
+    player = session.state.players[actor]
+    assert len(player.dev_hand) == 1
+    assert player.revealed_vp_cards == 0
+    assert session.state.phase == Phase.MAIN
+
+
+def test_bots_are_still_offered_play_victory_point() -> None:
+    _, session, _ = _human_game_holding_a_vp_card()
+    actor = session.state.current_player
+    seen: list[list[Any]] = []
+
+    class Recorder(RandomAgent):
+        def choose_action(self, state: Any, legal_actions: Any, player_idx: int) -> Any:
+            seen.append(list(legal_actions))
+            return super().choose_action(state, legal_actions, player_idx)
+
+    session.agents[actor] = Recorder(random.Random(0), name="random")
+    step_bots(session)
+
+    assert seen
+    assert any(isinstance(a, PlayVictoryPoint) for a in seen[0])

@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from engine.actions import CounterTrade, ProposeTrade
+from engine.actions import CounterTrade, PlayVictoryPoint, ProposeTrade
 from engine.board import Resource
 from engine.game import IllegalActionError
 from engine.state import acting_player
@@ -191,6 +191,13 @@ def get_state(game_id: str, viewer: int | None = None) -> dict[str, Any]:
     return _session_view(session, viewer)
 
 
+# VP cards count toward their holder's total automatically and stay hidden
+# until game over, so "playing" one only leaks information. The engine and
+# bots keep the action (decision 10 / #34); it is just never offered to a
+# human. Indices stay the engine's, so the served list may have gaps.
+HUMAN_HIDDEN_ACTION_KINDS = frozenset({"PlayVictoryPoint"})
+
+
 @app.get("/api/games/{game_id}/legal_actions")
 def get_legal_actions(game_id: str, viewer: int | None = None) -> list[dict[str, Any]]:
     session = _get_session_or_404(game_id)
@@ -202,7 +209,11 @@ def get_legal_actions(game_id: str, viewer: int | None = None) -> list[dict[str,
         return []
     if session.agents[actor] is not None:  # a bot seat -- nothing for a human to pick
         return []
-    return serialize_legal_actions(session.game.legal_actions(state))
+    return [
+        a
+        for a in serialize_legal_actions(session.game.legal_actions(state))
+        if a["kind"] not in HUMAN_HIDDEN_ACTION_KINDS
+    ]
 
 
 @app.post("/api/games/{game_id}/action")
@@ -226,6 +237,14 @@ def post_action(game_id: str, request: ActionRequest) -> dict[str, Any]:
             status_code=400, detail=f"action index {request.index} out of range"
         )
     action = legal[request.index]
+    if isinstance(action, PlayVictoryPoint):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "PlayVictoryPoint is not offered to human players: VP cards "
+                "count automatically and are revealed at game over"
+            ),
+        )
 
     if isinstance(action, ProposeTrade | CounterTrade):
         # Reconstruct the same class the sentinel was -- a counter must
