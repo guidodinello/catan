@@ -117,6 +117,20 @@ export interface TradeOfferView {
 }
 
 // server/serialize.py's player_view(): the redacted per-turn game state.
+// server/serialize.py's serialize_dice_history(): every RollDice applied in
+// the session, oldest first. `complete` is false for a game restored from a
+// snapshot saved before tracking existed -- its earlier rolls are gone.
+export interface DiceRollRecord {
+  turn: number;
+  player_id: number;
+  dice: [number, number];
+}
+
+export interface DiceHistoryView {
+  complete: boolean;
+  rolls: DiceRollRecord[];
+}
+
 export interface GameStateView {
   phase: string;
   current_player: number;
@@ -132,6 +146,8 @@ export interface GameStateView {
   trade_offer: TradeOfferView | null;
   trade_responders: number[];
   winner: number | null;
+  // Optional so a newer frontend still works against a server without it.
+  dice_history?: DiceHistoryView;
 }
 
 // server/serialize.py's serialize_trail_entry(): one already-applied action

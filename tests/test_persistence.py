@@ -188,3 +188,91 @@ def test_a_version_1_snapshot_is_discarded() -> None:
     with path.open("wb") as f:
         pickle.dump(old, f)
     assert load_all() == {}
+
+
+def _play_some_turns(session: GameSession, n_actions: int = 60) -> None:
+    from server.bots import apply_to_session
+
+    for _ in range(n_actions):
+        if session.game.is_terminal(session.state):
+            return
+        from engine.state import acting_player
+
+        actor = acting_player(session.state)
+        legal = session.game.legal_actions(session.state)
+        apply_to_session(session, actor, legal[0])
+
+
+def test_dice_history_round_trips() -> None:
+    game_id, session = create_session(3, [None, None, None], seed=3)
+    _play_some_turns(session, 80)
+    assert session.dice_rolls  # the fixture actually rolled something
+    save_session(game_id, session)
+
+    restored = load_all()[game_id]
+
+    assert restored.dice_rolls == session.dice_rolls
+    assert restored.dice_history_complete is True
+
+
+def _write_old_shape_snapshot(
+    game_id: str, session: GameSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dump a snapshot as it was saved before dice tracking: same class name
+    and module, without the trailing dice fields. Pickle checks the class
+    object's identity, so ``persistence._Snapshot`` is swapped for the old
+    shape only for the duration of the dump.
+    """
+
+    @dataclasses.dataclass(frozen=True, slots=True)
+    class _Snapshot:
+        format_version: int
+        fingerprint: str
+        saved_at: float
+        num_players: int
+        seat_kinds: list
+        state: object
+        turn_count: int
+        rl_checkpoint: str | None
+
+    _Snapshot.__module__ = persistence_mod.__name__
+    _Snapshot.__qualname__ = "_Snapshot"
+    old = _Snapshot(
+        format_version=persistence_mod.FORMAT_VERSION,
+        fingerprint=shape_fingerprint(),
+        saved_at=time.time(),
+        num_players=len(session.agents),
+        seat_kinds=persistence_mod._seat_kinds(session),
+        state=session.state,
+        turn_count=session.turn_count,
+        rl_checkpoint=None,
+    )
+    with monkeypatch.context() as m:
+        m.setattr(persistence_mod, "_Snapshot", _Snapshot)
+        with _snapshot_path(game_id).open("wb") as f:
+            pickle.dump(old, f)
+
+
+def test_a_pre_dice_snapshot_loads_with_incomplete_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    game_id, session = _bot_session()
+    session.turn_count = 5
+    _write_old_shape_snapshot(game_id, session, monkeypatch)
+
+    restored = load_all()[game_id]
+
+    assert restored.dice_rolls == []
+    assert restored.dice_history_complete is False
+    legal = restored.game.legal_actions(restored.state)
+    restored.game.apply_action(restored.state, legal[0])  # still playable
+
+
+def test_a_pre_dice_snapshot_before_any_turn_counts_as_complete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    game_id, session = _bot_session()
+    assert session.turn_count == 0
+    _write_old_shape_snapshot(game_id, session, monkeypatch)
+
+    assert load_all()[game_id].dice_history_complete is True

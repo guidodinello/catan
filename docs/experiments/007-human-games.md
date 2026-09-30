@@ -112,3 +112,9 @@ To be filled in when the games are played: catan commit, torch/sb3-contrib versi
 
 - Trade-learning agent: [catan #28](https://github.com/guidodinello/catan/issues/28), gamekit note 012. A fair human match *with* trading needs it.
 - Proposed gamekit note (follow-up PR there): "human baseline as a sanity check for a hand-written heuristic / learned agent".
+
+### Amendment (2026-09-29): per-game dice counts
+
+Additive, and not part of the pre-registered rules or the verdict. From the commit that adds the dice histogram, a finished game's record also carries `dice_counts` (times each total 2-12 was rolled), the full `dice_rolls` list (`[turn, player_id, d1, d2]`), and `dice_history_complete`. The tabulator reports them per game and, as `dice_totals`, aggregated (observed vs. fair-dice expectation) over finished games with a complete history. This exists so dice luck can be *described* alongside each result; no test is applied to it.
+
+Games already under way when the server was first restarted onto this code have `dice_history_complete: false` (their earlier rolls were never recorded and cannot be recovered), and games finished before it have no dice fields at all. Both are excluded from `dice_totals`.

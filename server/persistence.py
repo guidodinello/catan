@@ -40,6 +40,16 @@ losing a bot's exact RNG position only costs perfect reproducibility, not
 correctness -- and it keeps every class in ``agents/`` out of the save
 format, so nothing there can invalidate a snapshot.
 
+**Adding session-level fields later.** ``_Snapshot`` is a slots dataclass, so
+new fields must be *appended at the end* and given defaults: pickle restores
+slots state positionally, and an old snapshot then simply leaves the trailing
+new fields unset (measured on py3.14) instead of failing. Read them with
+``getattr(snapshot, name, default)`` -- never bump ``FORMAT_VERSION`` for an
+additive field, that would discard live games. ``dice_rolls`` (a
+``server/sessions.py`` type, not engine state) is such a field, so it is
+deliberately not in the shape fingerprint; a snapshot that predates it loads
+with an empty history flagged ``dice_history_complete=False``.
+
 **Security note:** ``pickle.load`` runs arbitrary code for a maliciously
 crafted file, but every snapshot here is written by this same process (never
 accepted from a client or network peer) into a directory the server itself
@@ -76,7 +86,8 @@ from .bots import (
     build_agents,
     rl_checkpoint_id,
 )
-from .sessions import _TTL_SECONDS, GameSession
+from .serialize import dice_counts
+from .sessions import _TTL_SECONDS, DiceRoll, GameSession
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +137,9 @@ class _Snapshot:
     state: GameState
     turn_count: int
     rl_checkpoint: str | None  # rebuilt with this, not the current env var
+    # Appended last, with defaults -- see the module docstring.
+    dice_rolls: tuple[DiceRoll, ...] = ()
+    dice_history_complete: bool = True
 
 
 def _snapshot_path(game_id: str) -> Path:
@@ -159,6 +173,8 @@ def save_session(game_id: str, session: GameSession) -> None:
         state=session.state,
         turn_count=session.turn_count,
         rl_checkpoint=session.rl_checkpoint,
+        dice_rolls=tuple(session.dice_rolls),
+        dice_history_complete=session.dice_history_complete,
     )
     path = _snapshot_path(game_id)
     tmp_path = path.with_suffix(".pickle.tmp")
@@ -219,12 +235,30 @@ def _load_one(path: Path) -> tuple[str, GameSession] | None:
     except RLSeatUnavailableError as exc:
         logger.warning("skipping session %r: rl seat unavailable: %s", game_id, exc)
         return None
+    # A snapshot saved before dice tracking has no such attribute at all.
+    # Its rolls are unrecoverable, so its history is complete only if no
+    # turn had been played yet.
+    saved_rolls = getattr(snapshot, "dice_rolls", None)
+    if saved_rolls is None:
+        rolls: list[DiceRoll] = []
+        history_complete = snapshot.turn_count == 0
+        if not history_complete:
+            logger.info(
+                "session %r predates dice tracking: counting from turn %d",
+                game_id,
+                snapshot.turn_count,
+            )
+    else:
+        rolls = list(saved_rolls)
+        history_complete = getattr(snapshot, "dice_history_complete", True)
     session = GameSession(
         game=game,
         state=snapshot.state,
         agents=agents,
         turn_count=snapshot.turn_count,
         rl_checkpoint=snapshot.rl_checkpoint,
+        dice_rolls=rolls,
+        dice_history_complete=history_complete,
     )
     return game_id, session
 
@@ -311,6 +345,11 @@ def write_game_record(
         record["winner_kind"] = None if state.winner is None else kinds[state.winner]
         record["vp_true"] = [true_victory_points(state, i) for i in range(len(kinds))]
         record["vp_public"] = [victory_points(state, i) for i in range(len(kinds))]
+        record["dice_history_complete"] = session.dice_history_complete
+        record["dice_counts"] = dice_counts(session.dice_rolls)
+        record["dice_rolls"] = [
+            [r.turn, r.player_id, r.d1, r.d2] for r in session.dice_rolls
+        ]
     GAMES_DIR.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(".json.tmp")
     tmp_path.write_text(json.dumps(record, indent=2))

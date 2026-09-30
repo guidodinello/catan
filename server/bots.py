@@ -37,6 +37,8 @@ from engine.board import Resource
 from engine.game import CatanGame
 from engine.state import GameState, Phase, TradeOffer, acting_player
 
+from .sessions import DiceRoll
+
 if TYPE_CHECKING:
     from .sessions import GameSession
 
@@ -277,6 +279,9 @@ def apply_to_session(session: GameSession, actor: int, action: Action) -> TrailE
     state = session.state
     pre_phase = state.phase
     entry = apply_and_record(state, session.game, actor, action)
+    if entry.dice_roll is not None:
+        d1, d2 = entry.dice_roll
+        session.dice_rolls.append(DiceRoll(session.turn_count, actor, d1, d2))
     if pre_phase is Phase.SETUP_ROAD and state.phase is Phase.ROLL:
         session.turn_count = 1
     elif isinstance(action, EndTurn):

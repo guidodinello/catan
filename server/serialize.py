@@ -24,6 +24,7 @@ from engine.game import (
 )
 from engine.state import GameState, PlayerState, TradeOffer, acting_player
 from server.bots import TrailEntry
+from server.sessions import DiceRoll
 
 
 def _cube_to_list(hexagon: Cube) -> list[int]:
@@ -289,3 +290,29 @@ def serialize_trail_entry(entry: TrailEntry) -> dict[str, Any]:
 
 def serialize_trail(entries: list[TrailEntry]) -> list[dict[str, Any]]:
     return [serialize_trail_entry(e) for e in entries]
+
+
+DICE_TOTALS = range(2, 13)
+
+
+def dice_counts(rolls: list[DiceRoll]) -> dict[str, int]:
+    """How many times each total 2-12 was rolled (string keys, like every
+    other JSON object here); shared by the wire view and the game record.
+    """
+    counts = {str(t): 0 for t in DICE_TOTALS}
+    for roll in rolls:
+        counts[str(roll.total)] += 1
+    return counts
+
+
+def serialize_dice_history(rolls: list[DiceRoll], complete: bool) -> dict[str, Any]:
+    """The session's full roll history, public like every roll. ``complete``
+    is False for a game restored from a snapshot that predates tracking.
+    """
+    return {
+        "complete": complete,
+        "rolls": [
+            {"turn": r.turn, "player_id": r.player_id, "dice": [r.d1, r.d2]}
+            for r in rolls
+        ],
+    }

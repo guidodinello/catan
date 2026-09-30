@@ -22,6 +22,8 @@
   import GameSetup, { type NewGameConfig } from "./lib/GameSetup.svelte";
   import HandSummary from "./lib/HandSummary.svelte";
   import Scoreboard from "./lib/Scoreboard.svelte";
+  import DiceHistogram from "./lib/DiceHistogram.svelte";
+  import { visibleRolls } from "./lib/diceStats";
   import { firstEdgeCandidates, secondEdgeCandidates } from "./lib/roadBuilding";
   import { recentRolls as recentRollsFrom } from "./lib/actionLog";
   import { PLAYER_COLOR } from "./lib/playerColor";
@@ -205,6 +207,15 @@
     pendingTrail = [];
     isBusy = false;
   }
+
+  // gameState jumps ahead of the paced log, so hold back any roll whose
+  // RollDice entry hasn't been revealed yet -- see visibleRolls.
+  const shownRolls = $derived.by(() =>
+    visibleRolls(
+      gameState?.dice_history,
+      pendingTrail.filter((e) => e.kind === "RollDice").length,
+    ),
+  );
 
   const isGameOver = $derived.by(() => gameState !== null && gameState.phase === "GAME_OVER");
 
@@ -559,6 +570,15 @@
         {:else}
           <p>Game over.</p>
         {/if}
+        {#if gameState.dice_history}
+          <h3 class="panel-label">Dice rolls</h3>
+          <DiceHistogram
+            rolls={shownRolls}
+            numPlayers={gameState.players.length}
+            complete={gameState.dice_history.complete}
+            variant="full"
+          />
+        {/if}
         {#if engineSeed !== null}
           <p class="seed">Engine seed: {engineSeed}</p>
         {/if}
@@ -613,6 +633,16 @@
             recentRolls={recentRollsFrom(revealedLog)}
             resources={viewer !== undefined ? gameState.players[viewer].resources : undefined}
           />
+          {#if gameState.dice_history}
+            <details class="dice-panel panel">
+              <summary>Dice rolls ({shownRolls.length})</summary>
+              <DiceHistogram
+                rolls={shownRolls}
+                numPlayers={gameState.players.length}
+                complete={gameState.dice_history.complete}
+              />
+            </details>
+          {/if}
           {#if buildCosts}
             <BuildCosts costs={buildCosts} />
           {/if}
@@ -752,12 +782,28 @@
      above it so .disabled's pointer-events:none (during Play Road
      Building) doesn't also swallow clicks on the road-building banner's
      own Cancel button. */
+  /* Never shrinks below its content (flex-shrink 0, auto basis): when the
+     panels stack taller than the sidebar, .panel-column scrolls instead of
+     squeezing a panel -- a `min-height: 0` here used to let Recent activity
+     collapse to just its header. It still grows to fill spare height. */
   .panels {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    flex: 1;
-    min-height: 0;
+    flex: 1 0 auto;
+  }
+
+  .dice-panel {
+    flex: none;
+  }
+
+  .dice-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .dice-panel[open] summary {
+    margin-bottom: var(--space-2);
   }
 
   .panels.disabled {

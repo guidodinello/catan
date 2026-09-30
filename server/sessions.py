@@ -23,6 +23,23 @@ from engine.state import GameState
 _TTL_SECONDS = 2 * 60 * 60  # 2 hours -- a local dev/demo tool, not a service
 
 
+@dataclass(frozen=True, slots=True)
+class DiceRoll:
+    """One ``RollDice`` applied in a session: the turn it happened on (by
+    ``turn_count``), who rolled, and the two dice. The engine keeps only the
+    current roll, so this server-side list is the game's full roll history.
+    """
+
+    turn: int
+    player_id: int
+    d1: int
+    d2: int
+
+    @property
+    def total(self) -> int:
+        return self.d1 + self.d2
+
+
 class SessionNotFoundError(Exception):
     """Raised when a ``game_id`` has no active session (missing or evicted)."""
 
@@ -39,6 +56,12 @@ class GameSession:
     # Path of the checkpoint any ``rl`` seat was built from (``None`` if there
     # is no rl seat) -- persisted so a restore rebuilds the same model.
     rl_checkpoint: str | None = None
+    # Every ``RollDice`` applied so far, in order (``server/bots.py``'s
+    # ``apply_to_session``). ``dice_history_complete`` is False when the game
+    # was restored from a snapshot saved before this was tracked -- the rolls
+    # before that point are unrecoverable, so counts are partial.
+    dice_rolls: list[DiceRoll] = field(default_factory=list)
+    dice_history_complete: bool = True
 
     def seat_kind(self, player_id: int) -> Literal["human", "bot"]:
         return "human" if self.agents[player_id] is None else "bot"
