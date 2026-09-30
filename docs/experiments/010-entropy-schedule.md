@@ -45,6 +45,8 @@ Run from the worktree `../catan-40-entropy` (branch `exp/40-entropy-schedule`), 
 
 **Deviations from 004:** CUDA update; current in-loop eval scheme (README §In-loop eval caveats: guard + fresh-seed reported eval); `--regression-patience 1000` for all three arms equally, which only removes the stop rule (it does not change training) so no arm can stop before its fixed 3M checkpoint exists; per-arm run/TB dirs; fresh control (above).
 
+**Aborted first start (disclosed).** A first start of the measured runs on 2026-09-29 ~23:09 was aborted at ~750k-1M steps of `catan_ent_ctrl` (last completed 250k chunk: 750,000) for a laptop shutdown. Its outputs were not used (the in-loop evals it printed are unread as results); they are archived, gitignored, under `rl_runs/exp010/aborted_2026-09-29/`. All arms were restarted from scratch (not `--resume`).
+
 ## Metric and gate
 
 `experiments.benchmark --mode rl_vs_heuristic --games 4000 --players 4 --engine-seed-base 1 --driver-seed-base 1 --workers <=12` on each arm's **fixed `<label>_3000000.zip`** (not the in-loop best), seat-rotated, `RLAgent(deterministic=True)`, Wilson CIs, result JSONs named by checkpoint stem (`benchmark_rl_vs_heuristic_p4_catan_ent_<arm>_3000000.json`). `rl_vs_heuristic` is 3 plain `HeuristicAgent`s (`experiments/benchmark.py`). Same boards as 004/006.
