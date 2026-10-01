@@ -1,0 +1,375 @@
+{
+  "none": {
+    "n": 4000,
+    "wins": 829,
+    "win_rate": 0.20725,
+    "wilson95": [
+      0.194972494729683,
+      0.2200892593164372
+    ],
+    "latency": {},
+    "provenance": {
+      "chunks": 20,
+      "git_commits": [
+        "e58c76b951e5626a16d37fe4ab31fdd1b0735be6"
+      ],
+      "config_hashes": [
+        "813abcc818ba"
+      ],
+      "config": {
+        "arm": "none",
+        "sims": 0,
+        "mode": "rl_vs_heuristic",
+        "checkpoint_sha256_12": "e8001d3e81ba",
+        "timing_only": false
+      },
+      "workers": [
+        16
+      ],
+      "wall_s_sum": 114.16803458001232,
+      "module_paths_inside_worktree": true
+    }
+  },
+  "heur_s128": {
+    "n": 4000,
+    "wins": 1385,
+    "win_rate": 0.34625,
+    "wilson95": [
+      0.33165973156593315,
+      0.3611352972456502
+    ],
+    "latency": {
+      "decisions": 454048,
+      "searched": 212304,
+      "skip_rate": 0.5324194798787794,
+      "ms_mean": 844.9380040790564,
+      "ms_p95": 1537.074,
+      "ms_max": 5128.557,
+      "sims_per_s": 151.49040448182242,
+      "override_rate": 0.09326249152159168,
+      "override_by_phase": {
+        "DISCARD": [
+          8497,
+          0.06225726727080146
+        ],
+        "MAIN": [
+          117014,
+          0.13147144786093973
+        ],
+        "MOVE_ROBBER": [
+          32939,
+          0.057834178329639635
+        ],
+        "ROLL": [
+          19265,
+          0.04220088242927589
+        ],
+        "SETUP_ROAD": [
+          8000,
+          0.0
+        ],
+        "SETUP_SETTLEMENT": [
+          8000,
+          0.124375
+        ],
+        "STEAL": [
+          18589,
+          0.0093603744149766
+        ]
+      },
+      "worker_s_per_game": 45.23516447014773,
+      "peak_rss_mb": 372.5625
+    },
+    "provenance": {
+      "chunks": 20,
+      "git_commits": [
+        "e58c76b951e5626a16d37fe4ab31fdd1b0735be6"
+      ],
+      "config_hashes": [
+        "d5d2b2eb2776"
+      ],
+      "config": {
+        "arm": "heur",
+        "sims": 128,
+        "mode": "rl_search_vs_heuristic",
+        "checkpoint_sha256_12": "e8001d3e81ba",
+        "timing_only": false
+      },
+      "workers": [
+        16
+      ],
+      "wall_s_sum": 12023.558357709,
+      "module_paths_inside_worktree": true
+    }
+  },
+  "self_s64": {
+    "n": 1000,
+    "wins": 272,
+    "win_rate": 0.272,
+    "wilson95": [
+      0.24533124703883707,
+      0.30041375483057603
+    ],
+    "latency": {
+      "decisions": 113974,
+      "searched": 52789,
+      "skip_rate": 0.5368329619035921,
+      "ms_mean": 1805.9429682509613,
+      "ms_p95": 3787.392,
+      "ms_max": 45065.608,
+      "sims_per_s": 35.4385499017078,
+      "override_rate": 0.08621114247286367,
+      "override_by_phase": {
+        "DISCARD": [
+          2168,
+          0.05581180811808118
+        ],
+        "MAIN": [
+          29019,
+          0.12588304214480167
+        ],
+        "MOVE_ROBBER": [
+          8242,
+          0.050715845668527056
+        ],
+        "ROLL": [
+          4603,
+          0.03845318270693026
+        ],
+        "SETUP_ROAD": [
+          2000,
+          0.0
+        ],
+        "SETUP_SETTLEMENT": [
+          2000,
+          0.0735
+        ],
+        "STEAL": [
+          4757,
+          0.007357578305654824
+        ]
+      },
+      "worker_s_per_game": 95.77617331901803,
+      "peak_rss_mb": 366.92578125
+    },
+    "provenance": {
+      "chunks": 5,
+      "git_commits": [
+        "e58c76b951e5626a16d37fe4ab31fdd1b0735be6"
+      ],
+      "config_hashes": [
+        "f4f618dab5fa"
+      ],
+      "config": {
+        "arm": "self",
+        "sims": 64,
+        "mode": "rl_search_vs_heuristic",
+        "checkpoint_sha256_12": "e8001d3e81ba",
+        "timing_only": false
+      },
+      "workers": [
+        16
+      ],
+      "wall_s_sum": 6312.200162464,
+      "module_paths_inside_worktree": true
+    }
+  },
+  "heur_s32": {
+    "n": 1000,
+    "wins": 263,
+    "win_rate": 0.263,
+    "wilson95": [
+      0.2366568597910784,
+      0.2911570237310747
+    ],
+    "latency": {
+      "decisions": 114400,
+      "searched": 52738,
+      "skip_rate": 0.5390034965034964,
+      "ms_mean": 162.76695712768782,
+      "ms_p95": 311.267,
+      "ms_max": 952.101,
+      "sims_per_s": 196.60009970510512,
+      "override_rate": 0.08417080662899618,
+      "override_by_phase": {
+        "DISCARD": [
+          2183,
+          0.04580852038479157
+        ],
+        "MAIN": [
+          29254,
+          0.12035960894236686
+        ],
+        "MOVE_ROBBER": [
+          8171,
+          0.060947252478276835
+        ],
+        "ROLL": [
+          4497,
+          0.03224371803424505
+        ],
+        "SETUP_ROAD": [
+          2000,
+          0.0
+        ],
+        "SETUP_SETTLEMENT": [
+          2000,
+          0.0665
+        ],
+        "STEAL": [
+          4633,
+          0.009065400388517159
+        ]
+      },
+      "worker_s_per_game": 8.97367295634098,
+      "peak_rss_mb": 360.3828125
+    },
+    "provenance": {
+      "chunks": 5,
+      "git_commits": [
+        "e58c76b951e5626a16d37fe4ab31fdd1b0735be6"
+      ],
+      "config_hashes": [
+        "cd5d7a87d6a0"
+      ],
+      "config": {
+        "arm": "heur",
+        "sims": 32,
+        "mode": "rl_search_vs_heuristic",
+        "checkpoint_sha256_12": "e8001d3e81ba",
+        "timing_only": false
+      },
+      "workers": [
+        16
+      ],
+      "wall_s_sum": 603.5798967869996,
+      "module_paths_inside_worktree": true
+    }
+  },
+  "heur_s64": {
+    "n": 1000,
+    "wins": 298,
+    "win_rate": 0.298,
+    "wilson95": [
+      0.27046858673913043,
+      0.3270774236890338
+    ],
+    "latency": {
+      "decisions": 114972,
+      "searched": 53472,
+      "skip_rate": 0.5349128483456842,
+      "ms_mean": 371.49365226660683,
+      "ms_p95": 694.079,
+      "ms_max": 3405.879,
+      "sims_per_s": 172.27750624947325,
+      "override_rate": 0.0872980251346499,
+      "override_by_phase": {
+        "DISCARD": [
+          2181,
+          0.051811095827602016
+        ],
+        "MAIN": [
+          29528,
+          0.12452587374695205
+        ],
+        "MOVE_ROBBER": [
+          8306,
+          0.05586323139898868
+        ],
+        "ROLL": [
+          4732,
+          0.037193575655114115
+        ],
+        "SETUP_ROAD": [
+          2000,
+          0.0005
+        ],
+        "SETUP_SETTLEMENT": [
+          2000,
+          0.1025
+        ],
+        "STEAL": [
+          4725,
+          0.006772486772486773
+        ]
+      },
+      "worker_s_per_game": 20.25502014008499,
+      "peak_rss_mb": 369.16796875
+    },
+    "provenance": {
+      "chunks": 5,
+      "git_commits": [
+        "e58c76b951e5626a16d37fe4ab31fdd1b0735be6"
+      ],
+      "config_hashes": [
+        "b9a373659e5d"
+      ],
+      "config": {
+        "arm": "heur",
+        "sims": 64,
+        "mode": "rl_search_vs_heuristic",
+        "checkpoint_sha256_12": "e8001d3e81ba",
+        "timing_only": false
+      },
+      "workers": [
+        16
+      ],
+      "wall_s_sum": 1345.083733319001,
+      "module_paths_inside_worktree": true
+    }
+  },
+  "vs_baseline": {
+    "heur_s128": {
+      "n": 4000,
+      "wins_a": 1385,
+      "wins_b": 829,
+      "rate_a": 0.34625,
+      "rate_b": 0.20725,
+      "diff": 0.139,
+      "z": 13.89446285726089,
+      "p_value": 0.0,
+      "mcnemar_p": 3.2951953331231993e-74,
+      "only_a": 770,
+      "only_b": 214
+    },
+    "self_s64": {
+      "n": 1000,
+      "wins_a": 272,
+      "wins_b": 216,
+      "rate_a": 0.272,
+      "rate_b": 0.216,
+      "diff": 0.056,
+      "z": 2.9155280108877024,
+      "p_value": 0.003550872307341635,
+      "mcnemar_p": 6.45610390025889e-05,
+      "only_a": 124,
+      "only_b": 68
+    },
+    "heur_s32": {
+      "n": 1000,
+      "wins_a": 263,
+      "wins_b": 216,
+      "rate_a": 0.263,
+      "rate_b": 0.216,
+      "diff": 0.047,
+      "z": 2.462524114350973,
+      "p_value": 0.01379628951347045,
+      "mcnemar_p": 0.0008819823006755221,
+      "only_a": 120,
+      "only_b": 73
+    },
+    "heur_s64": {
+      "n": 1000,
+      "wins_a": 298,
+      "wins_b": 216,
+      "rate_a": 0.298,
+      "rate_b": 0.216,
+      "diff": 0.082,
+      "z": 4.196023250666074,
+      "p_value": 2.7164237339949437e-05,
+      "mcnemar_p": 2.0877329929763937e-08,
+      "only_a": 148,
+      "only_b": 66
+    }
+  }
+}

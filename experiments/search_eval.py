@@ -264,6 +264,25 @@ def load_arm(arm_dir: Path) -> list[dict[str, Any]]:
     return sorted(games, key=lambda g: g["e"])
 
 
+def provenance(arm_dir: Path) -> dict[str, Any]:
+    """Where an arm's chunks came from: commits, configs, workers, modules."""
+    chunks = [json.loads(f.read_text()) for f in sorted(arm_dir.glob("chunk_*.json"))]
+    return {
+        "chunks": len(chunks),
+        "git_commits": sorted({c["git_commit"] for c in chunks}),
+        "config_hashes": sorted({c["config_hash"] for c in chunks}),
+        "config": chunks[0]["config"],
+        "workers": sorted({c["workers"] for c in chunks}),
+        "wall_s_sum": sum(c["wall_s"] for c in chunks),
+        "module_paths_inside_worktree": all(
+            Path(p).is_relative_to(ROOT)
+            for c in chunks
+            for m in c["module_paths"]
+            for p in m.values()
+        ),
+    }
+
+
 def _pct(xs: Sequence[float], q: float) -> float:
     s = sorted(xs)
     return s[min(len(s) - 1, int(q * len(s)))]
@@ -355,6 +374,8 @@ def analyze(args: argparse.Namespace) -> None:
     root = Path(args.out_dir)
     arms = {name: load_arm(root / name) for name in args.arm_dirs}
     report: dict[str, Any] = {n: arm_summary(g) for n, g in arms.items()}
+    for n in arms:
+        report[n]["provenance"] = provenance(root / n)
     if args.baseline:
         base = arms[args.baseline]
         report["vs_baseline"] = {

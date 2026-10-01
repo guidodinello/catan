@@ -1,9 +1,9 @@
 # Decision-time search over the current checkpoint (issue #41)
 
-**Date:** pre-registered 2026-09-30 (commit: see Status); measured runs pending
+**Date:** pre-registered 2026-09-30 (commit `e58c76b`); measured runs 2026-09-30 / 2026-10-01
 **Note:** [gamekit#021 — Decision-time search: ISMCTS with the trained policy/value network as priors](https://github.com/guidodinello/gamekit/blob/main/docs/research/021-decision-time-search.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Builds on [009 — critic calibration](009-critic-calibration.md), whose Verdict says how the critic may be used as a leaf. A gamekit follow-up (link this log from 021, record the design departures below) is proposed in the PR, not edited there.
 
-**Status: pre-registered, not yet measured.** The smoke/timing runs below were committed to fix the budget *before* any measured run; they read no win rate. The commit that carries this file is the pre-registration commit; the result JSONs will carry that `git_commit` or a later one.
+**Status: complete.** The pre-registration and the code were committed (`e58c76b`) before any measured run; every chunk of every result carries that `git_commit`, checkpoint sha `e8001d3e81ba`, and module paths inside the worktree. The smoke/timing runs below read no win rate. A1 was stopped on purpose overnight and resumed (see Deviations).
 
 ## Hypothesis
 
@@ -109,11 +109,57 @@ catan commit: the result JSON records `git_commit`; existing main-checkout `.ven
 
 ## Result
 
-Not yet measured.
+Result JSON: `experiments/results/search_eval_011.json` (all numbers below are from it; the raw per-chunk rows are in `rl_runs/search_eval/`, gitignored). 16 workers throughout; peak worker RSS 373 MB, no memory warning.
+
+**A0 replication (pre-registered check).** The driver's no-search rerun gives **829/4000 = 20.72% [19.50, 22.01]**, exactly 006's number, so the harness, the seed/seat mapping and the checkpoint are the ones 006 measured.
+
+### Win rates (3 `HeuristicAgent` opponents, seat-rotated, seeds 1..n)
+
+| arm | simulations (S) | n | wins | win rate [Wilson 95%] | vs A0 on the same boards |
+|---|---|---|---|---|---|
+| A0 no search | 0 | 4000 | 829 | 20.72% [19.50, 22.01] | – |
+| **A1 `heur`** (known opponent model, upper bound) | 128 | 4000 | 1385 | **34.62% [33.17, 36.11]** | **+13.9 pts**, z = 13.89, p < 1e-40 (two-proportion); exact McNemar p ≈ 3e-74 (770 boards won only with search, 214 only without) |
+| **A2 `self`** (opponents = own policy; the transferable number, exploratory) | 64 | 1000 | 272 | 27.20% [24.53, 30.04] | +5.6 pts vs 21.6% (216/1000), z = 2.92, p = 0.0036; McNemar p = 6e-5 (124 vs 68) |
+| C1 `heur` | 32 | 1000 | 263 | 26.30% [23.67, 29.12] | +4.7 pts, z = 2.46, p = 0.014 |
+| C2 `heur` | 64 | 1000 | 298 | 29.80% [27.05, 32.71] | +8.2 pts, z = 4.20, p = 3e-5 |
+| A1 on the first 1000 boards | 128 | 1000 | 353 | 35.30% [32.40, 38.31] | +13.7 pts, z = 6.79 |
+
+- **Budget curve (`heur`, the same 1000 boards, 0 / 32 / 64 / 128 simulations): 21.6% → 26.3% → 29.8% → 35.3%.** Monotone, with no sign of saturation at the chosen S = 128. S = 128 vs S = 64 on the same boards is +5.5 pts (post-hoc, z = 2.62, p = 0.009, McNemar p = 2e-4).
+- **Equal-budget opponent-model comparison (post-hoc, not pre-registered).** `heur` S = 64 (29.8%) vs `self` S = 64 (27.2%): −2.6 pts for not knowing the opponents, z = 1.29, p = 0.20 (McNemar p = 0.093). n = 1000 cannot resolve a difference of that size, so this neither confirms nor excludes a cost of the self-model.
+- **The gain is not seat-specific.** A1 minus A0 by rotation position (`engine_seed % 4` = 0, 1, 2, 3): +12.8, +11.3, +16.9, +14.6 pts.
+
+### Decision latency, throughput, overrides (per searched decision, 16 concurrent workers on a 20-core laptop, so an upper-ish figure)
+
+| arm | S | mean ms | p95 | max | sims/s | override | worker-s/game |
+|---|---|---|---|---|---|---|---|
+| `heur` | 32 | 163 | 311 | 952 | 197 | 8.4% | 9.0 |
+| `heur` | 64 | 371 | 694 | 3406 | 172 | 8.7% | 20.3 |
+| **`heur`** | **128** | **845** | **1537** | **5129** | 151 | **9.3%** | **45.2** |
+| `self` | 64 | 1806 | 3787 | 45066 | 35 | 8.6% | 95.8 |
+
+- 53% of the rl seat's top-level decisions have one legal action and are not searched (53 searched decisions per game). Averaged over *all* top-level decisions, including the skipped ones, the cost is **395 ms (A1)** and **837 ms (A2)** per decision.
+- A1 overrides the greedy action in 9.3% of searched decisions: MAIN 13.1%, first settlement 12.4%, discard 6.2%, robber 5.8%, roll 4.2%, steal 0.9%, setup road 0.0%. About one searched decision in eleven is enough for +13.9 points.
+- Measured cost matched the smoke estimate (A1 45.2 vs 43.2 worker-s/game; A2 95.8 vs the interpolated 119). A1 took 3.3 h of chunk wall time, A2 1.8 h, the curve 0.5 h. Peak RSS stayed at 373 MB per worker.
 
 ## Verdict
 
-Pending.
+- **Search helps with a known opponent model: yes by the pre-registered rule** (A1 beats A0, p < 0.05, positive difference): 34.62% [33.17, 36.11] vs 20.72% on the same 4000 boards, +13.9 pts. This is an **upper bound**: the opponents inside the search are the same deterministic `HeuristicAgent` that sits at the table, so the search predicts their moves exactly and is uncertain only about their hidden cards and the dice.
+- **Phase 5 gate:** A1's Wilson lower bound (33.17%) is above 25%, so the rule is met *with the known-opponent-model qualifier*. Whether that counts toward closing the gate is Guido's call. The model-free number (20.72%) and the gate are unchanged.
+- **Transferable number (exploratory): 27.2% [24.53, 30.04]**, +5.6 pts over no search on the same 1000 boards, at half the primary arm's budget and with opponents modelled by the agent's own policy. The effect is significant, but the interval's lower bound is below 25%, and the arm is exploratory with a ~5-point MDE; no gate claim is made. The curve suggests a larger budget would add (the heuristic-model arm gains 5.5 pts from S = 64 to S = 128), but the self-model arm was not run at S = 128.
+- **Latency:** ~0.8 s per searched decision (p95 1.5 s) at S = 128 against a heuristic model, ~1.8 s (p95 3.8 s, max 45 s) with the self model at S = 64, on a loaded laptop. That is fine for an offline benchmark and slow for interactive play, which is why the agent is a benchmark role only and not a GUI seat.
+- **Leakage check, stated plainly.** The result is large, so I looked for ways search could be reading hidden information. What rules it out: `tests/test_ismcts.py` shows two states with identical public information and different hidden hands, dev cards, deck order and RNG state give the same decision and visit counts, and the live state is untouched; the determinizer reads only public counts and the agent's own cards; chance is reseeded from the agent's own stream, never from `state.rng`; every action goes through the engine's `legal_actions` and `apply_action`. What it does not rule out is a leak through a path those tests do not exercise. The size of the gain is, however, consistent with the structural explanation above (exact opponent prediction), and the self-model arm, which does not have that advantage, still gains 5.6 pts.
+- **Where the number comes from, and what it does not say.** The comparison A1 vs A0 is paired on the same boards, so 006's winner's-curse bias (20.72% is the best of five fixed points) cancels in the difference; it does not cancel in the level compared with 25%. 009 measured the same checkpoint at 20.575% on fresh boards, and A1's margin is far larger than that gap. Nothing here says search would help against a different opponent; A2 is the only evidence on that, and it is exploratory.
+
+Caveats: one checkpoint; the heuristic opponent model is deterministic and exact; the determinizer's belief is weaker than card counting (it ignores what a steal revealed); leaves of an `EndTurn` edge are ~3.5× noisier than the gaps between sibling moves (see the smoke section), so a larger budget mostly buys noise reduction; a terminal ±1 widens the tree-wide min-max range in endgames, so there the prior dominates more.
+
+## Deviations / disclosures
+
+- **A1 was stopped on purpose overnight and resumed.** On 2026-09-30 (`chunk_2201.json` was written at 21:21:53) the laptop was being shut down, so the driver was stopped right after `chunk_2201.json` was written (seeds 1–2400 done, 12 of 20 chunks, each verified as valid JSON with 200 games). It was resumed on 2026-10-01 (~13:37) from `chunk_2401` with the same command, at the same commit `e58c76b` and a clean tree; the driver skipped the 12 existing chunks. Every game is seeded by its `(engine_seed, driver_seed)`, so the numbers do not depend on where a run was resumed. At most a few seconds of the next chunk were lost.
+- **Branch moved while the arms ran.** After the pre-registration commit, #40 (experiment 010) merged to main and conflicted with this branch's README index row. It was resolved in a separate worktree (merge commit `4a19c53`, then a test-only CI fix `548c227` that skips two numpy-dependent test files in the plain test job) so the measuring worktree stayed at `e58c76b`. All 55 measured chunk files carry `e58c76b`; the commits since differ only in tests, docs, and the analysis code below.
+- **Analysis code added after the runs.** The `provenance` section of `search_eval analyze` (commits, config hashes, workers, module-path check per arm) was added after the measured runs, with the results commit. It reads the chunks only.
+- **Workers.** 16 for every measured run (the cap is 18); #40 had finished, so the earlier 10-worker limit no longer applied.
+- **Smoke.** One smoke script died once without a traceback (rerun detached), and the driver was refactored once while it ran, as already disclosed above.
+- The `self` arm used S = 64, not S\*, by the pre-registered budget rule (disclosed in the pre-registration).
 
 ## Notes / follow-up
 
