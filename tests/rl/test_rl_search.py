@@ -19,7 +19,7 @@ torch = pytest.importorskip("torch")
 import numpy as np  # noqa: E402
 
 from agents.heuristic import HeuristicAgent  # noqa: E402
-from agents.ismcts import SearchConfig, keyed_actions  # noqa: E402
+from agents.ismcts import SearchConfig, determinize, keyed_actions  # noqa: E402
 from agents.rl_agent import RLAgent, _load_model  # noqa: E402
 from agents.rl_search import PolicyEvaluator, RLSearchAgent  # noqa: E402
 from engine.game import CatanGame, victory_points  # noqa: E402
@@ -142,3 +142,27 @@ def test_encoder_reset_is_per_board(tiny_checkpoint: str) -> None:
     ev.ensure_board(st)
     assert ev._board is first
     assert isinstance(ev.encoder, ObservationEncoder)
+
+
+def test_end_to_end_decision_ignores_hidden_information(tiny_checkpoint: str) -> None:
+    """The full agent (real evaluator, encoder, greedy comparison): a live state
+    and a twin with identical public information but redealt hidden hands, dev
+    cards, deck order and RNG state yield the same decision and statistics."""
+    for seed in (3, 4, 5):
+        game, st, _, seat = _decision_state(seed)
+        twin = determinize(st, seat, random.Random(777))
+        twin.rng.seed(123456)
+        assert [dict(p.resources) for p in twin.players] != [
+            dict(p.resources) for p in st.players
+        ] or twin.dev_deck != st.dev_deck
+        outcomes = []
+        for s in (st, twin):
+            agent = RLSearchAgent(
+                tiny_checkpoint,
+                config=SearchConfig(simulations=8),
+                rng=random.Random(42),
+            )
+            action = agent.choose_action(s, game.legal_actions(s), seat)
+            stats = [(d.phase, d.simulations, d.overrode) for d in agent.log.decisions]
+            outcomes.append((action, stats))
+        assert outcomes[0] == outcomes[1]
