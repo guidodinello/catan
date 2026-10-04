@@ -5,9 +5,9 @@ description = "Base-game Catan rules engine and hot-seat CLI"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.141.1",
+    "fastapi>=0.142.2",
     "gamekit",
-    "uvicorn[standard]>=0.53.0",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 # Split by dependency so CI never downloads a training stack. `rl` is the env
@@ -26,7 +26,7 @@ rl-train = [
     "sb3-contrib>=2.9.0",
     "stable-baselines3>=2.9.0",
     "tensorboard>=2.21.0",
-    "torch>=2.14",
+    "torch>=2.14.1",
 ]
 # Opt-in CUDA torch, same deps otherwise. Never installed by CI (see the
 # comment on `rl-train` above) and conflicts with `rl-train` (below) so the
@@ -42,7 +42,7 @@ rl-train-cuda = [
     "sb3-contrib>=2.9.0",
     "stable-baselines3>=2.9.0",
     "tensorboard>=2.21.0",
-    "torch>=2.14",
+    "torch>=2.14.1",
 ]
 
 [project.scripts]
@@ -51,11 +51,11 @@ catan = "main:main"
 [dependency-groups]
 dev = [
     "pre-commit>=4.6.2",
-    "ruff>=0.16.8",
+    "ruff>=0.16.9",
     "mypy>=2.3.1",
     "pytest>=9.1.1",
     "pytest-benchmark>=5.3.0",
-    "hypothesis>=6.168.1",
+    "hypothesis>=6.168.3",
     "httpx>=0.28.1",
 ]
 
