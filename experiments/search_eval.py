@@ -8,11 +8,19 @@ Arms (all vs 3 ``HeuristicAgent``, seat-rotated, the benchmark's boards):
 * ``self``  -- ``RLSearchAgent`` whose search simulates opponents with the
   checkpoint's own greedy policy (the transferable number, A2).
 
-Games run in chunks of ``--chunk`` seeds; each finished chunk is written
-atomically to ``--out-dir/<label>/chunk_<base>.json`` so a laptop shutdown
-loses at most one chunk and ``--resume`` continues. Every game is seeded by
-its ``(engine_seed, driver_seed)`` pair, so the numbers do not depend on the
-worker count or on where a run was resumed.
+Games run in chunks of ``--chunk`` seeds. Every finished game is journaled
+(append + fsync) to ``--out-dir/<label>/chunk_<base>.partial.jsonl``; a
+complete chunk is written atomically to ``chunk_<base>.json`` and its journal
+deleted. Re-running the same command resumes from the journals, so a stop
+loses at most the games in flight. Every game is seeded by its
+``(engine_seed, driver_seed)`` pair, so the numbers do not depend on the
+worker count or on where a run was stopped and resumed (each game also
+records a ``digest`` of its ``GameRecord`` so this can be checked).
+
+Stopping: ``touch <out-dir>/<label>/STOP`` drains the games in flight
+(at most one game length), consumes the file and exits with code 3;
+SIGTERM/SIGINT to the driver kills the workers at once. Every invocation is
+logged to ``<label>/invocations.jsonl``.
 
 ``--timing-only`` (the smoke run) records latency, throughput, memory and
 search diagnostics and **never records or prints who won**.
@@ -25,18 +33,23 @@ Run from the worktree with the main checkout's interpreter:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import math
 import os
+import platform
 import resource
+import signal
 import statistics
 import subprocess
 import sys
 import time
-from collections.abc import Sequence
-from concurrent.futures import ProcessPoolExecutor
+import uuid
+from collections.abc import Callable, Sequence
+from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from dataclasses import dataclass
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
@@ -65,11 +78,17 @@ ARMS: dict[str, str] = {
 OPPONENT = {"heur": "heuristic", "self": "self"}
 
 # Consecutive seeds, length divisible by 4 so the rotation is exact. The smoke
-# range is never measured; 1.. are the benchmark boards of 004/006/008/010.
+# range is never measured; 1.. are the benchmark boards of 004/006/008/010;
+# fresh_012 is experiment 012's block (disjointness is asserted in the tests).
 SEED_RANGES: dict[str, tuple[int, int]] = {
     "smoke": (4_000_001, 400),
     "measured": (1, 4000),
+    "fresh_012": (20_000_001, 4000),
 }
+STOP_FILE = "STOP"
+EXIT_STOPPED = 3  # graceful STOP-file exit; nonzero so `a && b` chains break
+CLEAN_REASON = "completed"
+ENV_PACKAGES = ("torch", "numpy", "sb3-contrib", "gamekit")
 MIN_EDGE_N = 4  # edges with fewer leaf samples are left out of the noise check
 
 
@@ -136,6 +155,8 @@ def play_one(job: Job) -> dict[str, Any]:
         "worker_s": time.perf_counter() - t0,
         "rss_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         "module_paths": module_paths(),
+        # opaque (reveals no outcome); lets identity across stop/resume be checked
+        "digest": hashlib.sha256(repr(record).encode()).hexdigest()[:16],
     }
     if job.record_outcome:
         lineup = MODE_LINEUPS[job.mode](job.num_players)
@@ -178,9 +199,128 @@ def _write_atomic(path: Path, payload: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def _map_jobs(jobs: Sequence[Job], workers: int) -> list[dict[str, Any]]:
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(play_one, jobs, chunksize=2))  # ordered by seed
+def environment() -> dict[str, str]:
+    """Interpreter and package versions; a resume under different ones is refused."""
+    return {
+        "python": platform.python_version(),
+        **{pkg: version(pkg) for pkg in ENV_PACKAGES},
+    }
+
+
+def search_params(arm: str, sims: int) -> dict[str, Any] | None:
+    """The frozen ``SearchConfig`` an arm runs with (None: no search)."""
+    if arm == "none":
+        return None
+    cfg = SearchConfig(simulations=sims, opponent=OPPONENT[arm])
+    return dataclasses.asdict(cfg)
+
+
+def _ignore_sigint() -> None:
+    """Pool initializer: Ctrl-C in tmux reaches only the driver, not the workers."""
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def _kill_pool(pool: ProcessPoolExecutor) -> None:
+    # ProcessPoolExecutor has no public way to kill running workers.
+    procs = list((pool._processes or {}).values())
+    pool.shutdown(wait=False, cancel_futures=True)
+    for p in procs:
+        p.terminate()
+    for p in procs:
+        p.join(timeout=10)
+
+
+def _run_jobs(
+    jobs: Sequence[Job],
+    workers: int,
+    on_result: Callable[[dict[str, Any]], None],
+    stop_file: Path,
+    fn: Callable[[Job], dict[str, Any]] = play_one,
+) -> str:
+    """Run ``jobs`` in seed order with exactly ``workers`` in flight, handing each
+    result to ``on_result`` as it finishes. Returns ``"completed"``,
+    ``"stop_file"`` (stopped submitting, drained the games in flight) or
+    ``"signal"`` (SIGTERM/SIGINT: workers killed, in-flight games lost)."""
+    caught: list[int] = []
+
+    def on_signal(signum: int, _frame: Any) -> None:
+        caught.append(signum)
+
+    old = {
+        sig: signal.signal(sig, on_signal) for sig in (signal.SIGINT, signal.SIGTERM)
+    }
+    pool = ProcessPoolExecutor(max_workers=workers, initializer=_ignore_sigint)
+    pending = iter(jobs)
+    inflight: set[Future[dict[str, Any]]] = set()
+    reason = CLEAN_REASON
+    clean = False
+    try:
+        while True:
+            if caught:
+                reason = "signal"
+                return reason
+            if reason == CLEAN_REASON and stop_file.exists():
+                reason = "stop_file"
+            while reason == CLEAN_REASON and len(inflight) < workers:
+                job = next(pending, None)
+                if job is None:
+                    break
+                inflight.add(pool.submit(fn, job))
+            if not inflight:
+                clean = True
+                return reason
+            done, inflight = wait(inflight, timeout=2, return_when=FIRST_COMPLETED)
+            for f in done:
+                on_result(f.result())
+    finally:
+        for sig, handler in old.items():
+            signal.signal(sig, handler)
+        if clean:
+            pool.shutdown(wait=True)
+        else:
+            _kill_pool(pool)
+
+
+def _read_journal(
+    path: Path, header: dict[str, Any], allow_commit_change: bool
+) -> dict[int, dict[str, Any]]:
+    """Games already finished in a chunk's partial journal, by engine seed. A
+    truncated last line (a crash mid-write) is dropped and the file rewritten."""
+    lines = path.read_text().split("\n")
+    rows: list[dict[str, Any]] = []
+    for i, line in enumerate(lines):
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            if any(lines[i + 1 :]):
+                raise SystemExit(f"{path}: corrupt journal line {i + 1}") from None
+    head, games = rows[0], rows[1:]
+    if head["config_hash"] != header["config_hash"] or (
+        head["git_commit"] != header["git_commit"] and not allow_commit_change
+    ):
+        raise SystemExit(f"{path} was written by a different config/commit")
+    _rewrite_journal(path, rows)
+    return {g["e"]: g for g in games}
+
+
+def _rewrite_journal(path: Path, rows: Sequence[dict[str, Any]]) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    os.replace(tmp, path)
+
+
+def _append_journal(path: Path, row: dict[str, Any]) -> None:
+    with path.open("a") as f:
+        f.write(json.dumps(row) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _log_invocation(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _append_journal(path, row)
 
 
 def run(args: argparse.Namespace) -> None:
@@ -192,25 +332,45 @@ def run(args: argparse.Namespace) -> None:
     commit, dirty = _git("rev-parse", "HEAD"), bool(_git("status", "--porcelain"))
     if measured and dirty:
         raise SystemExit("refusing a measured run from a dirty worktree")
-    kind = "measured" if measured else "smoke"
-    lo, n_range = SEED_RANGES[kind]
-    if args.seed_base < lo or args.seed_base + args.games > lo + n_range:
-        raise SystemExit(f"seeds outside the {kind} range {lo}..{lo + n_range - 1}")
+    range_name = args.seed_range or ("measured" if measured else "smoke")
+    if (range_name == "smoke") == measured:
+        raise SystemExit(
+            "--timing-only runs use the smoke range, measured runs never do"
+        )
+    lo, n_range = SEED_RANGES[range_name]
+    seed_base = args.seed_base if args.seed_base is not None else lo
+    if seed_base < lo or seed_base + args.games > lo + n_range:
+        raise SystemExit(
+            f"seeds outside the {range_name} range {lo}..{lo + n_range - 1}"
+        )
     checkpoint = str(Path(args.checkpoint).resolve())
-    sha = _sha12(checkpoint)
     config = {
         "arm": args.arm,
         "sims": args.sims if args.arm != "none" else 0,
         "mode": ARMS[args.arm],
-        "checkpoint_sha256_12": sha,
+        "search": search_params(args.arm, args.sims),
+        "checkpoint_sha256_12": _sha12(checkpoint),
         "timing_only": args.timing_only,
+        "seed_range": range_name,
+        "seed_base": seed_base,
+        "chunk": args.chunk,
+        "environment": environment(),
     }
     chash = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
     label = args.label or f"{args.arm}" + (
         f"_s{args.sims}" if args.arm != "none" else ""
     )
     out_dir = Path(args.out_dir) / label
-    for base in range(args.seed_base, args.seed_base + args.games, args.chunk):
+    stop_file = out_dir / STOP_FILE
+    if stop_file.exists():
+        print(f"{stop_file} exists: remove it to run", flush=True)
+        raise SystemExit(EXIT_STOPPED)
+    header = {"config_hash": chash, "git_commit": commit, "config": config}
+
+    bases = list(range(seed_base, seed_base + args.games, args.chunk))
+    partial: dict[int, dict[int, dict[str, Any]]] = {}
+    todo: list[Job] = []
+    for base in bases:
         path = out_dir / f"chunk_{base}.json"
         if path.exists():
             prev = json.loads(path.read_text())
@@ -219,7 +379,15 @@ def run(args: argparse.Namespace) -> None:
                     raise SystemExit(f"{path} was written by a different config/commit")
             print(f"chunk {base}: present, skipped", flush=True)
             continue
-        jobs = [
+        journal = out_dir / f"chunk_{base}.partial.jsonl"
+        partial[base] = (
+            _read_journal(journal, header, args.allow_commit_change)
+            if journal.exists()
+            else {}
+        )
+        if partial[base]:
+            print(f"chunk {base}: {len(partial[base])} games journaled", flush=True)
+        todo += [
             Job(
                 ARMS[args.arm],
                 checkpoint,
@@ -232,25 +400,85 @@ def run(args: argparse.Namespace) -> None:
                 record_noise=args.timing_only,
             )
             for e in range(base, base + args.chunk)
+            if e not in partial[base]
         ]
-        t0 = time.perf_counter()
-        samples = _map_jobs(jobs, args.workers)
-        wall = time.perf_counter() - t0
-        payload = {
-            "config": config,
-            "config_hash": chash,
-            "git_commit": commit,
+
+    inv_id = f"{time.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    inv_log = out_dir / "invocations.jsonl"
+    _log_invocation(
+        inv_log,
+        {
+            "id": inv_id,
+            "event": "start",
+            "at": time.time(),
             "workers": args.workers,
+            "commit": commit,
+            "games_todo": len(todo),
+        },
+    )
+    finished = 0
+
+    def on_result(game: dict[str, Any]) -> None:
+        nonlocal finished
+        _check_paths([game])
+        game["invocation_id"] = inv_id
+        game["workers"] = args.workers
+        base = seed_base + (game["e"] - seed_base) // args.chunk * args.chunk
+        journal = out_dir / f"chunk_{base}.partial.jsonl"
+        if not journal.exists():
+            out_dir.mkdir(parents=True, exist_ok=True)
+            _append_journal(journal, header)
+        _append_journal(journal, game)
+        finished += 1
+        partial[base][game["e"]] = game
+        if len(partial[base]) == args.chunk:
+            _finish_chunk(out_dir, base, header, partial[base].values())
+            journal.unlink()
+            print(f"chunk {base}: complete -> chunk_{base}.json", flush=True)
+
+    reason = CLEAN_REASON
+    try:
+        reason = _run_jobs(todo, args.workers, on_result, stop_file)
+    except BaseException:
+        reason = "error"
+        raise
+    finally:
+        _log_invocation(
+            inv_log,
+            {"id": inv_id, "event": "end", "at": time.time(), "reason": reason,
+             "games_done": finished},
+        )  # fmt: skip
+    if reason == "stop_file":
+        stop_file.unlink(missing_ok=True)
+        print(
+            f"stopped on STOP file after {finished} games; rerun to resume", flush=True
+        )
+        raise SystemExit(EXIT_STOPPED)
+    if reason == "signal":
+        print(f"stopped by signal after {finished} games; rerun to resume", flush=True)
+        raise SystemExit(130)
+
+
+def _finish_chunk(out_dir: Path, base: int, header: dict[str, Any], games: Any) -> None:
+    rows = sorted(games, key=lambda g: g["e"])
+    paths = [dict(t) for t in {tuple(sorted(g["module_paths"].items())) for g in rows}]
+    _write_atomic(
+        out_dir / f"chunk_{base}.json",
+        {
+            "config": header["config"],
+            "config_hash": header["config_hash"],
+            "git_commit": header["git_commit"],
+            "workers": sorted({g["workers"] for g in rows}),
             "seed_base": base,
-            "n": args.chunk,
-            "wall_s": wall,
-            "module_paths": _check_paths(samples),
+            "n": len(rows),
+            "worker_s_sum": sum(g["worker_s"] for g in rows),
+            "invocations": sorted({g["invocation_id"] for g in rows}),
+            "module_paths": paths,
             "games": [
-                {k: v for k, v in s.items() if k != "module_paths"} for s in samples
+                {k: v for k, v in g.items() if k != "module_paths"} for g in rows
             ],
-        }
-        _write_atomic(path, payload)
-        print(f"chunk {base}: {args.chunk} games in {wall:.0f}s -> {path}", flush=True)
+        },
+    )
 
 
 # --- Analysis ----------------------------------------------------------------
@@ -265,21 +493,43 @@ def load_arm(arm_dir: Path) -> list[dict[str, Any]]:
 
 
 def provenance(arm_dir: Path) -> dict[str, Any]:
-    """Where an arm's chunks came from: commits, configs, workers, modules."""
+    """Where an arm's chunks came from: commits, configs, workers, modules, and
+    every invocation (start, end, reason) so each stop/resume is disclosed from data."""
     chunks = [json.loads(f.read_text()) for f in sorted(arm_dir.glob("chunk_*.json"))]
+    invocations: dict[str, dict[str, Any]] = {}
+    log = arm_dir / "invocations.jsonl"
+    for line in log.read_text().splitlines() if log.exists() else []:
+        row = json.loads(line)
+        inv = invocations.setdefault(
+            row["id"], {"id": row["id"], "reason": "unclean_exit"}
+        )
+        if row["event"] == "start":
+            inv |= {
+                "started": row["at"],
+                "workers": row["workers"],
+                "commit": row["commit"],
+            }
+        else:
+            inv |= {
+                "ended": row["at"],
+                "reason": row["reason"],
+                "games_done": row["games_done"],
+            }
     return {
         "chunks": len(chunks),
         "git_commits": sorted({c["git_commit"] for c in chunks}),
         "config_hashes": sorted({c["config_hash"] for c in chunks}),
         "config": chunks[0]["config"],
-        "workers": sorted({c["workers"] for c in chunks}),
-        "wall_s_sum": sum(c["wall_s"] for c in chunks),
+        "workers": sorted({w for c in chunks for w in c["workers"]}),
+        "worker_s_sum": sum(c["worker_s_sum"] for c in chunks),
         "module_paths_inside_worktree": all(
             Path(p).is_relative_to(ROOT)
             for c in chunks
             for m in c["module_paths"]
             for p in m.values()
         ),
+        "invocations": sorted(invocations.values(), key=lambda i: i.get("started", 0)),
+        "chunk_invocations": {c["seed_base"]: c["invocations"] for c in chunks},
     }
 
 
@@ -370,6 +620,24 @@ def arm_summary(games: Sequence[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+GATE_LOWER = 0.25
+GATE_ALPHA = 0.05
+
+
+def gate(summary: dict[str, Any], vs: dict[str, Any]) -> dict[str, Any]:
+    """Experiment 012's pre-registered gate: Wilson lower bound above 25% and a
+    significantly positive paired-board difference vs no search."""
+    lower_ok = summary["wilson95"][0] > GATE_LOWER
+    beats = vs["diff"] > 0 and vs["p_value"] < GATE_ALPHA
+    return {
+        "wilson_lower": summary["wilson95"][0],
+        "wilson_lower_above_25": lower_ok,
+        "beats_no_search": beats,
+        "mcnemar_p_secondary": vs["mcnemar_p"],
+        "passed": lower_ok and beats,
+    }
+
+
 def analyze(args: argparse.Namespace) -> None:
     root = Path(args.out_dir)
     arms = {name: load_arm(root / name) for name in args.arm_dirs}
@@ -381,6 +649,8 @@ def analyze(args: argparse.Namespace) -> None:
         report["vs_baseline"] = {
             n: compare(g, base) for n, g in arms.items() if n != args.baseline
         }
+    if args.gate:
+        report["gate"] = gate(report[args.gate], report["vs_baseline"][args.gate])
     print(json.dumps(report, indent=2))
     if args.write:
         RESULTS_DIR.mkdir(exist_ok=True)
@@ -396,7 +666,8 @@ def main() -> None:
     r.add_argument("--arm", choices=sorted(ARMS), required=True)
     r.add_argument("--sims", type=int, default=64)
     r.add_argument("--games", type=int, required=True)
-    r.add_argument("--seed-base", type=int, default=1)
+    r.add_argument("--seed-range", choices=sorted(SEED_RANGES), default=None)
+    r.add_argument("--seed-base", type=int, default=None)
     r.add_argument("--chunk", type=int, default=200)
     r.add_argument("--workers", type=int, default=10)
     r.add_argument("--checkpoint", required=True)
@@ -408,6 +679,7 @@ def main() -> None:
     a.add_argument("arm_dirs", nargs="+")
     a.add_argument("--baseline", default=None)
     a.add_argument("--out-dir", default=str(DEFAULT_OUT))
+    a.add_argument("--gate", default=None, help="arm to evaluate against the 012 gate")
     a.add_argument("--write", default=None)
     args = parser.parse_args()
     run(args) if args.cmd == "run" else analyze(args)
