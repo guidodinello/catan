@@ -102,7 +102,11 @@ def test_four_seat_reduction_ranks_heuristic_above_random_and_balances_seats(
 def test_a_step_budget_hit_is_a_tie_excluded_from_the_fit(
     tmp_path: Path, baseline_only: None
 ) -> None:
-    _run(tmp_path, pairs=(AGENTS,), step_budget=30)  # nobody can win in 30 steps
+    # Nobody can win in 30 steps, so every game is a tie. The pairing file is
+    # written, but a league with no decisive game cannot be rated (gamekit
+    # refuses the fit): the error is raised after the file is on disk.
+    with pytest.raises(ValueError, match="not connected"):
+        _run(tmp_path, pairs=(AGENTS,), step_budget=30)
     out = tmp_path / "out" / "t"
     (pairing,) = load_pairings(out)
     wins = sum(r["wins"] for r in pairing["by_role"].values())
