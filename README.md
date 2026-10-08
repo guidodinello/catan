@@ -61,7 +61,7 @@ This project follows the pattern already proven in the Truco/Roulette family:
 | `truco` | `~/projects/truco` | Hand-probability simulator only (flowers, piezas, muestra). No game-play loop. Superseded by `truco-py`. |
 | `roulette` | `~/projects/roulette` | Notebook with `BetStrategy` abstract class + heuristic strategies + balance simulation. |
 | `truco-py` | `~/Desktop/fac/2026/mmo/truco-py` | **The reference pipeline**: full game engine, Agent protocol, VonNeumannAgent (online MC rollouts + EV cache), gymnasium env, MaskablePPO training, self-play, match benchmarking. Best result: 85.3% vs ThresholdAgent at 2M steps. |
-| `catan` | this repo | Empty skeleton — this document is the proposed spec. |
+| `catan` | this repo | Rules engine, Monte Carlo analysis, heuristic and RL agents, and a web UI; see the [Roadmap](#roadmap). |
 
 `truco-py` is the template this project is designed after.
 
@@ -91,7 +91,7 @@ near-identical, confirming the shape generalizes, but this repo's
 row shipped as `gamekit.rl` (gamekit v0.2.0); the MC-rollout-agent row is
 still unbuilt. See `~/projects/docs/shared-ml-package.md`.
 
-### Catan package layout (proposed)
+### Catan package layout
 
 ```
 catan/
@@ -101,9 +101,12 @@ catan/
 │   ├── state.py       #   immutable-ish game state (mirrors GameState pattern)
 │   ├── actions.py     #   action encoding/decoding (see design decision below)
 │   └── game.py        #   reset / legal_actions / apply_action / is_terminal / winner
-├── agents/            # RandomAgent, heuristic agents, (later) RLAgent
-├── experiments/       # Monte Carlo experiments (starting placement, build order, …)
-└── env/               # gymnasium wrapper for RL training
+├── agents/            # Random, heuristic, trading-heuristic, human and RL agents
+├── experiments/       # Monte Carlo experiments, benchmarks, league and human-game drivers
+├── rl/                # Phase 5: gymnasium env, state encoder, BC, MaskablePPO, self-play, search
+├── server/            # FastAPI backend wrapping the engine
+├── web/               # Svelte + Vite frontend
+└── scripts/           # screenshots and other tooling
 ```
 
 ## Decisions
@@ -333,7 +336,11 @@ Resolved while planning the web GUI (full detail in
     directions: sized for a production multi-user app, not a local
     in-memory research tool.
 
-## Proposed Roadmap
+## Roadmap
+
+The live, ordered roadmap is the pinned issue
+[#60](https://github.com/guidodinello/catan/issues/60). The checklist below is
+the phase history.
 
 - [x] **Phase 1 — Engine**: board generation, game state, legal actions,
       full rule enforcement, CLI playable game (human vs humans).
@@ -356,8 +363,8 @@ Resolved while planning the web GUI (full detail in
       self-play with anti-collapse controls (PR #19), and a behaviour-cloning
       warm start before self-play fine-tuning (PR #21) have all landed, but
       the Phase-5-done bar — beating `HeuristicAgent` — has not: the best
-      attempt so far reaches **16.2% [15.09%, 17.37%] vs 3
-      `HeuristicAgent`s**, well short of the >25%-with-CI-excluding-it gate.
+      result so far is in [`docs/experiments/README.md`](docs/experiments/README.md#current-best-phase-5-as-of-2026-09-29),
+      short of the >25%-with-CI-excluding-it gate.
       See `docs/experiments/` for every run's numbers, config, and verdict,
       and `~/projects/docs/shared-ml-package.md`'s "`gamekit.rl`" section for
       what Phase 5 supplies vs. reuses. As planned, it reuses
