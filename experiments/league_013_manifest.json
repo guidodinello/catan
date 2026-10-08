@@ -1,0 +1,34 @@
+{
+  "bc_clone": {
+    "path": "catan_bc_clone.zip",
+    "sha256": "538059e8dfb8dbea501fb8096dd0ca0e800fc83c2c90e8fb0e306eb5aac5a078"
+  },
+  "bc_ft_2m": {
+    "path": "catan_bc_ft_2000000.zip",
+    "sha256": "f91580529cb8b72f054ea2a41ad8054b574cba4d7282e488395b116a875e7965"
+  },
+  "long_4m": {
+    "path": "catan_bc_ft_long_4031616.zip",
+    "sha256": "28299abbfb70488c131e00da9e3708057041459f5d5b0bbe0485d7bf04a2a192"
+  },
+  "long_8m": {
+    "path": "catan_bc_ft_long_8031616.zip",
+    "sha256": "52df98c22a7aec25a9a0e261473aaee8ba6ded112ebddeb91669b7923f49100c"
+  },
+  "long_10m": {
+    "path": "catan_bc_ft_long_10031616.zip",
+    "sha256": "e8001d3e81bae995aa8d820cda09809702170da8ce013c3d7f7b2f7d2a3466b0"
+  },
+  "ent_ctrl_3m": {
+    "path": "catan_ent_ctrl_3000000.zip",
+    "sha256": "0c818cdb05be3b6a206b70bead8f718408f1759124849b582507513a0b1a3a11"
+  },
+  "ent_ramp_3m": {
+    "path": "catan_ent_ramp_3000000.zip",
+    "sha256": "30423612870429f05e1e949495eef3f30f268481e70ac6e8777c777eb387cb11"
+  },
+  "ent_decay_3m": {
+    "path": "catan_ent_decay_3000000.zip",
+    "sha256": "980ff1ae6d8d16fc295ba4dc6bbe5420c2094e10ecd5bbc244120a991662af21"
+  }
+}
