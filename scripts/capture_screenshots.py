@@ -63,20 +63,24 @@ DRIVER_SEED = 7
 NUM_PLAYERS = 4
 SEAT_KINDS: list[SeatKind] = ["human", "heuristic", "heuristic", "heuristic"]
 HUMAN_SEAT = 0
-# Seat 0 is played by a HeuristicAgent in-process up to this turn, so the
-# board already has settlements, cities and roads when the browser takes over.
-SHOWCASE_TURN = 18
+# Seat 0 is played by a HeuristicAgent in-process up to this turn (a count of
+# per-seat turns, ~4 per round), so the board already has cities, settlements
+# and long roads when the browser takes over -- 7-8 VP for the leaders here.
+SHOWCASE_TURN = 183
 # The GIF game stops at the first turn from here on where seat 0's roll (not a
 # 7) leaves a placement it can afford, so the clip always shows a build.
-GIF_MIN_TURN = 12
+GIF_MIN_TURN = 130
 GIF_NAME = "gameplay.gif"
 GIF_WIDTH = 900
 GIF_FPS = 10
-# Source seconds kept after the board first shows, played back GIF_SPEEDUP x
-# faster so the whole paced bot replay fits in a ~12 s clip.
-GIF_SOURCE_SECONDS = 18.0
-GIF_SPEEDUP = 1.5
+# The app dims the whole board (`.layout.busy`, opacity 0.6) for as long as a
+# move is being applied / the bots' paced replay is revealing, so that stretch
+# is played back GIF_REPLAY_SPEEDUP x faster and the clip is mostly the
+# undimmed human turn.
+GIF_REPLAY_SPEEDUP = 2.0
+GIF_TAIL_SECONDS = 1.5
 GIF_LEAD_SECONDS = 0.5
+GIF_MAX_BUILDS = 2
 MAX_GIF_BYTES = 4 * 1024 * 1024
 
 VIEWPORT = {"width": 1440, "height": 900}
@@ -188,6 +192,30 @@ def _scroll_panels(page: Page, *, to_bottom: bool) -> None:
     )
 
 
+def _snap_log_to_whole_lines(page: Page) -> None:
+    """Show only whole lines in the activity log.
+
+    The list is a fixed-height scroll area pinned to its newest entry, so
+    whichever line sits at the top edge is normally cut mid-line -- ordinary
+    scroll-container behaviour, not an app bug. Shrink the list (inline style,
+    capture only) to the whole lines that fit and re-pin it to the bottom.
+    """
+    page.evaluate(
+        """() => {
+            const ul = document.querySelector(".activity-log ul");
+            const gap = parseFloat(getComputedStyle(ul).rowGap) || 0;
+            let used = 0;
+            for (let i = ul.children.length - 1; i >= 0; i--) {
+                const next = used + ul.children[i].offsetHeight + (used ? gap : 0);
+                if (next > ul.clientHeight) break;
+                used = next;
+            }
+            ul.style.maxHeight = `${used}px`;
+            ul.scrollTop = ul.scrollHeight;
+        }"""
+    )
+
+
 def _click_action(page: Page, kind: str) -> None:
     page.get_by_role("button", name=kind, exact=True).click()
     _settle(page)
@@ -251,6 +279,7 @@ def _capture(
             _click_action(page, "EndTurn")
             _click_action(page, "RollDice")
             _scroll_panels(page, to_bottom=False)
+            _snap_log_to_whole_lines(page)
             _save_png(page, "board.png")
 
             page.locator("details.dice-panel summary").click()
@@ -294,7 +323,9 @@ def _capture(
 
 
 def _record_gif(browser: Browser, base_url: str, game_id: str, tmp: Path) -> None:
-    """Roll, build, end turn, and let the bots' paced replay play out."""
+    """Roll and build with the board undimmed, then end the turn and let the
+    bots' paced replay play out.
+    """
     ctx = browser.new_context(
         viewport=VIEWPORT,
         record_video_dir=str(tmp / "video"),
@@ -307,47 +338,64 @@ def _record_gif(browser: Browser, base_url: str, game_id: str, tmp: Path) -> Non
     page.goto(base_url)
     page.get_by_role("button", name="Resume game").click()
     page.get_by_role("heading", name="Victory points").wait_for()
-    lead = time.monotonic() - started + GIF_LEAD_SECONDS
-    page.wait_for_timeout(1000)
+    start_s = time.monotonic() - started + GIF_LEAD_SECONDS
+    page.wait_for_timeout(1200)
     _click_action(page, "RollDice")
     page.wait_for_timeout(1000)
-    # Prefer a settlement/city over a road: it changes the board more.
+    # Vertex targets (settlement/city) come before edge targets in the DOM, so
+    # the first build is a settlement/city whenever one is affordable.
     targets = page.locator("circle.highlight-vertex, rect.edge-hit-target")
-    targets.first.hover()
-    page.wait_for_timeout(600)
-    targets.first.click()
-    page.wait_for_selector("em:has-text('applying your move')", state="detached")
-    page.wait_for_timeout(1000)
-    # End the turn and watch the paced replay, un-skipped.
+    for _ in range(GIF_MAX_BUILDS):
+        if targets.count() == 0:
+            break
+        targets.first.hover()
+        page.wait_for_timeout(800)
+        targets.first.click()
+        page.wait_for_selector("em:has-text('applying your move')", state="detached")
+        page.wait_for_timeout(1000)
+    replay_s = time.monotonic() - started
     page.get_by_role("button", name="EndTurn", exact=True).click()
     page.wait_for_selector("em:has-text('applying your move')", state="detached")
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(int(GIF_TAIL_SECONDS * 1000))
+    end_s = time.monotonic() - started
     video = page.video
     assert video is not None
     ctx.close()  # finalizes the webm
-    _encode_gif(Path(video.path()), max(lead, 0.0), tmp)
+    _encode_gif(Path(video.path()), start_s, replay_s, end_s, tmp)
 
 
-def _encode_gif(webm: Path, start_s: float, tmp: Path) -> None:
+def _encode_gif(
+    webm: Path, start_s: float, replay_s: float, end_s: float, tmp: Path
+) -> None:
+    """Two-pass palettegen/paletteuse; ``[start_s, replay_s)`` at 1x, the rest
+    (the bots' replay) at ``GIF_REPLAY_SPEEDUP`` x. Times are seconds into the
+    recording.
+    """
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("--gif needs ffmpeg on PATH")
     palette = tmp / "palette.png"
-    trim = ["-ss", f"{start_s:.2f}", "-t", f"{GIF_SOURCE_SECONDS}", "-i", str(webm)]
-    scale = f"setpts=PTS/{GIF_SPEEDUP},fps={GIF_FPS},scale={GIF_WIDTH}:-1:flags=lanczos"
-    base = ["ffmpeg", "-y", "-loglevel", "error"]
+    chain = (
+        f"[0:v]split=2[a][b];"
+        f"[a]trim=start={start_s:.2f}:end={replay_s:.2f},setpts=PTS-STARTPTS[a1];"
+        f"[b]trim=start={replay_s:.2f}:end={end_s:.2f},"
+        f"setpts=(PTS-STARTPTS)/{GIF_REPLAY_SPEEDUP}[b1];"
+        f"[a1][b1]concat=n=2:v=1:a=0,fps={GIF_FPS},"
+        f"scale={GIF_WIDTH}:-1:flags=lanczos"
+    )
+    base = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(webm)]
     subprocess.run(
-        [*base, *trim, "-vf", f"{scale},palettegen=stats_mode=diff", str(palette)],
+        [*base, "-filter_complex", f"{chain},palettegen=stats_mode=diff", str(palette)],
         check=True,
     )
     out = OUT_DIR / GIF_NAME
+    use = "paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle"
     subprocess.run(
         [
             *base,
-            *trim,
             "-i",
             str(palette),
-            "-lavfi",
-            f"{scale}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
+            "-filter_complex",
+            f"{chain}[x];[x][1:v]{use}",
             str(out),
         ],
         check=True,
