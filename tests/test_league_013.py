@@ -187,6 +187,7 @@ def test_league_seeds_are_disjoint_from_every_used_range_and_each_other() -> Non
     )
     assert not any(_overlaps(x, y) for x, y in itertools.combinations(both, 2))
     assert lg.SEED != lg.TIMING_SEED
+    assert lg.XCHECK_SEED != lg.SEED  # no peek at registered games
 
 
 # --- manifest --------------------------------------------------------------

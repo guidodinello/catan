@@ -56,11 +56,16 @@ Timing is measured under whatever else runs on the HP (GitHub runners; truco 011
 
 ## Cross-machine gate (before launch)
 
-Pairings `long_10m__vs__heuristic`, `long_4m__vs__random`, `bc_ft_2m__vs__trading_heuristic` at n = 200, seed `20261013`, league name `xcheck`, run on the laptop and on the HP (torch cu128 vs CPU). **Pass** if wins, ties, `config_hash`, the sha256 of the per-game winner list and the sha256 of the per-game record digests are all identical. If it fails, the league is not launched. The xcheck files are deleted afterwards. Earlier evidence: truco 010 (C20 vs M20) and the catan HP determinism check of 2026-09-30 (200/200 games identical, 2228/2228 search decisions identical).
+Pairings `long_10m__vs__heuristic`, `long_4m__vs__random`, `bc_ft_2m__vs__trading_heuristic` at n = 200, **seed `20261014` (the timing seed, not the registered `20261013`)**, league name `xcheck`, run on the laptop and on the HP (torch cu128 vs CPU). **Pass** if wins, ties, `config_hash`, the sha256 of the per-game winner list and the sha256 of the per-game record digests are all identical. If it fails, the league is not launched. The xcheck files are deleted afterwards. **Why not the registered seed:** pairing seeds do not depend on n, so 3 x 200 games at `20261013` would be the first 200 games of three registered pairings, a peek at registered data (truco 011's amendment avoided the same thing). `20261014` is the timing seed: its ranges are asserted disjoint from every used range and from the registered seed's, and no win rate from it enters any result. Earlier evidence: truco 010 (C20 vs M20) and the catan HP determinism check of 2026-09-30 (200/200 games identical, 2228/2228 search decisions identical).
 
 ## Environment
 
 To fill at run time: laptop and HP torch / python / numpy / sb3-contrib versions, gamekit commit (the lock moves from `dab51b1` to `05f271e` (docs-only on top of `cf879b3`; `src/` is unchanged since the league landed); the package version string stays 0.3.0, so the commit is recorded by hand), catan commit. Checkpoints were written after the last change to `rl/encoder.py` / `rl/action_space.py` (`e772d1e`, 2026-09-20); `experiments.league_013 check-checkpoints` verifies each checkpoint's observation and action space against the current encoder and plays one game before any league run. Engine rule fixes after a checkpoint's training date can still change what it learned for; that is not detectable here.
+
+## Run log — to fill
+
+- **Lock-bump replay (owed, laptop, when free):** `experiments.benchmark --mode rl_vs_heuristic --games 200` at the old lock (`dab51b1`) and the new (`05f271e`); `by_role` must be identical. _Not run yet._
+- xcheck, launch, timestamps: _not run yet._
 
 ## Timing (HP smoke) and the chosen n
 

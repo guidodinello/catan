@@ -73,6 +73,9 @@ N_BOOTSTRAP = 1000
 BOOTSTRAP_SEED = 0
 SEED = 20261013
 TIMING_SEED = 20261014
+# The cross-machine check must not play registered data: pairing seeds do not
+# depend on n, so any games at SEED are the first games of registered pairings.
+XCHECK_SEED = TIMING_SEED
 BASELINES = ("heuristic", "random", "trading_heuristic")
 PROGRESS_EVERY = 100
 SEP = "__vs__"
