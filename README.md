@@ -5,6 +5,34 @@ game simulator: Monte Carlo probability estimation, heuristic agents, and
 reinforcement learning, following the pattern established in the Truco and
 Roulette projects.
 
+<p align="center">
+  <img src="docs/images/gameplay.gif" alt="Playing a game in the web UI: roll, build, then the bots take their turns" width="900">
+</p>
+
+## Web UI
+
+A Svelte frontend (`web/`) over a FastAPI server (`server/`) wrapping the
+engine: play against the bots in a browser, or watch bots play each other.
+
+```bash
+(cd web && npm ci && npm run build)   # once
+uv run uvicorn server.app:app         # then open http://127.0.0.1:8000
+```
+
+<table>
+  <tr>
+    <td><img src="docs/images/board.png" alt="Mid-game board with scoreboard, activity log and hand"></td>
+    <td><img src="docs/images/trade.png" alt="Proposing a domestic trade"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/setup.png" alt="New-game screen with per-seat bot selection"></td>
+    <td><img src="docs/images/game-over.png" alt="Game-over screen with the full dice histogram"></td>
+  </tr>
+</table>
+
+The images are generated from seeded games by `scripts/capture_screenshots.py`
+(`--gif` for the clip; it needs Playwright and ffmpeg, see its docstring).
+
 ## Idea & Motivation
 
 The goal is to *understand the game mathematically*, not just to play it

@@ -142,3 +142,10 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = ["sb3_contrib.*", "stable_baselines3.*", "torch.*", "tensorboard.*"]
 ignore_missing_imports = true
+
+# scripts/capture_screenshots.py runs under `uv run --with playwright --with
+# pillow` (see its docstring); neither is a project dependency, so the
+# type-check env doesn't have them.
+[[tool.mypy.overrides]]
+module = ["playwright.*", "PIL.*"]
+ignore_missing_imports = true
