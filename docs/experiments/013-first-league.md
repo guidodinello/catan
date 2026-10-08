@@ -62,9 +62,19 @@ Pairings `long_10m__vs__heuristic`, `long_4m__vs__random`, `bc_ft_2m__vs__tradin
 
 To fill at run time: laptop and HP torch / python / numpy / sb3-contrib versions, gamekit commit (the lock moves from `dab51b1` to `05f271e` (docs-only on top of `cf879b3`; `src/` is unchanged since the league landed); the package version string stays 0.3.0, so the commit is recorded by hand), catan commit. Checkpoints were written after the last change to `rl/encoder.py` / `rl/action_space.py` (`e772d1e`, 2026-09-20); `experiments.league_013 check-checkpoints` verifies each checkpoint's observation and action space against the current encoder and plays one game before any league run. Engine rule fixes after a checkpoint's training date can still change what it learned for; that is not detectable here.
 
-## Timing (HP smoke) — to fill
+## Timing (HP smoke) and the chosen n
 
-_Not measured yet._
+Measured on the HP 2026-10-08 (commit `764036b`, after the rule above was committed), seed `20261014`, n = 8 per pairing, all 55 pairings, **1 worker**, nice 19, `OMP_NUM_THREADS=1`, CPU-only torch. No win rate is read. Worker time is per-game CPU time (`time.process_time`) inside the worker.
+
+| pairing class | pairings | worker-s / game (mean, min-max) | peak RSS | ties |
+|---|---|---|---|---|
+| baseline-baseline | 3 | 0.50 (0.34-0.61) | 479 MB | 0/24 |
+| RL-baseline | 24 | 1.30 (0.92-2.05) | 479 MB | 0/192 |
+| RL-RL | 28 | 2.30 (1.58-3.38) | 479 MB | 0/224 |
+
+Sum over the 55 pairings: 97.0 worker-s per unit of n. At 3 workers (assuming linear scaling): **n = 4000 -> 35.9 h, n = 2000 -> 18.0 h.** The rule gives **n = 4000** (<= 48 h). Peak RSS 479 MB per worker (peak RSS is per process, measured in the worker; 3 workers about 1.5 GB of the 5 GB free).
+
+Caveats, disclosed: the HP was **idle** during the smoke (load average about 0.5; no GitHub runner job and truco 011 was not running yet), so this is not measured under 011's load. The estimate assumes linear scaling to 3 workers, but the HP's 4 cores are 2 shared-FPU modules, so 3 workers will likely be slower than 3x (the 48 h line leaves about 1.3x of headroom); n = 8 per pairing is a small sample of game lengths (the per-class min-max spread above is the per-pairing noise). If the launch-time wall rate is worse than this by more than the headroom, the run is stopped and the owner is asked, not silently shortened. The launch waits until truco 011 finishes (owner coordinates).
 
 ## Result — to fill
 
