@@ -81,7 +81,7 @@ def test_gate_needs_both_conditions() -> None:
     assert not se.gate({"wilson95": [0.26, 0.29]}, {**cmp_ok, "diff": -0.01})["passed"]
 
 
-FAKE_BASE = 100  # a fake seed block, inside no real range: ranges are patched in
+FAKE_ENV = ("python", *se.ENV_PACKAGES)
 
 
 def _fake_play(job: se.Job) -> dict[str, Any]:
@@ -108,6 +108,8 @@ def ckpt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "ck.zip"
     path.write_bytes(b"x")
     monkeypatch.setattr(se, "_git", lambda *a: "" if a[0] == "status" else "abc123")
+    # the RL CI job has no torch; the fake games below need none
+    monkeypatch.setattr(se, "environment", lambda: dict.fromkeys(FAKE_ENV, "1"))
     # tiny fake board range so a few chunks are a whole run
     monkeypatch.setitem(se.SEED_RANGES, "measured", (1, 24))
     return path
@@ -243,9 +245,30 @@ def test_resume_refuses_a_different_environment(
 ) -> None:
     monkeypatch.setattr(se, "_run_jobs", _sequential)
     se.run(_args(tmp_path, 8, ckpt))
-    monkeypatch.setattr(se, "environment", lambda: {"python": "0", "torch": "other"})
+    monkeypatch.setattr(
+        se, "environment", lambda: {**dict.fromkeys(FAKE_ENV, "1"), "torch": "other"}
+    )
     with pytest.raises(SystemExit):
         se.run(_args(tmp_path, 8, ckpt))
+
+
+def test_a_run_refuses_to_start_without_torch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ckpt: Path
+) -> None:
+    monkeypatch.setattr(
+        se, "environment", lambda: {**dict.fromkeys(FAKE_ENV, "1"), "torch": None}
+    )
+    with pytest.raises(SystemExit, match="torch"):
+        se.run(_args(tmp_path, 8, ckpt))
+
+
+def test_environment_records_an_absent_package_as_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        se, "version", lambda _p: (_ for _ in ()).throw(se.PackageNotFoundError())
+    )
+    assert se.environment()["torch"] is None
 
 
 def test_a_stale_stop_file_refuses_to_start(

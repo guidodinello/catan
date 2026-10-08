@@ -49,7 +49,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from dataclasses import dataclass
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -199,11 +199,19 @@ def _write_atomic(path: Path, payload: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def environment() -> dict[str, str]:
-    """Interpreter and package versions; a resume under different ones is refused."""
+def _installed(package: str) -> str | None:
+    try:
+        return version(package)
+    except PackageNotFoundError:
+        return None
+
+
+def environment() -> dict[str, str | None]:
+    """Interpreter and package versions (None: not installed); a resume under
+    different ones is refused."""
     return {
         "python": platform.python_version(),
-        **{pkg: version(pkg) for pkg in ENV_PACKAGES},
+        **{pkg: _installed(pkg) for pkg in ENV_PACKAGES},
     }
 
 
@@ -343,6 +351,9 @@ def run(args: argparse.Namespace) -> None:
         raise SystemExit(
             f"seeds outside the {range_name} range {lo}..{lo + n_range - 1}"
         )
+    env = environment()
+    if missing := sorted(k for k, v in env.items() if v is None):
+        raise SystemExit(f"cannot run games without {', '.join(missing)} installed")
     checkpoint = str(Path(args.checkpoint).resolve())
     config = {
         "arm": args.arm,
@@ -354,7 +365,7 @@ def run(args: argparse.Namespace) -> None:
         "seed_range": range_name,
         "seed_base": seed_base,
         "chunk": args.chunk,
-        "environment": environment(),
+        "environment": env,
     }
     chash = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
     label = args.label or f"{args.arm}" + (
