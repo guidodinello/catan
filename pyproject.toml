@@ -91,7 +91,7 @@ conflicts = [
 ]
 
 [tool.uv.sources]
-gamekit = { git = "https://github.com/guidodinello/gamekit", branch = "main" }
+gamekit = { git = "https://github.com/guidodinello/gamekit", tag = "v0.4.0" }
 # CPU-only torch by default. The default Linux index pulls ~3-4GB of
 # nvidia-*/triton wheels; this one pulls ~250MB and no CUDA at all. Justified
 # empirically: truco-py measured on this same machine that training is
