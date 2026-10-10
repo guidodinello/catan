@@ -125,7 +125,7 @@ Run from the dedicated worktree `catan-46-run`, detached at `694b12e` (the merge
 
 - **Pre-run harness check:** `012_check_none` (`none`, benchmark boards 1..4000) gave **829/4000 = 20.725%**, exactly 011's and 006's count, so the driver rewrite and the torch 2.14.0 → 2.14.1 bump did not change `none`'s behavior. The arm was run once, in a single invocation (12:34:59–12:36:13, 2026-10-08); it is not part of the gate.
 - **B0 `012_none`:** 4000 games in one 73 s invocation (1150 worker-s, 0.29 worker-s/game).
-- **B1 `012_self_s128`:** 4000 games in 7 invocations over three days, about 20.2 h of recorded wall time plus about 0.5 h in the invocation lost to the power-off. Raw outputs (chunks, journals, `invocations.jsonl`, `run012.log`) stay in `catan-46-run/rl_runs/search_eval/` (gitignored); the analysis JSON is committed as `experiments/results/search_eval_012.json`.
+- **B1 `012_self_s128`:** 4000 games in 7 invocations over three days, about 20.2 h of recorded wall time plus about 0.5 h in the invocation lost to the power-off. Raw outputs (chunks, journals, `invocations.jsonl`, `run012.log`) are archived in `rl_runs/exp012/run/` (`search_eval/` and `run012.log`; relative to the catan checkout; gitignored); the analysis JSON is committed as `experiments/results/search_eval_012.json`.
 
 ## Result
 
