@@ -1,9 +1,9 @@
 # Confirming decision-time search with the self opponent model (issue #46)
 
-**Date:** pre-registered 2026-10-07 (the commit that adds this file; no measured run exists before it); measured runs: see Deviations
+**Date:** pre-registered 2026-10-07 (PR #53, merge `694b12e`; no measured run exists before it); measured 2026-10-08 … 2026-10-10 (see Run log)
 **Note:** [gamekit#021 — Decision-time search: ISMCTS with the trained policy/value network as priors](https://github.com/guidodinello/gamekit/blob/main/docs/research/021-decision-time-search.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Follows [011 — decision-time search](011-decision-time-search.md) (issue #41, PR #45).
 
-**Status: pre-registered, not yet run (timing smoke and stop/resume checks done).** The code and this log are committed before any measured game. The timing smoke below read no win rate (`--timing-only` records no outcome).
+**Status: run complete; the pre-registered gate PASSED** (B1 `self` S=128: 32.58% [31.14, 34.04], above 25%; +11.6 pts over no search, z = 11.69). The code and this log were committed before any measured game; the timing smoke read no win rate (`--timing-only` records no outcome).
 
 ## Hypothesis
 
@@ -119,15 +119,68 @@ All 32 digests are distinct. The first version of the SIGTERM leg signalled a sh
 
 Python 3.14.5, torch 2.14.1+cpu, numpy 2.5.3, sb3-contrib 2.9.0, gamekit 0.3.0 (from the lock at origin/main `efed88d`); the result JSON records the commit and these versions per chunk. 20 cores, 15 GB RAM; the laptop runs in the daytime only. In-loop eval caveats: not applicable (no training).
 
+## Run log
+
+Run from the dedicated worktree `catan-46-run`, detached at `694b12e` (the merge commit; clean tree, lock-pinned venv: Python 3.14.5, torch 2.14.1+cpu, numpy 2.5.3, sb3-contrib 2.9.0, gamekit 0.3.0), 16 workers, `OMP_NUM_THREADS=1`, in tmux session `catan46` (`rl_runs/run012.sh`, a `&&` chain: check, B0, B1, `analyze --gate`). Before the launch no `search_eval` driver, truco job or tmux session was running (`pgrep` guard, `tmux ls`), and 12.7 GB was available. The catan-league agent ran light rsync/diff jobs on the side; nothing heavy ran concurrently. The chain ended with `chain exit 0` on 2026-10-10 15:51.
+
+- **Pre-run harness check:** `012_check_none` (`none`, benchmark boards 1..4000) gave **829/4000 = 20.725%**, exactly 011's and 006's count, so the driver rewrite and the torch 2.14.0 → 2.14.1 bump did not change `none`'s behavior. The arm was run once, in a single invocation (12:34:59–12:36:13, 2026-10-08); it is not part of the gate.
+- **B0 `012_none`:** 4000 games in one 73 s invocation (1150 worker-s, 0.29 worker-s/game).
+- **B1 `012_self_s128`:** 4000 games in 7 invocations over three days, about 20.2 h of recorded wall time plus about 0.5 h in the invocation lost to the power-off. Raw outputs (chunks, journals, `invocations.jsonl`, `run012.log`) stay in `catan-46-run/rl_runs/search_eval/` (gitignored); the analysis JSON is committed as `experiments/results/search_eval_012.json`.
+
 ## Result
 
-Pending. Result JSON will be `experiments/results/search_eval_012.json`.
+All numbers are from `experiments/results/search_eval_012.json`, same 4000 boards 20,000,001–20,004,000 for both arms.
+
+| arm | wins / n | win rate | Wilson 95% |
+|---|---|---|---|
+| B0 `none` (`RLAgent`) | 840 / 4000 | **21.00%** | [19.77, 22.29] |
+| B1 `self`, S = 128 | 1303 / 4000 | **32.575%** | [31.14, 34.04] |
+
+- **B1 − B0:** **+11.575 pts**, `two_proportion_test` z = 11.69 (the reported p underflows to 0.0, i.e. p < 1e-30, far below 0.05).
+- **Secondary, board-paired:** B1 won and B0 lost on 697 boards, B0 won and B1 lost on 234; exact McNemar p = 4.6e-54.
+- **By rotation position** (`engine_seed % 4`, n = 1000 each; B0 → B1): 0: 19.3% → 28.9%; 1: 23.7% → 34.9%; 2: 20.1% → 33.9%; 3: 20.9% → 32.6%. The gain is positive in all four positions (+9.6, +11.2, +13.8, +11.7 pts).
+- **B0's fresh-board level:** 21.00% [19.77, 22.29], against 006's 20.72% [19.50, 22.01] (winner's-curse-biased upward, the best of five fixed points) and 009's 20.575% [19.35, 21.86] (same checkpoint, fresh boards). Both are inside B0's interval, and `012_check_none` reproduces 006's 829/4000 exactly, so the no-search level is stable across board sets.
+- **Against 011's exploratory arm A2** (`self`, S = 64, n = 1000, 27.2% [24.53, 30.04]): B1 is higher at 32.6% [31.14, 34.04], so the confirmation did not regress toward the mean. The S = 64 → 128 comparison is not controlled (different boards and n) and is not part of the gate.
+
+**Latency and cost (B1):**
+
+| quantity | value |
+|---|---|
+| top-level decisions of the search seat | 450,006 (112.5 per game) |
+| searched decisions (S = 128 sims) | 209,524 (46.6%); skip rate (one legal action or trade response) 53.4% |
+| wall per searched decision | mean 4796 ms, p95 10,404 ms, max 69,708 ms |
+| wall per top-level decision, skipped included | about 2233 ms (mean 4796 ms × 46.6%) |
+| simulations per second | 26.7 |
+| override rate (search differs from greedy) | 9.27% of top-level decisions overall |
+| worker-s per game | 251.6 (smoke: 248.4; 011's 379 was the pessimistic figure) |
+| peak RSS per worker | 378 MB |
+
+Override rate by phase (decisions, overrides): MAIN 116,210 → 13.3%; SETUP_SETTLEMENT 8,000 → 8.4%; DISCARD 8,140 → 6.2%; MOVE_ROBBER 32,359 → 5.6%; ROLL 18,739 → 4.3%; STEAL 18,076 → 0.9%; SETUP_ROAD 8,000 → 0.03%. The search changes the play mostly in the main phase.
 
 ## Verdict
 
-Pending (pre-registered gate above).
+**Gate passed.** Both pre-registered conditions hold: (1) B1's Wilson 95% lower bound is **31.14% > 25%**; (2) B1 beats no search on the same boards, **p < 0.05 with a positive difference (+11.6 pts, z = 11.69)**. The secondary McNemar test agrees (p = 4.6e-54).
+
+`self` decision-time search at S = 128, with no retraining and with opponents inside the search modelled only by the checkpoint's own policy, lifts `catan_bc_ft_long_10031616` from 21.0% to 32.6% against 3 `HeuristicAgent`, on boards no earlier experiment used. Per the pre-registration this confirms 011's exploratory finding and, by #46's criterion, closes the issue.
+
+Limits, stated rather than hidden: the result is one checkpoint against three heuristic opponents, 4-player, no trading; the 25% gate is the Phase 5 level for model-free opponents inside the search, not a claim about other opponent sets. The cost is about 252 worker-s per game, about 2.2 s per top-level decision, which is not interactive-speed without a smaller S.
 
 ## Deviations / disclosures
 
-- Written before any measured run; the driver changes (journaled/stoppable resume, invocation log, digest, environment and search params in the config hash, the `fresh_012` range, the gate helper) are in the same PR as this log. The game code (`agents/`, `engine/`, `rl/`) is unchanged from 011.
-- The stop/resume table (every invocation boundary) is added after the run from `provenance.invocations`.
+- Written before any measured run; the driver changes (journaled/stoppable resume, invocation log, digest, environment and search params in the config hash, the `fresh_012` range, the gate helper) came in the same PR (#53) as the pre-registration. The game code (`agents/`, `engine/`, `rl/`) is unchanged from 011. The measured run used exactly the merge commit `694b12e`; every chunk records that commit and one config hash per arm.
+- **Stop/resume table for B1**, from `provenance.invocations` (`invocations.jsonl`). Times are local (UTC−3). Games are counted by the invocation that played them; 7 distinct invocation ids appear in the games, and a chunk can span several of them (`provenance.chunk_invocations`).
+
+  | # | started | ended | reason | games played | recorded wall |
+  |---|---|---|---|---|---|
+  | 1 | Thu 10-08 12:37 | Thu 10-08 18:57 | `stop_file` | 1631 | 6.33 h |
+  | 2 | Thu 10-08 21:12 | Thu 10-08 22:03 | `stop_file` | 209 | 0.84 h |
+  | 3 | Thu 10-08 22:07 | Thu 10-08 22:59 | `stop_file` | 218 | 0.87 h |
+  | 4 | Fri 10-09 16:20 | Fri 10-09 19:47 | `stop_file` | 854 | 3.45 h |
+  | 5 | Fri 10-09 20:34 | Sat 10-10 02:04 | `stop_file` | 475 | 5.51 h |
+  | 6 | Sat 10-10 11:37 | **no end event** | **unclean: laptop powered off on low battery at about 12:09** | 55 (kept) | about 0.5 h (not in the sum) |
+  | 7 | Sat 10-10 12:41 | Sat 10-10 15:51 | `completed` | 558 | 3.18 h |
+
+  The five graceful stops lost nothing. Invocation 6 was killed mid-chunk (`20003401`); the games it had finished and fsynced (55) were kept, the games in flight at the power-off (at most 16, none recorded) were replayed by invocation 7, which resumed from the journal ("42 games journaled" for that chunk at resume, in `run012.log`). The driver prints no line when it drops a truncated last journal line, so I cannot say from the log whether one existed. All 4000 games have distinct digests and the same config hash and commit throughout; a resume under any other config, commit or environment would have been refused, and none was.
+- The check and B0 arms also have invocations after their completion (games_todo 0, reason `completed`, 0 games): every re-run of `run012.sh` re-entered those finished arms and skipped them. They played nothing.
+- No manual intervention in the measurements: no seed, config, checkpoint or environment change between invocations; the only manual actions were `touch STOP`, the tmux relaunch, and the laptop power-off.
+- **Stop-resume identity** on the real checkpoint was demonstrated before the run (smoke section, S = 16, 32 games, both stop kinds). It was not re-checked on the measured games themselves (that would need an uninterrupted B1, 17–26 h); the evidence for it on the real run is that the 7 invocations used the same config hash and commit and nothing was refused.
