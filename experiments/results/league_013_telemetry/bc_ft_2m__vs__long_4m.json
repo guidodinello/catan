@@ -1,0 +1,12 @@
+{
+  "a": "bc_ft_2m",
+  "b": "long_4m",
+  "n": 4000,
+  "winners_sha256": "41b0e17a6a21ea7e0a366495c3d10cad8c475e80bb0aa0d60a43f6b77a4d571b",
+  "digests_sha256": "bef97367c2299089f9355b9c1f407dda6a5b9b24211498ef9a5d8a9c09557d9a",
+  "worker_s_total": 12152.401667540013,
+  "worker_s_per_game": 3.038100416885003,
+  "peak_rss_mb": 476.03515625,
+  "wall_s": 4056.9158963490045,
+  "ties": 0
+}

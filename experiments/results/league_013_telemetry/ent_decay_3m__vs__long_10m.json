@@ -1,0 +1,12 @@
+{
+  "a": "ent_decay_3m",
+  "b": "long_10m",
+  "n": 4000,
+  "winners_sha256": "61861e758646a676633afff80f6801bcddab01d2fa356aaf8221bc25b7c4e7d6",
+  "digests_sha256": "6aab3c9a9f28c1530cc30bab1466ba3ac5e4cde104d0b198db58de044e425952",
+  "worker_s_total": 11469.536742511831,
+  "worker_s_per_game": 2.867384185627958,
+  "peak_rss_mb": 476.8359375,
+  "wall_s": 3844.806898120034,
+  "ties": 0
+}

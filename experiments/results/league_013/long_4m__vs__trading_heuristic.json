@@ -1,0 +1,99 @@
+{
+  "git_commit": "433bf1eb7cc428554eec57c3749c66bba18a4b73",
+  "generated_at": "2026-10-10T17:26:29.257291+00:00",
+  "experiment": "benchmark",
+  "num_seats": 4,
+  "n_games": 4000,
+  "engine_seed_base": 1650169939,
+  "driver_seed_base": 1879728847,
+  "by_role": {
+    "trading_heuristic": {
+      "n_seat_occupancies": 8000,
+      "wins": 2692,
+      "win_rate": 0.3365,
+      "win_rate_wilson_ci": [
+        0.32622647058553517,
+        0.3469304736818931
+      ],
+      "seat_occupancy_counts": {
+        "0": 2000,
+        "1": 2000,
+        "2": 2000,
+        "3": 2000
+      }
+    },
+    "long_4m": {
+      "n_seat_occupancies": 8000,
+      "wins": 1308,
+      "win_rate": 0.1635,
+      "win_rate_wilson_ci": [
+        0.15555792291469664,
+        0.17176508470603502
+      ],
+      "seat_occupancy_counts": {
+        "0": 2000,
+        "1": 2000,
+        "2": 2000,
+        "3": 2000
+      }
+    }
+  },
+  "by_seat": {
+    "0": {
+      "n_games": 4000,
+      "wins": 936,
+      "win_rate": 0.234,
+      "win_rate_wilson_ci": [
+        0.22113882574581253,
+        0.2473715980843087
+      ],
+      "expected_under_null": 0.25
+    },
+    "1": {
+      "n_games": 4000,
+      "wins": 1014,
+      "win_rate": 0.2535,
+      "win_rate_wilson_ci": [
+        0.24025989997360547,
+        0.2672131055682175
+      ],
+      "expected_under_null": 0.25
+    },
+    "2": {
+      "n_games": 4000,
+      "wins": 1018,
+      "win_rate": 0.2545,
+      "win_rate_wilson_ci": [
+        0.2412414551348824,
+        0.2682296315203611
+      ],
+      "expected_under_null": 0.25
+    },
+    "3": {
+      "n_games": 4000,
+      "wins": 1032,
+      "win_rate": 0.258,
+      "win_rate_wilson_ci": [
+        0.2446776326973712,
+        0.2717867378548444
+      ],
+      "expected_under_null": 0.25
+    }
+  },
+  "comparisons": {
+    "trading_heuristic_vs_long_4m": {
+      "z": 25.268267319571663,
+      "p_value": 0.0
+    }
+  },
+  "league_config": {
+    "a": "long_4m",
+    "b": "trading_heuristic",
+    "num_seats": 4,
+    "n_games": 4000,
+    "seed": 20261013,
+    "engine_seed_base": 1650169939,
+    "driver_seed_base": 1879728847
+  },
+  "config_hash": "fe5627be62e4"
+}
