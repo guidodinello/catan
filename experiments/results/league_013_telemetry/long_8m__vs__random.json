@@ -1,0 +1,12 @@
+{
+  "a": "long_8m",
+  "b": "random",
+  "n": 4000,
+  "winners_sha256": "77d9401c0c3905e60a396cda38085ee0e77ce1ce9b1878f4bce9b91e13ce0a84",
+  "digests_sha256": "d33fa13354b1821443528cef81744fc3d7fe202c5eff53cbda01deb1f4256088",
+  "worker_s_total": 7391.365940493735,
+  "worker_s_per_game": 1.8478414851234337,
+  "peak_rss_mb": 478.69921875,
+  "wall_s": 2496.0670004640124,
+  "ties": 0
+}

@@ -1,0 +1,12 @@
+{
+  "a": "bc_ft_2m",
+  "b": "trading_heuristic",
+  "n": 4000,
+  "winners_sha256": "b189ba0a872ab6e54026bbe607914f4aecc916c2d0368a16a2f6802b2a0d8839",
+  "digests_sha256": "beae46fa20189c81e0b7f9533adbbfd3442a3ef0e36a635cfee838e58fdf5f3f",
+  "worker_s_total": 7064.689280866231,
+  "worker_s_per_game": 1.7661723202165576,
+  "peak_rss_mb": 476.03515625,
+  "wall_s": 2361.3073086389923,
+  "ties": 0
+}

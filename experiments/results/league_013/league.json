@@ -1,0 +1,1509 @@
+{
+  "git_commit": "433bf1eb7cc428554eec57c3749c66bba18a4b73",
+  "generated_at": "2026-10-10T19:07:21.899691+00:00",
+  "experiment": "league",
+  "anchor": "heuristic",
+  "anchor_rating": 0.0,
+  "prior_draws": 1.0,
+  "n_bootstrap": 1000,
+  "bootstrap_seed": 0,
+  "alpha": 0.05,
+  "agents": [
+    "bc_clone",
+    "bc_ft_2m",
+    "ent_ctrl_3m",
+    "ent_decay_3m",
+    "ent_ramp_3m",
+    "heuristic",
+    "long_10m",
+    "long_4m",
+    "long_8m",
+    "random",
+    "trading_heuristic"
+  ],
+  "ratings": {
+    "trading_heuristic": {
+      "elo": 16.153609713772664,
+      "elo_ci": [
+        10.575201654069806,
+        21.15981574360846
+      ]
+    },
+    "heuristic": {
+      "elo": 0.0,
+      "elo_ci": [
+        0.0,
+        0.0
+      ]
+    },
+    "long_10m": {
+      "elo": -62.91918423673611,
+      "elo_ci": [
+        -67.64471182503767,
+        -57.76202775659656
+      ]
+    },
+    "long_8m": {
+      "elo": -69.18336447104748,
+      "elo_ci": [
+        -74.3917348004137,
+        -64.19551000085453
+      ]
+    },
+    "ent_decay_3m": {
+      "elo": -89.87310307324705,
+      "elo_ci": [
+        -95.04326645415748,
+        -84.57980085842233
+      ]
+    },
+    "ent_ctrl_3m": {
+      "elo": -116.10892526060879,
+      "elo_ci": [
+        -120.99943622995126,
+        -111.23954737790582
+      ]
+    },
+    "long_4m": {
+      "elo": -123.43253793050773,
+      "elo_ci": [
+        -128.8549478095897,
+        -118.39081169484783
+      ]
+    },
+    "ent_ramp_3m": {
+      "elo": -132.32665740739327,
+      "elo_ci": [
+        -137.63673260677197,
+        -127.15859264862355
+      ]
+    },
+    "bc_clone": {
+      "elo": -161.1110112440334,
+      "elo_ci": [
+        -166.3774525749809,
+        -156.06711401280842
+      ]
+    },
+    "bc_ft_2m": {
+      "elo": -178.78520656740585,
+      "elo_ci": [
+        -183.80991189843198,
+        -173.61970290287996
+      ]
+    },
+    "random": {
+      "elo": -687.3360051139597,
+      "elo_ci": [
+        -696.1605994652609,
+        -676.5524606109971
+      ]
+    }
+  },
+  "matrix": {
+    "bc_clone__vs__bc_ft_2m": {
+      "wins": 2065,
+      "losses": 1935,
+      "n_decisive": 4000,
+      "win_rate": 0.51625,
+      "win_rate_wilson_ci": [
+        0.5007551418639683,
+        0.5317136762291164
+      ],
+      "bt_predicted": 0.5254132939502555,
+      "residual": -0.009163293950255502
+    },
+    "bc_clone__vs__ent_ctrl_3m": {
+      "wins": 1904,
+      "losses": 2096,
+      "n_decisive": 4000,
+      "win_rate": 0.476,
+      "win_rate_wilson_ci": [
+        0.46055342052513715,
+        0.4914926327527686
+      ],
+      "bt_predicted": 0.43559655759218424,
+      "residual": 0.04040344240781574
+    },
+    "bc_clone__vs__ent_decay_3m": {
+      "wins": 1557,
+      "losses": 2443,
+      "n_decisive": 4000,
+      "win_rate": 0.38925,
+      "win_rate_wilson_ci": [
+        0.3742531460284549,
+        0.40445937066021403
+      ],
+      "bt_predicted": 0.3988933311971536,
+      "residual": -0.009643331197153604
+    },
+    "bc_clone__vs__ent_ramp_3m": {
+      "wins": 1902,
+      "losses": 2098,
+      "n_decisive": 4000,
+      "win_rate": 0.4755,
+      "win_rate_wilson_ci": [
+        0.46005465155037606,
+        0.49099236117081935
+      ],
+      "bt_predicted": 0.4586705008094252,
+      "residual": 0.016829499190574804
+    },
+    "bc_clone__vs__heuristic": {
+      "wins": 1066,
+      "losses": 2934,
+      "n_decisive": 4000,
+      "win_rate": 0.2665,
+      "win_rate_wilson_ci": [
+        0.25302731489217706,
+        0.2804207451241137
+      ],
+      "bt_predicted": 0.28344649759354673,
+      "residual": -0.016946497593546717
+    },
+    "bc_clone__vs__long_10m": {
+      "wins": 1521,
+      "losses": 2479,
+      "n_decisive": 4000,
+      "win_rate": 0.38025,
+      "win_rate_wilson_ci": [
+        0.3653277544383929,
+        0.3954020322294907
+      ],
+      "bt_predicted": 0.3623364500635257,
+      "residual": 0.01791354993647426
+    },
+    "bc_clone__vs__long_4m": {
+      "wins": 1694,
+      "losses": 2306,
+      "n_decisive": 4000,
+      "win_rate": 0.4235,
+      "win_rate_wilson_ci": [
+        0.40826812682884484,
+        0.4388786679944796
+      ],
+      "bt_predicted": 0.44598789471504047,
+      "residual": -0.02248789471504048
+    },
+    "bc_clone__vs__long_8m": {
+      "wins": 1556,
+      "losses": 2444,
+      "n_decisive": 4000,
+      "win_rate": 0.389,
+      "win_rate_wilson_ci": [
+        0.37400514516906574,
+        0.40420785124124814
+      ],
+      "bt_predicted": 0.37070860991164867,
+      "residual": 0.018291390088351345
+    },
+    "bc_clone__vs__random": {
+      "wins": 3748,
+      "losses": 252,
+      "n_decisive": 4000,
+      "win_rate": 0.937,
+      "win_rate_wilson_ci": [
+        0.929043303976014,
+        0.9441181425887871
+      ],
+      "bt_predicted": 0.9538757493974329,
+      "residual": -0.01687574939743286
+    },
+    "bc_clone__vs__trading_heuristic": {
+      "wins": 986,
+      "losses": 3014,
+      "n_decisive": 4000,
+      "win_rate": 0.2465,
+      "win_rate_wilson_ci": [
+        0.23339166490811228,
+        0.2600947728397664
+      ],
+      "bt_predicted": 0.2649461460492837,
+      "residual": -0.018446146049283685
+    },
+    "bc_ft_2m__vs__bc_clone": {
+      "wins": 1935,
+      "losses": 2065,
+      "n_decisive": 4000,
+      "win_rate": 0.48375,
+      "win_rate_wilson_ci": [
+        0.46828632377088364,
+        0.4992448581360318
+      ],
+      "bt_predicted": 0.47458670604974457,
+      "residual": 0.009163293950255447
+    },
+    "bc_ft_2m__vs__ent_ctrl_3m": {
+      "wins": 1548,
+      "losses": 2452,
+      "n_decisive": 4000,
+      "win_rate": 0.387,
+      "win_rate_wilson_ci": [
+        0.3720212886265527,
+        0.40219554555691994
+      ],
+      "bt_predicted": 0.41076745257312536,
+      "residual": -0.023767452573125347
+    },
+    "bc_ft_2m__vs__ent_decay_3m": {
+      "wins": 1619,
+      "losses": 2381,
+      "n_decisive": 4000,
+      "win_rate": 0.40475,
+      "win_rate_wilson_ci": [
+        0.38963728999939506,
+        0.4200454839472932
+      ],
+      "bt_predicted": 0.3747671571101155,
+      "residual": 0.02998284288988451
+    },
+    "bc_ft_2m__vs__ent_ramp_3m": {
+      "wins": 1687,
+      "losses": 2313,
+      "n_decisive": 4000,
+      "win_rate": 0.42175,
+      "win_rate_wilson_ci": [
+        0.4065282882886352,
+        0.4371218645862032
+      ],
+      "bt_predicted": 0.4335364385481386,
+      "residual": -0.0117864385481386
+    },
+    "bc_ft_2m__vs__heuristic": {
+      "wins": 1200,
+      "losses": 2800,
+      "n_decisive": 4000,
+      "win_rate": 0.3,
+      "win_rate_wilson_ci": [
+        0.2859961177350789,
+        0.3143876595808018
+      ],
+      "bt_predicted": 0.26324497516528683,
+      "residual": 0.03675502483471316
+    },
+    "bc_ft_2m__vs__long_10m": {
+      "wins": 1324,
+      "losses": 2676,
+      "n_decisive": 4000,
+      "win_rate": 0.331,
+      "win_rate_wilson_ci": [
+        0.316585299414529,
+        0.3457389924173902
+      ],
+      "bt_predicted": 0.33917374855092397,
+      "residual": -0.008173748550923954
+    },
+    "bc_ft_2m__vs__long_4m": {
+      "wins": 1524,
+      "losses": 2476,
+      "n_decisive": 4000,
+      "win_rate": 0.381,
+      "win_rate_wilson_ci": [
+        0.36607132888604316,
+        0.3961570186169059
+      ],
+      "bt_predicted": 0.4210083048277905,
+      "residual": -0.0400083048277905
+    },
+    "bc_ft_2m__vs__long_8m": {
+      "wins": 1292,
+      "losses": 2708,
+      "n_decisive": 4000,
+      "win_rate": 0.323,
+      "win_rate_wilson_ci": [
+        0.30868426786804537,
+        0.33765537505650906
+      ],
+      "bt_predicted": 0.3473022048217133,
+      "residual": -0.024302204821713302
+    },
+    "bc_ft_2m__vs__random": {
+      "wins": 3793,
+      "losses": 207,
+      "n_decisive": 4000,
+      "win_rate": 0.94825,
+      "win_rate_wilson_ci": [
+        0.9409448512372589,
+        0.9546950078535238
+      ],
+      "bt_predicted": 0.9491870056933248,
+      "residual": -0.0009370056933247772
+    },
+    "bc_ft_2m__vs__trading_heuristic": {
+      "wins": 1114,
+      "losses": 2886,
+      "n_decisive": 4000,
+      "win_rate": 0.2785,
+      "win_rate_wilson_ci": [
+        0.26482606504585615,
+        0.29259896833148175
+      ],
+      "bt_predicted": 0.24561121039403983,
+      "residual": 0.0328887896059602
+    },
+    "ent_ctrl_3m__vs__bc_clone": {
+      "wins": 2096,
+      "losses": 1904,
+      "n_decisive": 4000,
+      "win_rate": 0.524,
+      "win_rate_wilson_ci": [
+        0.5085073672472314,
+        0.5394465794748629
+      ],
+      "bt_predicted": 0.5644034424078157,
+      "residual": -0.04040344240781568
+    },
+    "ent_ctrl_3m__vs__bc_ft_2m": {
+      "wins": 2452,
+      "losses": 1548,
+      "n_decisive": 4000,
+      "win_rate": 0.613,
+      "win_rate_wilson_ci": [
+        0.5978044544430801,
+        0.6279787113734474
+      ],
+      "bt_predicted": 0.5892325474268746,
+      "residual": 0.023767452573125403
+    },
+    "ent_ctrl_3m__vs__ent_decay_3m": {
+      "wins": 1458,
+      "losses": 2542,
+      "n_decisive": 4000,
+      "win_rate": 0.3645,
+      "win_rate_wilson_ci": [
+        0.34972154706832226,
+        0.3795384620631869
+      ],
+      "bt_predicted": 0.4623152180594901,
+      "residual": -0.09781521805949012
+    },
+    "ent_ctrl_3m__vs__ent_ramp_3m": {
+      "wins": 2042,
+      "losses": 1958,
+      "n_decisive": 4000,
+      "win_rate": 0.5105,
+      "win_rate_wilson_ci": [
+        0.4950058971290267,
+        0.5259739545618896
+      ],
+      "bt_predicted": 0.5233222564025738,
+      "residual": -0.01282225640257384
+    },
+    "ent_ctrl_3m__vs__heuristic": {
+      "wins": 1270,
+      "losses": 2730,
+      "n_decisive": 4000,
+      "win_rate": 0.3175,
+      "win_rate_wilson_ci": [
+        0.30325511144449696,
+        0.33209508535624416
+      ],
+      "bt_predicted": 0.338860419800716,
+      "residual": -0.021360419800716013
+    },
+    "ent_ctrl_3m__vs__long_10m": {
+      "wins": 2106,
+      "losses": 1894,
+      "n_decisive": 4000,
+      "win_rate": 0.5265,
+      "win_rate_wilson_ci": [
+        0.5110088804645482,
+        0.5419402690410976
+      ],
+      "bt_predicted": 0.4240462673176631,
+      "residual": 0.10245373268233687
+    },
+    "ent_ctrl_3m__vs__long_4m": {
+      "wins": 2115,
+      "losses": 1885,
+      "n_decisive": 4000,
+      "win_rate": 0.52875,
+      "win_rate_wilson_ci": [
+        0.513260574476742,
+        0.5441842575341003
+      ],
+      "bt_predicted": 0.5105379651311456,
+      "residual": 0.018212034868854476
+    },
+    "ent_ctrl_3m__vs__long_8m": {
+      "wins": 1887,
+      "losses": 2113,
+      "n_decisive": 4000,
+      "win_rate": 0.47175,
+      "win_rate_wilson_ci": [
+        0.45631437937217373,
+        0.4872398291736945
+      ],
+      "bt_predicted": 0.4328763485925018,
+      "residual": 0.03887365140749821
+    },
+    "ent_ctrl_3m__vs__random": {
+      "wins": 3875,
+      "losses": 125,
+      "n_decisive": 4000,
+      "win_rate": 0.96875,
+      "win_rate_wilson_ci": [
+        0.9628921271142394,
+        0.9737083948016655
+      ],
+      "bt_predicted": 0.9640234192799384,
+      "residual": 0.004726580720061602
+    },
+    "ent_ctrl_3m__vs__trading_heuristic": {
+      "wins": 1211,
+      "losses": 2789,
+      "n_decisive": 4000,
+      "win_rate": 0.30275,
+      "win_rate_wilson_ci": [
+        0.2887066454272873,
+        0.3171718549505001
+      ],
+      "bt_predicted": 0.3183501236235398,
+      "residual": -0.015600123623539797
+    },
+    "ent_decay_3m__vs__bc_clone": {
+      "wins": 2443,
+      "losses": 1557,
+      "n_decisive": 4000,
+      "win_rate": 0.61075,
+      "win_rate_wilson_ci": [
+        0.595540629339786,
+        0.6257468539715452
+      ],
+      "bt_predicted": 0.6011066688028465,
+      "residual": 0.009643331197153548
+    },
+    "ent_decay_3m__vs__bc_ft_2m": {
+      "wins": 2381,
+      "losses": 1619,
+      "n_decisive": 4000,
+      "win_rate": 0.59525,
+      "win_rate_wilson_ci": [
+        0.5799545160527069,
+        0.6103627100006049
+      ],
+      "bt_predicted": 0.6252328428898846,
+      "residual": -0.02998284288988462
+    },
+    "ent_decay_3m__vs__ent_ctrl_3m": {
+      "wins": 2542,
+      "losses": 1458,
+      "n_decisive": 4000,
+      "win_rate": 0.6355,
+      "win_rate_wilson_ci": [
+        0.620461537936813,
+        0.6502784529316777
+      ],
+      "bt_predicted": 0.53768478194051,
+      "residual": 0.09781521805949
+    },
+    "ent_decay_3m__vs__ent_ramp_3m": {
+      "wins": 2403,
+      "losses": 1597,
+      "n_decisive": 4000,
+      "win_rate": 0.60075,
+      "win_rate_wilson_ci": [
+        0.5854832577347826,
+        0.6158234144423427
+      ],
+      "bt_predicted": 0.5607933147889312,
+      "residual": 0.039956685211068765
+    },
+    "ent_decay_3m__vs__heuristic": {
+      "wins": 1490,
+      "losses": 2510,
+      "n_decisive": 4000,
+      "win_rate": 0.3725,
+      "win_rate_wilson_ci": [
+        0.35764638708458163,
+        0.38759827095429233
+      ],
+      "bt_predicted": 0.3734718273970311,
+      "residual": -0.0009718273970311109
+    },
+    "ent_decay_3m__vs__long_10m": {
+      "wins": 1617,
+      "losses": 2383,
+      "n_decisive": 4000,
+      "win_rate": 0.40425,
+      "win_rate_wilson_ci": [
+        0.389140780356512,
+        0.41954295303346595
+      ],
+      "bt_predicted": 0.46128782585662487,
+      "residual": -0.05703782585662487
+    },
+    "ent_decay_3m__vs__long_4m": {
+      "wins": 2294,
+      "losses": 1706,
+      "n_decisive": 4000,
+      "win_rate": 0.5735,
+      "win_rate_wilson_ci": [
+        0.558110125747232,
+        0.5887488360891819
+      ],
+      "bt_predicted": 0.5481462675118329,
+      "residual": 0.02535373248816708
+    },
+    "ent_decay_3m__vs__long_8m": {
+      "wins": 1620,
+      "losses": 2380,
+      "n_decisive": 4000,
+      "win_rate": 0.405,
+      "win_rate_wilson_ci": [
+        0.38988555095413524,
+        0.42029674327090816
+      ],
+      "bt_predicted": 0.4702602186471305,
+      "residual": -0.0652602186471305
+    },
+    "ent_decay_3m__vs__random": {
+      "wins": 3871,
+      "losses": 129,
+      "n_decisive": 4000,
+      "win_rate": 0.96775,
+      "win_rate_wilson_ci": [
+        0.961810722406102,
+        0.9727917183963823
+      ],
+      "bt_predicted": 0.9689096212076154,
+      "residual": -0.001159621207615369
+    },
+    "ent_decay_3m__vs__trading_heuristic": {
+      "wins": 1335,
+      "losses": 2665,
+      "n_decisive": 4000,
+      "win_rate": 0.33375,
+      "win_rate_wilson_ci": [
+        0.3193023806931079,
+        0.34851663420071793
+      ],
+      "bt_predicted": 0.3519819121875879,
+      "residual": -0.018231912187587906
+    },
+    "ent_ramp_3m__vs__bc_clone": {
+      "wins": 2098,
+      "losses": 1902,
+      "n_decisive": 4000,
+      "win_rate": 0.5245,
+      "win_rate_wilson_ci": [
+        0.5090076388291807,
+        0.5399453484496239
+      ],
+      "bt_predicted": 0.5413294991905748,
+      "residual": -0.01682949919057486
+    },
+    "ent_ramp_3m__vs__bc_ft_2m": {
+      "wins": 2313,
+      "losses": 1687,
+      "n_decisive": 4000,
+      "win_rate": 0.57825,
+      "win_rate_wilson_ci": [
+        0.5628781354137968,
+        0.5934717117113649
+      ],
+      "bt_predicted": 0.5664635614518614,
+      "residual": 0.011786438548138656
+    },
+    "ent_ramp_3m__vs__ent_ctrl_3m": {
+      "wins": 1958,
+      "losses": 2042,
+      "n_decisive": 4000,
+      "win_rate": 0.4895,
+      "win_rate_wilson_ci": [
+        0.47402604543811055,
+        0.5049941028709733
+      ],
+      "bt_predicted": 0.47667774359742615,
+      "residual": 0.01282225640257384
+    },
+    "ent_ramp_3m__vs__ent_decay_3m": {
+      "wins": 1597,
+      "losses": 2403,
+      "n_decisive": 4000,
+      "win_rate": 0.39925,
+      "win_rate_wilson_ci": [
+        0.38417658555765744,
+        0.4145167422652175
+      ],
+      "bt_predicted": 0.4392066852110687,
+      "residual": -0.03995668521106871
+    },
+    "ent_ramp_3m__vs__heuristic": {
+      "wins": 1296,
+      "losses": 2704,
+      "n_decisive": 4000,
+      "win_rate": 0.324,
+      "win_rate_wilson_ci": [
+        0.3096716339575602,
+        0.3386660900804148
+      ],
+      "bt_predicted": 0.318270029076529,
+      "residual": 0.005729970923470995
+    },
+    "ent_ramp_3m__vs__long_10m": {
+      "wins": 2065,
+      "losses": 1935,
+      "n_decisive": 4000,
+      "win_rate": 0.51625,
+      "win_rate_wilson_ci": [
+        0.5007551418639683,
+        0.5317136762291164
+      ],
+      "bt_predicted": 0.40142249657398754,
+      "residual": 0.11482750342601244
+    },
+    "ent_ramp_3m__vs__long_4m": {
+      "wins": 1810,
+      "losses": 2190,
+      "n_decisive": 4000,
+      "win_rate": 0.4525,
+      "win_rate_wilson_ci": [
+        0.43712811087746667,
+        0.4679630362350551
+      ],
+      "bt_predicted": 0.4872031284248656,
+      "residual": -0.03470312842486556
+    },
+    "ent_ramp_3m__vs__long_8m": {
+      "wins": 1446,
+      "losses": 2554,
+      "n_decisive": 4000,
+      "win_rate": 0.3615,
+      "win_rate_wilson_ci": [
+        0.34675087364803064,
+        0.3765148921432167
+      ],
+      "bt_predicted": 0.4101169309829706,
+      "residual": -0.048616930982970596
+    },
+    "ent_ramp_3m__vs__random": {
+      "wins": 3819,
+      "losses": 181,
+      "n_decisive": 4000,
+      "win_rate": 0.95475,
+      "win_rate_wilson_ci": [
+        0.9478607362903528,
+        0.9607666500376637
+      ],
+      "bt_predicted": 0.9606415490573996,
+      "residual": -0.0058915490573996365
+    },
+    "ent_ramp_3m__vs__trading_heuristic": {
+      "wins": 1197,
+      "losses": 2803,
+      "n_decisive": 4000,
+      "win_rate": 0.29925,
+      "win_rate_wilson_ci": [
+        0.28525698819411344,
+        0.31362822828670184
+      ],
+      "bt_predicted": 0.29844343271068713,
+      "residual": 0.0008065672893128872
+    },
+    "heuristic__vs__bc_clone": {
+      "wins": 2934,
+      "losses": 1066,
+      "n_decisive": 4000,
+      "win_rate": 0.7335,
+      "win_rate_wilson_ci": [
+        0.7195792548758865,
+        0.7469726851078231
+      ],
+      "bt_predicted": 0.7165535024064533,
+      "residual": 0.016946497593546717
+    },
+    "heuristic__vs__bc_ft_2m": {
+      "wins": 2800,
+      "losses": 1200,
+      "n_decisive": 4000,
+      "win_rate": 0.7,
+      "win_rate_wilson_ci": [
+        0.6856123404191982,
+        0.7140038822649212
+      ],
+      "bt_predicted": 0.7367550248347131,
+      "residual": -0.03675502483471316
+    },
+    "heuristic__vs__ent_ctrl_3m": {
+      "wins": 2730,
+      "losses": 1270,
+      "n_decisive": 4000,
+      "win_rate": 0.6825,
+      "win_rate_wilson_ci": [
+        0.6679049146437559,
+        0.6967448885555031
+      ],
+      "bt_predicted": 0.661139580199284,
+      "residual": 0.021360419800716013
+    },
+    "heuristic__vs__ent_decay_3m": {
+      "wins": 2510,
+      "losses": 1490,
+      "n_decisive": 4000,
+      "win_rate": 0.6275,
+      "win_rate_wilson_ci": [
+        0.6124017290457077,
+        0.6423536129154184
+      ],
+      "bt_predicted": 0.626528172602969,
+      "residual": 0.0009718273970309443
+    },
+    "heuristic__vs__ent_ramp_3m": {
+      "wins": 2704,
+      "losses": 1296,
+      "n_decisive": 4000,
+      "win_rate": 0.676,
+      "win_rate_wilson_ci": [
+        0.6613339099195853,
+        0.6903283660424399
+      ],
+      "bt_predicted": 0.681729970923471,
+      "residual": -0.0057299709234709395
+    },
+    "heuristic__vs__long_10m": {
+      "wins": 2392,
+      "losses": 1608,
+      "n_decisive": 4000,
+      "win_rate": 0.598,
+      "win_rate_wilson_ci": [
+        0.5827186387196521,
+        0.6130933103955662
+      ],
+      "bt_predicted": 0.589570936981558,
+      "residual": 0.008429063018441929
+    },
+    "heuristic__vs__long_4m": {
+      "wins": 2615,
+      "losses": 1385,
+      "n_decisive": 4000,
+      "win_rate": 0.65375,
+      "win_rate_wilson_ci": [
+        0.6388647027543499,
+        0.668340268434067
+      ],
+      "bt_predicted": 0.6705193212985554,
+      "residual": -0.01676932129855535
+    },
+    "heuristic__vs__long_8m": {
+      "wins": 2422,
+      "losses": 1578,
+      "n_decisive": 4000,
+      "win_rate": 0.6055,
+      "win_rate_wilson_ci": [
+        0.5902596828386938,
+        0.6205378746271792
+      ],
+      "bt_predicted": 0.5982674820178092,
+      "residual": 0.0072325179821908225
+    },
+    "heuristic__vs__random": {
+      "wins": 3931,
+      "losses": 69,
+      "n_decisive": 4000,
+      "win_rate": 0.98275,
+      "win_rate_wilson_ci": [
+        0.9782273423301275,
+        0.9863463151736658
+      ],
+      "bt_predicted": 0.981231419251333,
+      "residual": 0.0015185807486670644
+    },
+    "heuristic__vs__trading_heuristic": {
+      "wins": 1920,
+      "losses": 2080,
+      "n_decisive": 4000,
+      "win_rate": 0.48,
+      "win_rate_wilson_ci": [
+        0.46454413108489834,
+        0.4954942466466898
+      ],
+      "bt_predicted": 0.47676982321435196,
+      "residual": 0.00323017678564802
+    },
+    "long_10m__vs__bc_clone": {
+      "wins": 2479,
+      "losses": 1521,
+      "n_decisive": 4000,
+      "win_rate": 0.61975,
+      "win_rate_wilson_ci": [
+        0.6045979677705093,
+        0.6346722455616072
+      ],
+      "bt_predicted": 0.6376635499364743,
+      "residual": -0.017913549936474316
+    },
+    "long_10m__vs__bc_ft_2m": {
+      "wins": 2676,
+      "losses": 1324,
+      "n_decisive": 4000,
+      "win_rate": 0.669,
+      "win_rate_wilson_ci": [
+        0.6542610075826099,
+        0.6834147005854712
+      ],
+      "bt_predicted": 0.660826251449076,
+      "residual": 0.00817374855092401
+    },
+    "long_10m__vs__ent_ctrl_3m": {
+      "wins": 1894,
+      "losses": 2106,
+      "n_decisive": 4000,
+      "win_rate": 0.4735,
+      "win_rate_wilson_ci": [
+        0.4580597309589024,
+        0.4889911195354518
+      ],
+      "bt_predicted": 0.5759537326823368,
+      "residual": -0.10245373268233687
+    },
+    "long_10m__vs__ent_decay_3m": {
+      "wins": 2383,
+      "losses": 1617,
+      "n_decisive": 4000,
+      "win_rate": 0.59575,
+      "win_rate_wilson_ci": [
+        0.5804570469665342,
+        0.610859219643488
+      ],
+      "bt_predicted": 0.5387121741433751,
+      "residual": 0.05703782585662487
+    },
+    "long_10m__vs__ent_ramp_3m": {
+      "wins": 1935,
+      "losses": 2065,
+      "n_decisive": 4000,
+      "win_rate": 0.48375,
+      "win_rate_wilson_ci": [
+        0.46828632377088364,
+        0.4992448581360318
+      ],
+      "bt_predicted": 0.5985775034260125,
+      "residual": -0.11482750342601244
+    },
+    "long_10m__vs__heuristic": {
+      "wins": 1608,
+      "losses": 2392,
+      "n_decisive": 4000,
+      "win_rate": 0.402,
+      "win_rate_wilson_ci": [
+        0.38690668960443375,
+        0.4172813612803479
+      ],
+      "bt_predicted": 0.4104290630184419,
+      "residual": -0.008429063018441874
+    },
+    "long_10m__vs__long_4m": {
+      "wins": 2377,
+      "losses": 1623,
+      "n_decisive": 4000,
+      "win_rate": 0.59425,
+      "win_rate_wilson_ci": [
+        0.5789495032769426,
+        0.6093696416629486
+      ],
+      "bt_predicted": 0.5862156704861775,
+      "residual": 0.008034329513822436
+    },
+    "long_10m__vs__long_8m": {
+      "wins": 2667,
+      "losses": 1333,
+      "n_decisive": 4000,
+      "win_rate": 0.66675,
+      "win_rate_wilson_ci": [
+        0.651988349982216,
+        0.6811916756806685
+      ],
+      "bt_predicted": 0.5090139033149942,
+      "residual": 0.15773609668500577
+    },
+    "long_10m__vs__random": {
+      "wins": 3910,
+      "losses": 90,
+      "n_decisive": 4000,
+      "win_rate": 0.9775,
+      "win_rate_wilson_ci": [
+        0.9724254123450138,
+        0.9816583193133215
+      ],
+      "bt_predicted": 0.9732584766979602,
+      "residual": 0.004241523302039862
+    },
+    "long_10m__vs__trading_heuristic": {
+      "wins": 1587,
+      "losses": 2413,
+      "n_decisive": 4000,
+      "win_rate": 0.39675,
+      "win_rate_wilson_ci": [
+        0.38169510492921344,
+        0.41200302011011
+      ],
+      "bt_predicted": 0.3881299798293695,
+      "residual": 0.008620020170630516
+    },
+    "long_4m__vs__bc_clone": {
+      "wins": 2306,
+      "losses": 1694,
+      "n_decisive": 4000,
+      "win_rate": 0.5765,
+      "win_rate_wilson_ci": [
+        0.5611213320055205,
+        0.5917318731711552
+      ],
+      "bt_predicted": 0.5540121052849595,
+      "residual": 0.022487894715040535
+    },
+    "long_4m__vs__bc_ft_2m": {
+      "wins": 2476,
+      "losses": 1524,
+      "n_decisive": 4000,
+      "win_rate": 0.619,
+      "win_rate_wilson_ci": [
+        0.6038429813830942,
+        0.6339286711139569
+      ],
+      "bt_predicted": 0.5789916951722096,
+      "residual": 0.040008304827790386
+    },
+    "long_4m__vs__ent_ctrl_3m": {
+      "wins": 1885,
+      "losses": 2115,
+      "n_decisive": 4000,
+      "win_rate": 0.47125,
+      "win_rate_wilson_ci": [
+        0.4558157424658999,
+        0.48673942552325805
+      ],
+      "bt_predicted": 0.48946203486885453,
+      "residual": -0.018212034868854532
+    },
+    "long_4m__vs__ent_decay_3m": {
+      "wins": 1706,
+      "losses": 2294,
+      "n_decisive": 4000,
+      "win_rate": 0.4265,
+      "win_rate_wilson_ci": [
+        0.41125116391081806,
+        0.4418898742527681
+      ],
+      "bt_predicted": 0.45185373248816696,
+      "residual": -0.02535373248816697
+    },
+    "long_4m__vs__ent_ramp_3m": {
+      "wins": 2190,
+      "losses": 1810,
+      "n_decisive": 4000,
+      "win_rate": 0.5475,
+      "win_rate_wilson_ci": [
+        0.5320369637649449,
+        0.5628718891225334
+      ],
+      "bt_predicted": 0.5127968715751345,
+      "residual": 0.03470312842486545
+    },
+    "long_4m__vs__heuristic": {
+      "wins": 1385,
+      "losses": 2615,
+      "n_decisive": 4000,
+      "win_rate": 0.34625,
+      "win_rate_wilson_ci": [
+        0.33165973156593315,
+        0.3611352972456502
+      ],
+      "bt_predicted": 0.3294806787014446,
+      "residual": 0.016769321298555406
+    },
+    "long_4m__vs__long_10m": {
+      "wins": 1623,
+      "losses": 2377,
+      "n_decisive": 4000,
+      "win_rate": 0.40575,
+      "win_rate_wilson_ci": [
+        0.3906303583370514,
+        0.42105049672305744
+      ],
+      "bt_predicted": 0.4137843295138225,
+      "residual": -0.008034329513822491
+    },
+    "long_4m__vs__long_8m": {
+      "wins": 1400,
+      "losses": 2600,
+      "n_decisive": 4000,
+      "win_rate": 0.35,
+      "win_rate_wilson_ci": [
+        0.33536913864862195,
+        0.36491869433828855
+      ],
+      "bt_predicted": 0.4225574982529411,
+      "residual": -0.07255749825294111
+    },
+    "long_4m__vs__random": {
+      "wins": 3820,
+      "losses": 180,
+      "n_decisive": 4000,
+      "win_rate": 0.955,
+      "win_rate_wilson_ci": [
+        0.9481274103889861,
+        0.9609994962173855
+      ],
+      "bt_predicted": 0.9625323323854365,
+      "residual": -0.007532332385436491
+    },
+    "long_4m__vs__trading_heuristic": {
+      "wins": 1308,
+      "losses": 2692,
+      "n_decisive": 4000,
+      "win_rate": 0.327,
+      "win_rate_wilson_ci": [
+        0.31263418425501704,
+        0.34169778312321974
+      ],
+      "bt_predicted": 0.30927253584643905,
+      "residual": 0.017727464153560968
+    },
+    "long_8m__vs__bc_clone": {
+      "wins": 2444,
+      "losses": 1556,
+      "n_decisive": 4000,
+      "win_rate": 0.611,
+      "win_rate_wilson_ci": [
+        0.5957921487587519,
+        0.6259948548309344
+      ],
+      "bt_predicted": 0.6292913900883513,
+      "residual": -0.018291390088351345
+    },
+    "long_8m__vs__bc_ft_2m": {
+      "wins": 2708,
+      "losses": 1292,
+      "n_decisive": 4000,
+      "win_rate": 0.677,
+      "win_rate_wilson_ci": [
+        0.6623446249434911,
+        0.6913157321319547
+      ],
+      "bt_predicted": 0.6526977951782866,
+      "residual": 0.024302204821713413
+    },
+    "long_8m__vs__ent_ctrl_3m": {
+      "wins": 2113,
+      "losses": 1887,
+      "n_decisive": 4000,
+      "win_rate": 0.52825,
+      "win_rate_wilson_ci": [
+        0.5127601708263055,
+        0.5436856206278263
+      ],
+      "bt_predicted": 0.5671236514074982,
+      "residual": -0.03887365140749821
+    },
+    "long_8m__vs__ent_decay_3m": {
+      "wins": 2380,
+      "losses": 1620,
+      "n_decisive": 4000,
+      "win_rate": 0.595,
+      "win_rate_wilson_ci": [
+        0.579703256729092,
+        0.6101144490458648
+      ],
+      "bt_predicted": 0.5297397813528695,
+      "residual": 0.0652602186471305
+    },
+    "long_8m__vs__ent_ramp_3m": {
+      "wins": 2554,
+      "losses": 1446,
+      "n_decisive": 4000,
+      "win_rate": 0.6385,
+      "win_rate_wilson_ci": [
+        0.6234851078567833,
+        0.6532491263519693
+      ],
+      "bt_predicted": 0.5898830690170295,
+      "residual": 0.048616930982970485
+    },
+    "long_8m__vs__heuristic": {
+      "wins": 1578,
+      "losses": 2422,
+      "n_decisive": 4000,
+      "win_rate": 0.3945,
+      "win_rate_wilson_ci": [
+        0.37946212537282087,
+        0.4097403171613063
+      ],
+      "bt_predicted": 0.4017325179821908,
+      "residual": -0.007232517982190767
+    },
+    "long_8m__vs__long_10m": {
+      "wins": 1333,
+      "losses": 2667,
+      "n_decisive": 4000,
+      "win_rate": 0.33325,
+      "win_rate_wilson_ci": [
+        0.31880832431933154,
+        0.348011650017784
+      ],
+      "bt_predicted": 0.49098609668500576,
+      "residual": -0.15773609668500577
+    },
+    "long_8m__vs__long_4m": {
+      "wins": 2600,
+      "losses": 1400,
+      "n_decisive": 4000,
+      "win_rate": 0.65,
+      "win_rate_wilson_ci": [
+        0.6350813056617115,
+        0.664630861351378
+      ],
+      "bt_predicted": 0.5774425017470589,
+      "residual": 0.07255749825294111
+    },
+    "long_8m__vs__random": {
+      "wins": 3915,
+      "losses": 85,
+      "n_decisive": 4000,
+      "win_rate": 0.97875,
+      "win_rate_wilson_ci": [
+        0.9738000197412552,
+        0.9827813133088557
+      ],
+      "bt_predicted": 0.9723037879209031,
+      "residual": 0.006446212079096902
+    },
+    "long_8m__vs__trading_heuristic": {
+      "wins": 1539,
+      "losses": 2461,
+      "n_decisive": 4000,
+      "win_rate": 0.38475,
+      "win_rate_wilson_ci": [
+        0.3697897701546066,
+        0.39993138152366964
+      ],
+      "bt_predicted": 0.37960170810346,
+      "residual": 0.00514829189653998
+    },
+    "random__vs__bc_clone": {
+      "wins": 252,
+      "losses": 3748,
+      "n_decisive": 4000,
+      "win_rate": 0.063,
+      "win_rate_wilson_ci": [
+        0.055881857411212946,
+        0.07095669602398616
+      ],
+      "bt_predicted": 0.04612425060256713,
+      "residual": 0.016875749397432874
+    },
+    "random__vs__bc_ft_2m": {
+      "wins": 207,
+      "losses": 3793,
+      "n_decisive": 4000,
+      "win_rate": 0.05175,
+      "win_rate_wilson_ci": [
+        0.04530499214647627,
+        0.05905514876274112
+      ],
+      "bt_predicted": 0.05081299430667522,
+      "residual": 0.0009370056933247772
+    },
+    "random__vs__ent_ctrl_3m": {
+      "wins": 125,
+      "losses": 3875,
+      "n_decisive": 4000,
+      "win_rate": 0.03125,
+      "win_rate_wilson_ci": [
+        0.026291605198334553,
+        0.0371078728857606
+      ],
+      "bt_predicted": 0.03597658072006158,
+      "residual": -0.004726580720061581
+    },
+    "random__vs__ent_decay_3m": {
+      "wins": 129,
+      "losses": 3871,
+      "n_decisive": 4000,
+      "win_rate": 0.03225,
+      "win_rate_wilson_ci": [
+        0.027208281603617632,
+        0.03818927759389812
+      ],
+      "bt_predicted": 0.031090378792384743,
+      "residual": 0.0011596212076152579
+    },
+    "random__vs__ent_ramp_3m": {
+      "wins": 181,
+      "losses": 3819,
+      "n_decisive": 4000,
+      "win_rate": 0.04525,
+      "win_rate_wilson_ci": [
+        0.0392333499623364,
+        0.05213926370964711
+      ],
+      "bt_predicted": 0.039358450942600424,
+      "residual": 0.005891549057399574
+    },
+    "random__vs__heuristic": {
+      "wins": 69,
+      "losses": 3931,
+      "n_decisive": 4000,
+      "win_rate": 0.01725,
+      "win_rate_wilson_ci": [
+        0.013653684826334197,
+        0.021772657669872592
+      ],
+      "bt_predicted": 0.01876858074866706,
+      "residual": -0.0015185807486670574
+    },
+    "random__vs__long_10m": {
+      "wins": 90,
+      "losses": 3910,
+      "n_decisive": 4000,
+      "win_rate": 0.0225,
+      "win_rate_wilson_ci": [
+        0.01834168068667859,
+        0.027574587654986327
+      ],
+      "bt_predicted": 0.026741523302039907,
+      "residual": -0.0042415233020399075
+    },
+    "random__vs__long_4m": {
+      "wins": 180,
+      "losses": 3820,
+      "n_decisive": 4000,
+      "win_rate": 0.045,
+      "win_rate_wilson_ci": [
+        0.03900050378261444,
+        0.051872589611013924
+      ],
+      "bt_predicted": 0.03746766761456346,
+      "residual": 0.0075323323854365395
+    },
+    "random__vs__long_8m": {
+      "wins": 85,
+      "losses": 3915,
+      "n_decisive": 4000,
+      "win_rate": 0.02125,
+      "win_rate_wilson_ci": [
+        0.01721868669114435,
+        0.026199980258744825
+      ],
+      "bt_predicted": 0.0276962120790969,
+      "residual": -0.006446212079096899
+    },
+    "random__vs__trading_heuristic": {
+      "wins": 2,
+      "losses": 3998,
+      "n_decisive": 4000,
+      "win_rate": 0.0005,
+      "win_rate_wilson_ci": [
+        0.00013712874495346757,
+        0.0018213551014583168
+      ],
+      "bt_predicted": 0.01713056909185033,
+      "residual": -0.01663056909185033
+    },
+    "trading_heuristic__vs__bc_clone": {
+      "wins": 3014,
+      "losses": 986,
+      "n_decisive": 4000,
+      "win_rate": 0.7535,
+      "win_rate_wilson_ci": [
+        0.7399052271602335,
+        0.7666083350918876
+      ],
+      "bt_predicted": 0.7350538539507163,
+      "residual": 0.01844614604928363
+    },
+    "trading_heuristic__vs__bc_ft_2m": {
+      "wins": 2886,
+      "losses": 1114,
+      "n_decisive": 4000,
+      "win_rate": 0.7215,
+      "win_rate_wilson_ci": [
+        0.7074010316685184,
+        0.735173934954144
+      ],
+      "bt_predicted": 0.7543887896059602,
+      "residual": -0.0328887896059602
+    },
+    "trading_heuristic__vs__ent_ctrl_3m": {
+      "wins": 2789,
+      "losses": 1211,
+      "n_decisive": 4000,
+      "win_rate": 0.69725,
+      "win_rate_wilson_ci": [
+        0.6828281450495,
+        0.7112933545727129
+      ],
+      "bt_predicted": 0.6816498763764601,
+      "residual": 0.015600123623539908
+    },
+    "trading_heuristic__vs__ent_decay_3m": {
+      "wins": 2665,
+      "losses": 1335,
+      "n_decisive": 4000,
+      "win_rate": 0.66625,
+      "win_rate_wilson_ci": [
+        0.6514833657992821,
+        0.6806976193068922
+      ],
+      "bt_predicted": 0.6480180878124121,
+      "residual": 0.018231912187587906
+    },
+    "trading_heuristic__vs__ent_ramp_3m": {
+      "wins": 2803,
+      "losses": 1197,
+      "n_decisive": 4000,
+      "win_rate": 0.70075,
+      "win_rate_wilson_ci": [
+        0.6863717717132982,
+        0.7147430118058866
+      ],
+      "bt_predicted": 0.7015565672893129,
+      "residual": -0.0008065672893129427
+    },
+    "trading_heuristic__vs__heuristic": {
+      "wins": 2080,
+      "losses": 1920,
+      "n_decisive": 4000,
+      "win_rate": 0.52,
+      "win_rate_wilson_ci": [
+        0.5045057533533103,
+        0.5354558689151018
+      ],
+      "bt_predicted": 0.5232301767856481,
+      "residual": -0.0032301767856480756
+    },
+    "trading_heuristic__vs__long_10m": {
+      "wins": 2413,
+      "losses": 1587,
+      "n_decisive": 4000,
+      "win_rate": 0.60325,
+      "win_rate_wilson_ci": [
+        0.58799697988989,
+        0.6183048950707866
+      ],
+      "bt_predicted": 0.6118700201706304,
+      "residual": -0.00862002017063046
+    },
+    "trading_heuristic__vs__long_4m": {
+      "wins": 2692,
+      "losses": 1308,
+      "n_decisive": 4000,
+      "win_rate": 0.673,
+      "win_rate_wilson_ci": [
+        0.6583022168767803,
+        0.6873658157449831
+      ],
+      "bt_predicted": 0.690727464153561,
+      "residual": -0.017727464153560968
+    },
+    "trading_heuristic__vs__long_8m": {
+      "wins": 2461,
+      "losses": 1539,
+      "n_decisive": 4000,
+      "win_rate": 0.61525,
+      "win_rate_wilson_ci": [
+        0.6000686184763303,
+        0.6302102298453934
+      ],
+      "bt_predicted": 0.62039829189654,
+      "residual": -0.0051482918965400915
+    },
+    "trading_heuristic__vs__random": {
+      "wins": 3998,
+      "losses": 2,
+      "n_decisive": 4000,
+      "win_rate": 0.9995,
+      "win_rate_wilson_ci": [
+        0.9981786448985418,
+        0.9998628712550466
+      ],
+      "bt_predicted": 0.9828694309081496,
+      "residual": 0.016630569091850456
+    }
+  },
+  "ties": {
+    "bc_clone__vs__bc_ft_2m": 0,
+    "bc_clone__vs__ent_ctrl_3m": 0,
+    "bc_clone__vs__ent_decay_3m": 0,
+    "bc_clone__vs__ent_ramp_3m": 0,
+    "bc_clone__vs__heuristic": 0,
+    "bc_clone__vs__long_10m": 0,
+    "bc_clone__vs__long_4m": 0,
+    "bc_clone__vs__long_8m": 0,
+    "bc_clone__vs__random": 0,
+    "bc_clone__vs__trading_heuristic": 0,
+    "bc_ft_2m__vs__ent_ctrl_3m": 0,
+    "bc_ft_2m__vs__ent_decay_3m": 0,
+    "bc_ft_2m__vs__ent_ramp_3m": 0,
+    "bc_ft_2m__vs__heuristic": 0,
+    "bc_ft_2m__vs__long_10m": 0,
+    "bc_ft_2m__vs__long_4m": 0,
+    "bc_ft_2m__vs__long_8m": 0,
+    "bc_ft_2m__vs__random": 0,
+    "bc_ft_2m__vs__trading_heuristic": 0,
+    "ent_ctrl_3m__vs__ent_decay_3m": 0,
+    "ent_ctrl_3m__vs__ent_ramp_3m": 0,
+    "ent_ctrl_3m__vs__heuristic": 0,
+    "ent_ctrl_3m__vs__long_10m": 0,
+    "ent_ctrl_3m__vs__long_4m": 0,
+    "ent_ctrl_3m__vs__long_8m": 0,
+    "ent_ctrl_3m__vs__random": 0,
+    "ent_ctrl_3m__vs__trading_heuristic": 0,
+    "ent_decay_3m__vs__ent_ramp_3m": 0,
+    "ent_decay_3m__vs__heuristic": 0,
+    "ent_decay_3m__vs__long_10m": 0,
+    "ent_decay_3m__vs__long_4m": 0,
+    "ent_decay_3m__vs__long_8m": 0,
+    "ent_decay_3m__vs__random": 0,
+    "ent_decay_3m__vs__trading_heuristic": 0,
+    "ent_ramp_3m__vs__heuristic": 0,
+    "ent_ramp_3m__vs__long_10m": 0,
+    "ent_ramp_3m__vs__long_4m": 0,
+    "ent_ramp_3m__vs__long_8m": 0,
+    "ent_ramp_3m__vs__random": 0,
+    "ent_ramp_3m__vs__trading_heuristic": 0,
+    "heuristic__vs__long_10m": 0,
+    "heuristic__vs__long_4m": 0,
+    "heuristic__vs__long_8m": 0,
+    "heuristic__vs__random": 0,
+    "heuristic__vs__trading_heuristic": 0,
+    "long_10m__vs__long_4m": 0,
+    "long_10m__vs__long_8m": 0,
+    "long_10m__vs__random": 0,
+    "long_10m__vs__trading_heuristic": 0,
+    "long_4m__vs__long_8m": 0,
+    "long_4m__vs__random": 0,
+    "long_4m__vs__trading_heuristic": 0,
+    "long_8m__vs__random": 0,
+    "long_8m__vs__trading_heuristic": 0,
+    "random__vs__trading_heuristic": 0
+  },
+  "cycles": [
+    [
+      "ent_ctrl_3m",
+      "long_10m",
+      "ent_decay_3m"
+    ],
+    [
+      "ent_ctrl_3m",
+      "long_10m",
+      "long_8m"
+    ],
+    [
+      "ent_decay_3m",
+      "ent_ramp_3m",
+      "long_10m"
+    ],
+    [
+      "ent_ramp_3m",
+      "long_10m",
+      "long_4m"
+    ],
+    [
+      "ent_ramp_3m",
+      "long_10m",
+      "long_8m"
+    ]
+  ]
+}

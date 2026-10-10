@@ -1,0 +1,12 @@
+{
+  "a": "ent_ramp_3m",
+  "b": "long_10m",
+  "n": 4000,
+  "winners_sha256": "e3aae9587dd7965d194f8e53b74463e219173fde647ba30b1411e1d27d66c41d",
+  "digests_sha256": "180a6cfa0b8f479868f7d5068450a260166556d06a4748e9ae8c27b4bcd3315f",
+  "worker_s_total": 10813.101690808937,
+  "worker_s_per_game": 2.703275422702234,
+  "peak_rss_mb": 476.8359375,
+  "wall_s": 3610.3765960439923,
+  "ties": 0
+}
