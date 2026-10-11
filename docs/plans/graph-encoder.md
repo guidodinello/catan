@@ -30,7 +30,7 @@ Keep the 1484-dim obs, `OBS_DIM`, the env, the action space and the BC dataset e
 
 - **Static topology.** Index tensors built once from `GEOMETRY` and registered as buffers: hex→vertex (19×6), edge→vertex (72×2), plus padded vertex→edge and vertex→hex tables with validity masks.
 - **Node features.** Hex 8, vertex 14, edge 5 + 1. The extra edge feature is the BUFFER's chosen-edge mask, moved from the global block to where it belongs.
-- **Context vector.** OWN + OPPONENT + GLOBAL + the non-edge part of BUFFER + TRADE, through a small MLP, then broadcast into every node update.
+- **Context vector.** OWN + OPPONENT + GLOBAL + the non-edge part of BUFFER + TRADE, through a small MLP, then broadcast into every node update. (120 dims in total, derived from the encoder's constants in `rl/graph_policy.py`.)
 - **Trunk.** L = 3 rounds of message passing (hex→vertex, edge→vertex, vertex→edge, vertex→hex), gather + masked mean, d = 64, LayerNorm and residuals. No node-ID embeddings, so the trunk is equivariant to board symmetries.
 - **Policy head (pointer style).** Settlement and city logits from per-vertex MLPs over `[h_v ‖ ctx]`, road logits from a per-edge MLP, robber logits from a per-hex MLP. The non-spatial atoms 199-222 come from an MLP over `[pooled nodes ‖ ctx]`. Concatenated in atom order to width 223.
 - **Value head.** MLP over `[mean/max pooled nodes ‖ ctx]`.
@@ -41,7 +41,7 @@ Keep the 1484-dim obs, `OBS_DIM`, the env, the action space and the BC dataset e
 
 - `rl/train.py`: `--policy {mlp,graph}` (default `mlp`), `--gnn-dim`, `--gnn-layers`; `build_model` branches. `--bc-init` and `--resume` take the policy class from the checkpoint.
 - `rl/bc.py train`: `--policy`, and a `--select-split` option so early stopping reads a *tuning* split instead of the validation split (today `train_bc` early-stops on val). A third split by game, `game_id % 10 == 1`, is carved from train; `game_id % 10 == 0` stays sealed.
-- `rl/bc.py`: a tie-aware secondary accuracy, only if cheap: replay the val games and record the set of atoms tied at `HeuristicAgent`'s maximum score; a prediction in that set counts as correct. If the tie set cannot be made exact, drop it and say so in the log.
+- `rl/bc.py`: a pooled spatial accuracy (`vertex_settlement` + `edge` + `hex`) on val and, with `--select-split tune`, on the tuning split. **The tie-aware secondary metric is dropped:** the BC dataset stores observations, masks and labels but not `HeuristicAgent`'s per-decision score ties, so the tied set cannot be made exact without replaying every game. The tie-break bias stays disclosed (Risks) and un-measured.
 - `experiments/search_eval.py`-style seed registry: add `fresh_014`.
 - `experiments/benchmark.py` needs no change; it loads checkpoints through `RLAgent`.
 
@@ -60,7 +60,7 @@ Keep the 1484-dim obs, `OBS_DIM`, the env, the action space and the BC dataset e
 
 ## Cheap smoke (minutes; reads no win rate)
 
-On a **throwaway** dataset (about 50 games on smoke seeds, written under `rl_runs/exp014_smoke/`, never `rl_runs/bc/v1`), run 2-epoch BC for each arm and record:
+On a **throwaway** dataset (200 games, about 33k rows, so GPU warm-up does not dominate a per-epoch figure; smoke seeds from 4,000,501, written under `rl_runs/exp014/smoke/`, never `rl_runs/bc/v1`), run BC for each arm (an untimed warm-up, then 1-epoch and 3-epoch runs whose time difference gives seconds per epoch) and record:
 
 - BC seconds per epoch (GPU);
 - **CPU single-sample `lean_predict_batch` latency**, because self-play opponents and the in-loop eval run on CPU (log 005);
