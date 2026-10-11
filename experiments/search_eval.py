@@ -79,11 +79,14 @@ OPPONENT = {"heur": "heuristic", "self": "self"}
 
 # Consecutive seeds, length divisible by 4 so the rotation is exact. The smoke
 # range is never measured; 1.. are the benchmark boards of 004/006/008/010;
-# fresh_012 is experiment 012's block (disjointness is asserted in the tests).
+# fresh_012 / fresh_014 are experiments 012's / 014's blocks (disjointness is
+# asserted in the tests).
 SEED_RANGES: dict[str, tuple[int, int]] = {
     "smoke": (4_000_001, 400),
     "measured": (1, 4000),
     "fresh_012": (20_000_001, 4000),
+    # Experiment 014's boards (graph vs flat policy); no search runs use them.
+    "fresh_014": (21_000_001, 4000),
 }
 STOP_FILE = "STOP"
 EXIT_STOPPED = 3  # graceful STOP-file exit; nonzero so `a && b` chains break
