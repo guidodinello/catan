@@ -160,6 +160,14 @@ class TrainConfig:
     clip_range: float = 0.2
     gae_lambda: float = 0.95
     net_arch: list[int] = field(default_factory=lambda: [256, 256])
+    # "mlp": the stock MlpPolicy above. "graph": rl.graph_policy (issue #42).
+    # Ignored when warm-starting (`resume` / `bc_init`): the checkpoint's own
+    # policy class wins, and `train()` writes it back here so the CPU eval
+    # copy (built through `build_model`) matches.
+    policy: str = "mlp"
+    policy_explicit: bool = False  # --policy was passed on the command line
+    gnn_dim: int = 64
+    gnn_layers: int = 3
     eval_every: int = 250_000
     eval_episodes: int = 200
     torch_threads: int = 1
@@ -622,6 +630,28 @@ def _load_resumed_model(cfg: TrainConfig, vec_env: Any) -> MaskablePPO:
     return model
 
 
+def _adopt_checkpoint_policy(cfg: TrainConfig, model: MaskablePPO) -> None:
+    """Write the loaded model's policy kind back into ``cfg``.
+
+    ``_cpu_eval_model`` rebuilds the policy through ``build_model(cfg)``, so on
+    a warm start ``cfg`` must describe the *checkpoint's* policy. An explicit
+    ``--policy`` that disagrees with the checkpoint is an error, not a silent
+    override (``cfg.policy_explicit``).
+    """
+    policy: Any = model.policy
+    if type(policy).__name__ == "GraphMaskablePolicy":
+        kind = "graph"
+        cfg.gnn_dim = policy.gnn_dim
+        cfg.gnn_layers = policy.gnn_layers
+    else:
+        kind = "mlp"
+    if cfg.policy_explicit and cfg.policy != kind:
+        raise RuntimeError(
+            f"--policy {cfg.policy} contradicts the loaded checkpoint's {kind} policy"
+        )
+    cfg.policy = kind
+
+
 def _make_guard(cfg: TrainConfig) -> RegressionGuard:
     """Seeded from ``init_rate`` / ``init_best`` on either warm-start path
     (``resume`` or ``bc_init``); unseeded (-1.0) for a from-scratch run."""
@@ -645,8 +675,18 @@ def build_model(cfg: TrainConfig, vec_env: Any) -> MaskablePPO:
     """
     from sb3_contrib import MaskablePPO
 
+    policy_class: Any = "MlpPolicy"
+    policy_kwargs: dict[str, Any] = {"net_arch": cfg.net_arch}
+    if cfg.policy == "graph":
+        from rl.graph_policy import GraphMaskablePolicy
+
+        policy_class = GraphMaskablePolicy
+        policy_kwargs = {"gnn_dim": cfg.gnn_dim, "gnn_layers": cfg.gnn_layers}
+    elif cfg.policy != "mlp":
+        raise ValueError(f"unknown policy {cfg.policy!r}; expected 'mlp' or 'graph'")
+
     return MaskablePPO(
-        "MlpPolicy",
+        policy_class,
         vec_env,
         n_steps=cfg.n_steps,
         batch_size=cfg.batch_size,
@@ -660,7 +700,7 @@ def build_model(cfg: TrainConfig, vec_env: Any) -> MaskablePPO:
         tensorboard_log=str(cfg.run_dir / "tb"),
         seed=cfg.seed,
         device=cfg.device,
-        policy_kwargs={"net_arch": cfg.net_arch},
+        policy_kwargs=policy_kwargs,
     )
 
 
@@ -728,6 +768,8 @@ def train(cfg: TrainConfig) -> TrainResult:
     else:
         model = build_model(cfg, vec_env)
         resumed_from = None
+
+    _adopt_checkpoint_policy(cfg, model)
 
     start_step, target_step, reset_num_timesteps = _resume_step_bookkeeping(
         resumed_from, cfg.steps
@@ -940,6 +982,17 @@ def build_parser() -> argparse.ArgumentParser:
         "docs/experiments/005-gpu-inference.md",
     )
     parser.add_argument(
+        "--policy",
+        choices=("mlp", "graph"),
+        default=None,
+        help="policy network for a fresh run (default mlp). With --resume / "
+        "--bc-init the checkpoint's own policy is used; passing a "
+        "contradicting value is an error. 'graph' is rl.graph_policy "
+        "(issue #42)",
+    )
+    parser.add_argument("--gnn-dim", type=int, default=defaults.gnn_dim)
+    parser.add_argument("--gnn-layers", type=int, default=defaults.gnn_layers)
+    parser.add_argument(
         "--opponent-inference",
         choices=INFERENCE_KINDS,
         default=defaults.opponent_inference,
@@ -1006,6 +1059,10 @@ def config_from_args(
         regression_patience=args.regression_patience,
         device=args.device,
         opponent_inference=args.opponent_inference,
+        policy=defaults.policy if args.policy is None else args.policy,
+        policy_explicit=args.policy is not None,
+        gnn_dim=args.gnn_dim,
+        gnn_layers=args.gnn_layers,
     )
 
 

@@ -96,6 +96,9 @@ logger = logging.getLogger("rl.bc")
 GAMMA_DEFAULT = 0.999
 NUM_PLAYERS_DEFAULT = 4
 VALIDATION_MOD = 10  # game_id % VALIDATION_MOD == 0 -> validation split
+TUNE_RESIDUE = 1  # game_id % VALIDATION_MOD == 1 -> tuning split (opt-in)
+# The spatial placement blocks log 004 found weakest; pooled for experiment 014.
+SPATIAL_BLOCKS = ("vertex_settlement", "edge", "hex")
 
 # Atom-block boundaries, derived from rl/action_space.py's own layout
 # constants (SSOT -- never a second copy of the block widths). Used only for
@@ -308,6 +311,21 @@ def game_split(game_id: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.flatnonzero(~is_val), np.flatnonzero(is_val)
 
 
+def game_split_with_tune(
+    game_id: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``(train_idx, tune_idx, val_idx)``: ``game_split``'s val split is
+    unchanged (``game_id % 10 == 0``); the tuning split (``% 10 == 1``) is
+    carved out of its train split, so choices made on it (early stopping, lr)
+    never touch val. Split by game, for the same reason as ``game_split``."""
+    residue = game_id % VALIDATION_MOD
+    return (
+        np.flatnonzero((residue != 0) & (residue != TUNE_RESIDUE)),
+        np.flatnonzero(residue == TUNE_RESIDUE),
+        np.flatnonzero(residue == 0),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class BCMetrics:
     n_train: int
@@ -321,6 +339,10 @@ class BCMetrics:
     val_value_mse: float
     return_mean: float
     return_std: float
+    # Pooled masked accuracy over SPATIAL_BLOCKS on val, and (only when the
+    # tuning split was used) on tune.
+    val_acc_spatial: float = float("nan")
+    tune_acc_spatial: float | None = None
 
     def report(self) -> str:
         blocks = ", ".join(
@@ -335,6 +357,7 @@ class BCMetrics:
             f"masked_acc={self.val_acc_masked:.1%} "
             f"value_mse={self.val_value_mse:.4f}\n"
             f"  val by block: {blocks}\n"
+            f"  val spatial (pooled): {self.val_acc_spatial:.1%}\n"
             f"  returns: mean={self.return_mean:.3f} std={self.return_std:.3f}"
         )
 
@@ -385,6 +408,12 @@ class _SplitScore:
     @property
     def value_mse(self) -> float:
         return self.squared_error / self.n if self.n else float("nan")
+
+    @property
+    def spatial_acc(self) -> float:
+        n = sum(self.block_n[b] for b in SPATIAL_BLOCKS)
+        hit = sum(self.block_correct[b] for b in SPATIAL_BLOCKS)
+        return hit / n if n else float("nan")
 
     @property
     def acc_by_block(self) -> dict[str, float]:
@@ -460,6 +489,10 @@ def train_bc(
     seed: int = 0,
     value_loss_weight: float = 0.5,
     device: str = "cpu",
+    policy_name: str = "mlp",
+    gnn_dim: int = 64,
+    gnn_layers: int = 3,
+    select_split: Literal["val", "tune"] = "val",
 ) -> BCMetrics:
     """Cross-entropy pre-train a fresh ``MaskablePPO`` policy on ``dataset``,
     save it to ``save``, and return held-out metrics.
@@ -475,6 +508,11 @@ def train_bc(
     measured there), BC's larger batches make the GPU an unambiguous win
     with no IPC round-trip to eat the savings, since everything happens in
     one process.
+
+    ``select_split="val"`` (default) early-stops on val masked accuracy, as
+    in log 004. ``"tune"`` early-stops on the pooled *spatial* accuracy of the
+    tuning split instead and never scores val until the final report, so val
+    stays sealed for experiment 014 (``docs/experiments/014-graph-encoder.md``).
     """
     import torch
     import torch.nn.functional as functional
@@ -489,17 +527,27 @@ def train_bc(
         gamma=gamma,
         net_arch=net_arch or [256, 256],
         device=device,
+        policy=policy_name,
+        gnn_dim=gnn_dim,
+        gnn_layers=gnn_layers,
     )
     vec_env = build_vec_env(cfg)
     model = build_model(cfg, vec_env)
     policy = model.policy
     optimizer = torch.optim.Adam(policy.parameters(), lr=lr)
 
-    train_idx, val_idx = game_split(dataset.game_id)
+    if select_split == "tune":
+        train_idx, tune_idx, val_idx = game_split_with_tune(dataset.game_id)
+        select_idx = tune_idx
+    else:
+        train_idx, val_idx = game_split(dataset.game_id)
+        tune_idx = None
+        select_idx = val_idx
     logger.info(
-        "BC training: %d train samples, %d val samples (game-level split)",
+        "BC training: %d train samples, %d %s samples (game-level split)",
         len(train_idx),
-        len(val_idx),
+        len(select_idx),
+        select_split,
     )
 
     def _batch(idx: np.ndarray) -> tuple[Any, Any, Any, Any]:
@@ -538,17 +586,25 @@ def train_bc(
             optimizer.step()
             epoch_loss += float(loss.item()) * len(batch_idx)
 
-        val_score = _score_split(policy, dataset, val_idx, DEFAULT_EVAL_CHUNK, device)
+        val_score = _score_split(
+            policy, dataset, select_idx, DEFAULT_EVAL_CHUNK, device
+        )
+        select_acc = (
+            val_score.spatial_acc if select_split == "tune" else val_score.masked_acc
+        )
         logger.info(
-            "epoch=%d/%d train_loss=%.4f val_masked_acc=%.1f%% val_value_mse=%.4f",
+            "epoch=%d/%d train_loss=%.4f %s_%s_acc=%.1f%% %s_value_mse=%.4f",
             epoch + 1,
             epochs,
             epoch_loss / len(order),
-            val_score.masked_acc * 100,
+            select_split,
+            "spatial" if select_split == "tune" else "masked",
+            select_acc * 100,
+            select_split,
             val_score.value_mse,
         )
-        if val_score.masked_acc > best_acc:
-            best_acc = val_score.masked_acc
+        if select_acc > best_acc:
+            best_acc = select_acc
             best_state = {k: v.clone() for k, v in policy.state_dict().items()}
             stale = 0
         else:
@@ -564,7 +620,9 @@ def train_bc(
     assert best_state is not None
     policy.load_state_dict(best_state)
 
-    metrics = _compute_metrics(policy, dataset, train_idx, val_idx, device=device)
+    metrics = _compute_metrics(
+        policy, dataset, train_idx, val_idx, tune_idx=tune_idx, device=device
+    )
     save.parent.mkdir(parents=True, exist_ok=True)
     model.save(save)
     logger.info("saved BC checkpoint: %s", save)
@@ -577,6 +635,7 @@ def _compute_metrics(
     train_idx: np.ndarray,
     val_idx: np.ndarray,
     *,
+    tune_idx: np.ndarray | None = None,
     chunk: int = DEFAULT_EVAL_CHUNK,
     device: str = "cpu",
 ) -> BCMetrics:
@@ -584,6 +643,11 @@ def _compute_metrics(
     ``_score_split`` -- see its docstring on why."""
     train_score = _score_split(policy, dataset, train_idx, chunk, device)
     val_score = _score_split(policy, dataset, val_idx, chunk, device)
+    tune_acc = (
+        None
+        if tune_idx is None
+        else _score_split(policy, dataset, tune_idx, chunk, device).spatial_acc
+    )
 
     returns_arr = np.asarray(dataset.returns)
     return BCMetrics(
@@ -598,6 +662,8 @@ def _compute_metrics(
         val_value_mse=val_score.value_mse,
         return_mean=float(returns_arr.mean()),
         return_std=float(returns_arr.std()),
+        val_acc_spatial=val_score.spatial_acc,
+        tune_acc_spatial=tune_acc,
     )
 
 
@@ -654,6 +720,21 @@ def build_parser() -> argparse.ArgumentParser:
     train_p.add_argument("--seed", type=int, default=0)
     train_p.add_argument("--sanity-episodes", type=int, default=200)
     train_p.add_argument(
+        "--policy",
+        choices=("mlp", "graph"),
+        default="mlp",
+        help="policy network (graph: rl.graph_policy, issue #42)",
+    )
+    train_p.add_argument("--gnn-dim", type=int, default=64)
+    train_p.add_argument("--gnn-layers", type=int, default=3)
+    train_p.add_argument(
+        "--select-split",
+        choices=("val", "tune"),
+        default="val",
+        help="split early stopping reads. 'val' (default) is log 004's "
+        "behaviour; 'tune' (game_id %% 10 == 1) keeps val sealed",
+    )
+    train_p.add_argument(
         "--device",
         choices=("cpu", "cuda"),
         default="cpu",
@@ -695,8 +776,14 @@ def main() -> None:
             lr=args.lr,
             seed=args.seed,
             device=args.device,
+            policy_name=args.policy,
+            gnn_dim=args.gnn_dim,
+            gnn_layers=args.gnn_layers,
+            select_split=args.select_split,
         )
         print(metrics.report())
+        if args.sanity_episodes <= 0:
+            return
         win_rate = sanity_eval(
             args.save, n_episodes=args.sanity_episodes, num_players=args.players
         )
