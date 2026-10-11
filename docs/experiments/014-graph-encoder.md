@@ -3,7 +3,7 @@
 **Date:** pre-registered 2026-10-11. No run, smoke or measurement exists before this file's merge.
 **Note:** [gamekit#008 — Board-aware encoder / spatial inductive bias](https://github.com/guidodinello/gamekit/blob/main/docs/research/008-board-aware-encoder.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Implementation plan: [docs/plans/graph-encoder.md](../plans/graph-encoder.md). Motivated by [004](004-bc-warm-start.md) (spatial BC accuracy) and [010](010-entropy-schedule.md) (run-to-run spread).
 
-**Status: pre-registered, no results.** Everything under Smoke, Run log, Result and Verdict is empty on purpose; nothing here was simulated or estimated. The code does not exist yet (see [Docs-first protocol](#docs-first-protocol)).
+**Status: pre-registered; code merged (#71); Amendment 1 recorded; no measured run yet, no results.** Run log, Result and Verdict are empty on purpose. The smoke in Amendment 1 read no win rate. Stage 1 launches only on the owner's go.
 
 ## Hypothesis
 
@@ -145,11 +145,44 @@ $PY -m experiments.benchmark --mode rl_vs_heuristic --games 4000 --players 4 \
 
 ## Environment
 
-To be filled by the Amendment: code merge SHA, Python / torch / numpy / sb3-contrib / gamekit versions from the lock (`uv.lock` pins gamekit v0.4.0 and torch 2.14.1), GPU driver. In-loop eval: seed scheme per README §In-loop eval caveats.
+See [Amendment 1](#amendment-1-2026-10-11) (code SHA, lock-pinned versions, GPU driver). In-loop eval: seed scheme per README §In-loop eval caveats, catan commit `72f046e`.
 
 ## Smoke / timing runs
 
-Empty: none run. To be filled by the Amendment (BC s/epoch per arm, CPU single-sample latency, PPO fps, parameter counts).
+See [Amendment 1](#amendment-1-2026-10-11): two smoke runs (stale env, locked env), no win rate read.
+
+## Amendment 1 (2026-10-11)
+
+Committed before any measured run, as the [Docs-first protocol](#docs-first-protocol) requires. **The gates, splits, seeds, metrics, boards, lr sweep and stop rule above are unchanged.** What this records:
+
+**Code.** Merged in #71 as **`72f046e9302176ff66a85bcac2e164f11275aff5`** (squash on `main`, on top of this log's merge `494ddff`). Measured runs use a dedicated worktree detached at that SHA (`/home/guido/projects/catan-014-run`, clean tree), `PYTHONPATH=$PWD OMP_NUM_THREADS=1`, never the main checkout.
+
+**Environment (lock-pinned).** Built with `UV_CACHE_DIR=<HDD>/uv-cache UV_PROJECT_ENVIRONMENT=/media/guido/0DF7128F0DF7128F/catan-014-venv uv sync --frozen --dev --extra rl-train-cuda` from the worktree. Read back from that venv: Python 3.14.5, **torch 2.14.1+cu130** (CUDA 13.0, `cuda.is_available()` true), **gamekit 0.4.0**, sb3-contrib 2.9.0, stable-baselines3 2.9.0, numpy 2.5.3, gymnasium 1.4.0; GPU NVIDIA GeForce RTX 4050 Laptop (6 GB), driver 595.99.02. The older `.venv` / `.venv-cuda` in the main checkout are stale (gamekit 0.3.0, torch 2.14.0) and are not used for measured runs.
+
+**BC dataset re-verified** (`rl_runs/bc/v1`, sha256 recomputed 2026-10-11, identical to the table in Design): `obs.npy` `5b5d1f9f95ca…6ddc`, `masks.npy` `a51239612e01…8126`, `labels.npy` `4fdfc4b3ac28…03d4`, `returns.npy` `b176937fe238…68f3`, `game_id.npy` `8a4789053bc6…69bb`. Full values are in Design; all five match.
+
+**Smoke** (`experiments/exp014_smoke.py`, tmux `catan014-smoke` and `catan014-retime`, outputs under `rl_runs/exp014/smoke/` and `smoke_locked/`, no win rate read; the 4-game in-loop evals it prints are meaningless). Throwaway dataset of **200 games** (33,513 rows, 26,508 train) on smoke seeds from 4,000,501, **not the about 50 games** the Docs-first protocol said; the larger set keeps GPU warm-up from dominating a per-epoch figure. Seconds per epoch is the difference of a 1-epoch and a 3-epoch run after an untimed warm-up, extrapolated to a full-size train split (456,707 rows, an upper bound; the real split with the tuning split removed is about 407k rows).
+
+| | flat, stale env (torch 2.14.0) | flat, **locked** (2.14.1) | graph, stale env | graph, **locked** |
+|---|---|---|---|---|
+| parameters, total (pi side / vf side) | 949,472 (503,263 / 446,209) | same | 473,373 (251,996 / 221,377) | same |
+| BC s/epoch on 26.5k rows | 0.14 | 0.16 | 4.68 | **4.23** |
+| BC s/epoch, extrapolated to 456,707 rows | 2.4 | 2.7 | 80.6 | **72.9** |
+| CPU single-sample `lean_predict_batch`, median / p95 (ms) | 0.10 / 0.12 | 0.10 | 1.61 / 1.67 | **1.61** |
+| CPU single-sample `model.predict`, median (ms) | 0.19 | 0.19 | 1.34 | **1.32** |
+| PPO 16,384 steps, `--envs 8`: `train_fps` (steps/s incl. eval) | 515 (478) | 561 (534) | 256 (240) | **264 (248)** |
+
+The first and third columns were measured on the stale env (code `e2287c2`, pre-merge); the second and fourth re-time the same driver on the locked env at `72f046e`. They agree within a few percent, so the stale-env figures stand and the locked-env ones are the reference. The 16k-step PPO figure is a very short run, so treat fps as about ±20%.
+
+**Stop rule not triggered; d = 64 and L = 3 are kept.** Projection from the locked graph `train_fps` of 264: 3,047,424 steps is about 3.2 h of training. In-loop eval adds time the smoke only samples (8 graph episodes took about 6 s, so n = 200 twice per 250k-step chunk is about 5 min per chunk, about 1 h over 12 chunks, a rough figure). So roughly 4-4.5 h per graph fine-tune against the 8 h `timeout`, and about 1.6 h flat (log 010). Stage 1 BC for the graph arm is about 73 s per epoch, about 37 min for 30 epochs, so the 5 graph BC runs (2 lr-sweep + 3 seeds) are at most about 3 h. The compute table above stands; the fine-tune rows (graph x 2) land near its low end.
+
+**Differences from the plan, disclosed.**
+- The **tie-aware secondary metric is dropped**: the BC dataset has no per-decision score ties, so the tied set cannot be made exact without replaying every game. Not measured; the equivariance-vs-tie-break bias stays disclosed in Limitations.
+- The graph context vector is **120 dims** (OWN, OPPONENT, GLOBAL, the buffer prefix and TRADE; `rl.graph_policy.CTX_DIM`); the 72-wide buffer edge mask is an edge-node feature instead.
+- `rl.bc train` gained `--select-split tune` (early stopping on the tuning split's pooled spatial accuracy; val untouched until the final report) and a pooled `val_acc_spatial` metric; `--policy mlp` is the default and unchanged (a tiny flat BC run gives an identical parameter hash on `main` and the #71 branch).
+- `fresh_014` (21,000,001-21,004,000) is registered in `experiments/search_eval.py` and `league_013.USED_RANGES`, with a disjointness test.
+
+**Still to do before Stage 1** (nothing launched): the owner's go; the **harness check** (flat `catan_bc_ft_long_10031616` on boards 1..4000 must give exactly 829/4000); the `pgrep` / `tmux ls` / `free -g` guards at each launch.
 
 ## Run log
 
