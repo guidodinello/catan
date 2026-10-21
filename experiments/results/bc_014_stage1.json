@@ -1,0 +1,131 @@
+{
+  "metric": "val masked top-1 accuracy pooled over vertex_settlement, edge, hex (%), as printed (0.1-pt precision) by each run's single val report",
+  "seeds": {
+    "mlp": [
+      {
+        "val_spatial_pct": 53.8,
+        "val_masked_acc_pct": 87.7,
+        "val_value_mse": 0.7334,
+        "val_by_block_pct": {
+          "vertex_settlement": 52.5,
+          "vertex_city": 76.5,
+          "edge": 55.9,
+          "hex": 50.9,
+          "steal": 82.7,
+          "resource": 95.2,
+          "simple": 94.2,
+          "opener": 75.7,
+          "trade_reserved": null
+        },
+        "best_tune_spatial_pct": 55.2,
+        "epochs_run": 29,
+        "early_stop_epoch": 29
+      },
+      {
+        "val_spatial_pct": 54.0,
+        "val_masked_acc_pct": 88.3,
+        "val_value_mse": 0.6887,
+        "val_by_block_pct": {
+          "vertex_settlement": 50.0,
+          "vertex_city": 75.5,
+          "edge": 55.8,
+          "hex": 53.0,
+          "steal": 81.0,
+          "resource": 95.3,
+          "simple": 95.1,
+          "opener": 81.7,
+          "trade_reserved": null
+        },
+        "best_tune_spatial_pct": 54.7,
+        "epochs_run": 27,
+        "early_stop_epoch": 27
+      },
+      {
+        "val_spatial_pct": 53.9,
+        "val_masked_acc_pct": 88.1,
+        "val_value_mse": 0.741,
+        "val_by_block_pct": {
+          "vertex_settlement": 51.0,
+          "vertex_city": 76.8,
+          "edge": 55.1,
+          "hex": 53.3,
+          "steal": 81.5,
+          "resource": 95.3,
+          "simple": 95.3,
+          "opener": 76.1,
+          "trade_reserved": null
+        },
+        "best_tune_spatial_pct": 55.4,
+        "epochs_run": 26,
+        "early_stop_epoch": 26
+      }
+    ],
+    "graph": [
+      {
+        "val_spatial_pct": 85.0,
+        "val_masked_acc_pct": 96.5,
+        "val_value_mse": 0.5889,
+        "val_by_block_pct": {
+          "vertex_settlement": 87.0,
+          "vertex_city": 95.4,
+          "edge": 80.3,
+          "hex": 91.6,
+          "steal": 92.3,
+          "resource": 98.7,
+          "simple": 98.9,
+          "opener": 95.2,
+          "trade_reserved": null
+        },
+        "best_tune_spatial_pct": 86.6,
+        "epochs_run": 22,
+        "early_stop_epoch": 22
+      },
+      {
+        "val_spatial_pct": 87.4,
+        "val_masked_acc_pct": 97.1,
+        "val_value_mse": 0.5187,
+        "val_by_block_pct": {
+          "vertex_settlement": 87.8,
+          "vertex_city": 93.5,
+          "edge": 82.9,
+          "hex": 94.6,
+          "steal": 93.0,
+          "resource": 99.1,
+          "simple": 99.2,
+          "opener": 95.5,
+          "trade_reserved": null
+        },
+        "best_tune_spatial_pct": 87.9,
+        "epochs_run": 30,
+        "early_stop_epoch": 30
+      },
+      {
+        "val_spatial_pct": 85.7,
+        "val_masked_acc_pct": 97.0,
+        "val_value_mse": 0.5814,
+        "val_by_block_pct": {
+          "vertex_settlement": 87.1,
+          "vertex_city": 93.5,
+          "edge": 81.2,
+          "hex": 92.4,
+          "steal": 93.2,
+          "resource": 98.9,
+          "simple": 99.6,
+          "opener": 95.0,
+          "trade_reserved": null
+        },
+        "best_tune_spatial_pct": 87.4,
+        "epochs_run": 30,
+        "early_stop_epoch": 30
+      }
+    ]
+  },
+  "mean_val_spatial_pct": {
+    "mlp": 53.9,
+    "graph": 86.03333333333335
+  },
+  "mean_diff_graph_minus_flat_pts": 32.13333333333335,
+  "clause1_mean_diff_ge_3": true,
+  "clause2_min_graph_gt_max_flat": true,
+  "gate_s1_passed": true
+}
