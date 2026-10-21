@@ -3,7 +3,7 @@
 **Date:** pre-registered 2026-10-11. No run, smoke or measurement exists before this file's merge.
 **Note:** [gamekit#008 — Board-aware encoder / spatial inductive bias](https://github.com/guidodinello/gamekit/blob/main/docs/research/008-board-aware-encoder.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Implementation plan: [docs/plans/graph-encoder.md](../plans/graph-encoder.md). Motivated by [004](004-bc-warm-start.md) (spatial BC accuracy) and [010](010-entropy-schedule.md) (run-to-run spread).
 
-**Status: pre-registered; code merged (#71); Amendment 1 recorded; no measured run yet, no results.** Run log, Result and Verdict are empty on purpose. The smoke in Amendment 1 read no win rate. Stage 1 launches only on the owner's go.
+**Status: Stage 1 measured; Gate S1 PASSED (graph 86.03% vs flat 53.90% val spatial accuracy, +32.1 pts, all 3 graph seeds above all 3 flat seeds). Stage 2 (PPO fine-tune) has not been run; #42 stays open until S2's outcome.** The smoke in Amendment 1 read no win rate. See [Result](#result) and [Verdict](#verdict).
 
 ## Hypothesis
 
@@ -186,17 +186,78 @@ The first and third columns were measured on the stale env (code `e2287c2`, pre-
 
 ## Run log
 
-Empty.
+All Stage 1 runs used the dedicated worktree `/home/guido/projects/catan-014-run`, detached at **`7b353e3`** (clean tree), the lock-pinned venv `/media/guido/0DF7128F0DF7128F/catan-014-venv` (Python 3.14.5, torch 2.14.1+cu130, gamekit 0.4.0, as in Amendment 1), `PYTHONPATH=$PWD OMP_NUM_THREADS=1`, `--device cuda`, `timeout 8h` per job. Raw outputs are in `rl_runs/exp014/` (gitignored, on the HDD): `logs/`, `bc/` (the 4 sweep and 6 final checkpoints), `bench/`, `helpers/`, `lr_choice.json`. The helper scripts are committed in `experiments/exp014/`.
+
+- **Harness check (2026-10-11):** flat `catan_bc_ft_long_10031616` on benchmark boards 1..4000 gave **829/4000**, exactly log 012's count, so touching `build_model` changed nothing for the flat arm.
+- **lr sweep (2026-10-11, seed 0, tune split only, on `bc_sweep_ds`, see Deviations):**
+
+  | arm | lr 1e-3 | lr 3e-4 | chosen |
+  |---|---|---|---|
+  | flat (`mlp`) | 53.17 | **55.24** | **3e-4** |
+  | graph | **86.57** | 85.65 | **1e-3** |
+
+  (best-epoch tune spatial accuracy, %, `lr_choice.json`; no ties.)
+- **Final seeds (2026-10-20):** `stage1.sh final` in tmux `catan014-stage1`, `tee -a logs/stage1_final.log`, 20:01:09 to 21:46:42 (1 h 45 min), jobs run sequentially. Before launch: no `rl.bc` / `rl.train` / `experiments` process, no tmux server, worktree clean at `7b353e3`, only the 4 sweep-phase `done/` markers, laptop on AC at 100%. All 6 jobs ended `EXIT=0` with their `done/` marker. Wall time per job: flat 5 min 35 s / 1 min 35 s / 1 min 35 s (s0 / s1 / s2); graph 26 min 50 s / 36 min 35 s / 33 min 21 s. Train rows 404,464, tune rows 52,243, val rows 51,893 in every log.
+- **Consistency check (s0 vs the sweep):** `final_mlp_s0` reproduces `sweep_mlp_lr3e-4` and `final_graph_s0` reproduces `sweep_graph_lr1e-3` epoch by epoch (same train loss and tune accuracy at every epoch, same stopping epoch: 29 and 22). The final runs train on the same rows in the same order as the sweep (same seed; the sweep set is `v1` with only the val rows removed), so this is the expected outcome and shows nothing drifted between the sweep and the final runs.
+- **Clone benchmarks (secondary, 2026-10-20 21:49 to 21:59):** `helpers/bench_clones.sh 8` in tmux `catan014-bench`, 8 workers, `experiments.benchmark --mode rl_vs_heuristic --games 4000 --players 4 --engine-seed-base 21000001 --driver-seed-base 21000001` on each arm's seed-0 final checkpoint, run only after all 6 BC jobs had finished (flat 1 min 44 s, graph 8 min 18 s). The worktree stayed clean; result JSONs were moved to `rl_runs/exp014/bench/`.
+- **Helper hashes (as-run copies in `rl_runs/exp014/helpers/`, sha256):** `stage1.sh` `2cc9b7b3…fdede`, `stage1_tools.py` `33ac790f…1e69`, `score_tune.py` `cd10566a…1ce`, `bench_clones.sh` `4f44f26e…10a2`. The committed `experiments/exp014/` copies of the two shell scripts are byte-identical; the two Python files are lint-fixed (ruff) copies, and `stage1_tools.py` gained the `gate` and `check-splits` subcommands after the runs (they read only run logs and `game_id.npy`).
 
 ## Result
 
-Empty.
+Stage 1 only. Source: the six `val` reports in `rl_runs/exp014/logs/final_*.log`, parsed by `stage1_tools.py gate` into `experiments/results/bc_014_stage1.json`. Val (`game_id % 10 == 0`, 300 games, 51,893 rows) was scored exactly once per model, at the end of its run, and never used for a choice. The logs print accuracies to 0.1 point; nothing was re-scored.
+
+**Metric S1: val masked top-1 accuracy pooled over `vertex_settlement`, `edge`, `hex` (%).**
+
+| seed | flat | graph |
+|---|---|---|
+| 0 | 53.8 | 85.0 |
+| 1 | 54.0 | 87.4 |
+| 2 | 53.9 | 85.7 |
+| **mean** | **53.90** | **86.03** |
+
+**Gate S1: PASSED.** (1) mean(graph) − mean(flat) = **+32.13 pts** ≥ +3.0; (2) min(graph) = 85.0 > max(flat) = 54.0. The margin on both clauses is far larger than the 0.1-pt rounding of the logs, so the printed precision does not matter.
+
+Secondary (reported, not gated), val, per seed (s0 / s1 / s2):
+
+| quantity | flat | graph |
+|---|---|---|
+| `vertex_settlement` % | 52.5 / 50.0 / 51.0 | 87.0 / 87.8 / 87.1 |
+| `edge` % | 55.9 / 55.8 / 55.1 | 80.3 / 82.9 / 81.2 |
+| `hex` % | 50.9 / 53.0 / 53.3 | 91.6 / 94.6 / 92.4 |
+| `vertex_city` % | 76.5 / 75.5 / 76.8 | 95.4 / 93.5 / 93.5 |
+| overall masked accuracy % | 87.7 / 88.3 / 88.1 | 96.5 / 97.1 / 97.0 |
+| value MSE | 0.733 / 0.689 / 0.741 | 0.589 / 0.519 / 0.581 |
+| best tune spatial % | 55.2 / 54.7 / 55.4 | 86.6 / 87.9 / 87.4 |
+| epochs run (cap 30, patience 3) | 29 / 27 / 26 | 22 / 30 / 30 |
+
+The flat arm's per-block accuracies (50 to 56% on the three spatial blocks) match log 004's (51.6 / 55.4 / 50.5), as they should for the same architecture and data. Graph seeds 1 and 2 ended at the 30-epoch cap; the registered cap was not raised. Two properties of the numbers worth stating: the seed-to-seed spread of the graph arm (85.0 to 87.4) is larger than the flat arm's (53.8 to 54.0) but both are tiny next to the gap; the tune-to-val difference is small for both arms (flat tune 55.2 / 54.7 / 55.4 vs val 53.8 / 54.0 / 53.9; graph 86.6 / 87.9 / 87.4 vs 85.0 / 87.4 / 85.7), the expected selection-bias size.
+
+**Checks on the size of the gap (done because +32 points is far larger than the 3.0 the gate asked for):**
+
+- *Split integrity* (`stage1_tools.py check-splits`, reads only `rl_runs/bc/v1/game_id.npy`): 508,600 rows, exactly 3000 unique ids 0..2999, each id's rows are one contiguous block (so one id is one game and one board), train / tune / val share no game id (2400 / 300 / 300 games), row counts 404,464 / 52,243 / 51,893. The split is by `game_id % 10` by construction, so overlap by id cannot occur; the checks confirm one id really is one board. A split leak would in any case raise both arms, so it cannot explain the graph-minus-flat gap.
+- *Input path* (code read, no training): the graph policy sees only what the flat policy sees, the observation vector and the action mask. `rl/bc.py:368-380` (`_forward`) runs `extract_features(obs)`, `mlp_extractor(features)`, `action_net`, `value_net`, and applies the mask afterwards with `masked_fill(~mask_t, -1e8)`. In `rl/graph_policy.py`, `split_obs` (203-221) slices only the obs; `_Trunk.forward` (238-242), `GraphExtractor.forward_actor` / `forward_critic` (260-268) and `PointerHead.forward` (297-319) take only that tensor or a latent derived from it. A search of the file finds no dropout, batch-norm, `.training` branch or random op, so the train-mode and eval-mode forward passes are the same function of the obs. Labels and returns enter only the loss, `cross_entropy(masked_logits, labels_t)` and `mse_loss(values, returns_t)` at `rl/bc.py:580-582`, after the forward pass; tune is scored at `rl/bc.py:589` and val once at `rl/bc.py:645`.
+
+**Seed-0 clones at n = 4000 on `fresh_014`** (secondary, descriptive, not gated; one BC seed per arm; `rl_vs_heuristic`, `RLAgent` deterministic, 3 plain `HeuristicAgent`, engine seeds 21,000,001 to 21,004,000, driver seed equal to the engine seed; commit stamp `7b353e3`; `experiments/results/bc_014_clone_{mlp,graph}_s0_fresh014.json`):
+
+| clone | wins / n | win rate | Wilson 95% |
+|---|---|---|---|
+| flat s0 | 428 / 4000 | **10.70%** | [9.78, 11.70] |
+| graph s0 | 1001 / 4000 | **25.03%** | [23.71, 26.39] |
+
+No game ended without a winner in either run. 25% is the share a seat gets against equal-strength players; the graph clone plays at about the strength of the heuristic it was cloned from, the flat clone well below it. This is one checkpoint per arm, so it carries no information on training-seed variance, and no choice depends on it. The 3M-step PPO fine-tune (Stage 2) is the registered test of whether the BC gain converts to strength after fine-tuning; these clone numbers are not a substitute for it. These boards have now been played by these two clones; Stage 2 checkpoints will use the same 4000 boards, as registered.
 
 ## Verdict
 
-Empty.
+**Stage 1: Gate S1 passed.** Both pre-registered clauses hold with large margins: the graph arm's pooled spatial val accuracy is 86.0% against 53.9% for the flat arm (+32.1 pts), and every graph seed (85.0, 85.7, 87.4) is above every flat seed (53.8, 53.9, 54.0). Under the verdict map this means **Stage 2 is run** (flat s3, graph s3, flat s4, graph s4, 3M steps each); it has not been run, and **#42 closes on S2's outcome, not S1's**. Nothing here is a claim about win rate after fine-tuning.
+
+What the result does and does not say: for this data (3000 heuristic games, one 1484-dim observation, identical BC protocol) the board-aware network clones `HeuristicAgent`'s spatial decisions far better than the flat MLP, and the earlier reading of log 004 (the flat net's 51 to 55% on those blocks is a representation limit, not a data shortage) is consistent with this. It is a statement about imitation accuracy on held-out games from the same heuristic, three seeds per arm, one lr choice per arm. The plain-accuracy metric penalises the graph arm's equivariance (Limitations), so the gate was conservative for it. The size of the gap was checked for leakage and for input-path differences (Result) and none was found.
 
 ## Deviations / disclosures
 
+- **Stage 1 runs used `7b353e3`, not Amendment 1's `72f046e`.** `7b353e3` is the Amendment's own merge commit (#72); `git diff 72f046e 7b353e3` touches only `docs/experiments/014-graph-encoder.md` and `docs/experiments/README.md`, so the code that ran is identical to `72f046e`. Every benchmark JSON is stamped `7b353e3`.
+- **`sweep_graph_lr3e-4`: truncated log, tune score recovered by rescoring.** Our own Ctrl-C killed that job's `tee` during the sweep (2026-10-11, the log's last epoch line is 21:10:50). The training process kept going and saved its checkpoint at 21:28, but the log stops at epoch 14 with `EXIT=120` and no `done/` marker exists for it. Its tune score (85.65%) therefore comes from rescoring the saved checkpoint on the tune split with `score_tune.py` (`n = 52,243` rows; it loads no val game, as the sweep dataset has none). The same rescoring of the three surviving sweep checkpoints gives 53.17, 55.24 and 86.57, which match their logs (53.2, 55.2, 86.6) to within 0.05, so the rescoring reproduces the logged metric. `lr_choice.json` records the rescored values and the same registered rule (highest tune spatial accuracy, ties to 1e-3), which picks 1e-3 for the graph arm (86.57 > 85.65). `sweep_graph_lr3e-4` was not re-run, and `stage1.sh final` (not `sweep`) was launched so it would not be redone.
+- **The sweep ran on a val-stripped copy of the data.** To make "val is never used for any choice" structural, `stage1_tools.py make-sweep-ds` copied `rl_runs/bc/v1` without the `game_id % 10 == 0` rows into `rl_runs/exp014/bc_sweep_ds` (456,707 of 508,600 rows kept; the sweep's val metrics print as `nan`). Its manifest hashes: `obs` `2e8eb240…0a`, `masks` `dc7b1846…4fba`, `labels` `dc66b86f…d4c`, `returns` `f5826a69…64af1`, `game_id` `9813b0e7…5948`; the full values are in `bc_sweep_ds/manifest.json`. The final runs used the original `rl_runs/bc/v1` (hashes in Design).
+- **Seed-0 clone benchmarks at n = 4000 (registered secondary) were run after Stage 1**, once each, at the owner's go, after all six BC jobs had finished so they did not overlap training. They are descriptive.
+- **Not done in this change:** Stage 2 (fine-tunes, their benchmarks and Gate S2). The tie-aware secondary stays dropped (Amendment 1).
 - Written before any code, smoke or measured run. The code PR and the Amendment follow this merge.
 - The HDD behind `rl_runs` and `.venv-cuda` was unmounted at the start of the planning session and mounted during it; the dataset hashes above were computed read-only after the mount. Nothing was written to it.
