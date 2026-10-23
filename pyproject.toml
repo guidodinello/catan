@@ -5,7 +5,7 @@ description = "Base-game Catan rules engine and hot-seat CLI"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.143.1",
+    "fastapi>=0.143.2",
     "gamekit",
     "uvicorn[standard]>=0.54.0",
 ]
