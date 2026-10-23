@@ -147,6 +147,24 @@ def test_a_two_agent_pairing_equals_the_full_roster_pairing(
     assert len(load_pairings(tmp_path / "out" / "full")) == 3
 
 
+def test_pairs_mode_writes_only_pairing_files_and_still_returns_a_summary(
+    tmp_path: Path, baseline_only: None
+) -> None:
+    # --pairs goes through gamekit's run_pairing: no league.json, no matter
+    # how many pairings are listed; run() still returns the last pair's summary.
+    summary = _run(
+        tmp_path,
+        pairs=(AGENTS, ("heuristic", "trading_heuristic")),
+    )
+    league_dir = tmp_path / "out" / "t"
+    assert sorted(p.name for p in league_dir.iterdir()) == [
+        f"heuristic{lg.SEP}random.json",
+        f"heuristic{lg.SEP}trading_heuristic.json",
+    ]
+    assert summary["agents"] == ["heuristic", "trading_heuristic"]
+    assert summary["n_bootstrap"] == lg.PAIRS_N_BOOTSTRAP
+
+
 def test_resume_skips_finished_pairings_and_refuses_a_different_n(
     tmp_path: Path, baseline_only: None
 ) -> None:
