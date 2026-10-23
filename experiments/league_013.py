@@ -17,10 +17,11 @@ Two things differ from ``experiments.benchmark``:
 The full run is ONE serial ``run_league`` over the roster whose ``play``
 callback fans a pairing's games out to a persistent process pool, so every
 pairing file and ``league.json`` are written by a single process (no race,
-unlike one ``run_league`` per pairing from a pool; gamekit#47 is still open).
-``--pairs`` runs listed pairings as 2-agent leagues instead (timing smoke,
-cross-machine check); pairing seeds and ``config_hash`` do not depend on the
-roster, so those files equal the full run's.
+unlike one ``run_league`` per pairing from a pool).
+``--pairs`` runs the listed pairings alone through ``gamekit.league.run_pairing``
+(timing smoke, cross-machine check; gamekit >= 0.5.0). It writes only the
+pairing files, never a ``league.json``; pairing seeds and ``config_hash`` do not
+depend on the roster, so those files equal the full run's.
 
 Torch-free at import: RL agents are built lazily inside workers.
 
@@ -50,6 +51,7 @@ from gamekit.league import (
     load_pairings,
     pairing_seeds,
     run_league,
+    run_pairing,
     summarize_league,
 )
 from gamekit.results import write_result
@@ -70,6 +72,8 @@ ANCHOR = "heuristic"
 ANCHOR_RATING = 0.0
 PRIOR_DRAWS = 1.0
 N_BOOTSTRAP = 1000
+# ``--pairs`` only summarizes for its return value; nothing is written.
+PAIRS_N_BOOTSTRAP = 10
 BOOTSTRAP_SEED = 0
 SEED = 20261013
 TIMING_SEED = 20261014
@@ -305,15 +309,9 @@ def run(cfg: RunConfig) -> dict[str, Any]:
     summary: dict[str, Any] = {}
     with ProcessPoolExecutor(cfg.workers, initializer=_worker_init) as pool:
         play = make_play(pool, ckpt_paths, telemetry, cfg.step_budget)
-        groups = (
-            [roster(manifest)] if cfg.pairs is None else [list(p) for p in cfg.pairs]
-        )
-        for agents in groups:
-            # Pairing seeds and config_hash are roster-independent, so a
-            # 2-agent group writes the same pairing file as the full run.
-            anchor = ANCHOR if ANCHOR in agents else sorted(agents)[0]
+        if cfg.pairs is None:
             summary = run_league(
-                agents=agents,
+                agents=roster(manifest),
                 num_seats=NUM_SEATS,
                 n_per_pairing=cfg.n,
                 seed=cfg.seed,
@@ -321,12 +319,35 @@ def run(cfg: RunConfig) -> dict[str, Any]:
                 winning_seat=winning_seat,
                 results_dir=cfg.results_dir,
                 name=cfg.name,
-                anchor=anchor,
+                anchor=ANCHOR,
                 anchor_rating=ANCHOR_RATING,
                 prior_draws=PRIOR_DRAWS,
-                n_bootstrap=N_BOOTSTRAP if cfg.pairs is None else 10,
+                n_bootstrap=N_BOOTSTRAP,
                 bootstrap_seed=BOOTSTRAP_SEED,
             )
+        else:
+            # Pairing seeds and config_hash are roster-independent, so this
+            # writes the same pairing file as the full run.
+            for a, b in cfg.pairs:
+                payload = run_pairing(
+                    a,
+                    b,
+                    num_seats=NUM_SEATS,
+                    n_per_pairing=cfg.n,
+                    seed=cfg.seed,
+                    play=play,
+                    winning_seat=winning_seat,
+                    results_dir=cfg.results_dir,
+                    name=cfg.name,
+                )
+                summary = summarize_league(
+                    [payload],
+                    anchor=ANCHOR if ANCHOR in (a, b) else min(a, b),
+                    anchor_rating=ANCHOR_RATING,
+                    prior_draws=PRIOR_DRAWS,
+                    n_bootstrap=PAIRS_N_BOOTSTRAP,
+                    bootstrap_seed=BOOTSTRAP_SEED,
+                )
     return summary
 
 

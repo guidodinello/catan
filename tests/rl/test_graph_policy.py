@@ -472,7 +472,7 @@ def _overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
 
 
 def test_fresh_014_seeds_are_disjoint_from_every_used_range() -> None:
-    # league_013 needs gamekit.league (>= 0.4.0); skip where it is not installed.
+    # league_013 needs gamekit.league.run_pairing (>= 0.5.0); skip where absent.
     lg = pytest.importorskip("experiments.league_013")
     lo, n = se.SEED_RANGES["fresh_014"]
     fresh = (lo, lo + n - 1)
