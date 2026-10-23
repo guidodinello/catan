@@ -158,3 +158,14 @@ def test_redeal_draw_order_is_unchanged() -> None:
 
 def test_randomize_seat_off_reset_draw_order_is_unchanged() -> None:
     assert _trace(make_env(seed=7, randomize_seat=False)) == GOLDEN["fixed_seat0"]
+
+
+def test_reset_raises_when_every_deal_ends_before_the_learner_acts() -> None:
+    env = make_env(seed=7)
+    game = _RecordingGame(env._game, dead_deals=10**6)
+    env._game = game  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError, match="100 deals"):
+        env.reset(seed=0)
+
+    assert len(game.deal_seeds) == 100
