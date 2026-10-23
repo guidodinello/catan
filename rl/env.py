@@ -1,15 +1,18 @@
 """``CatanEnv``: a single-agent gymnasium env over the real engine.
 
 Deliberately *not* a subclass of ``gamekit.rl.env.SingleAgentEnv``. That class
-serves the flat masked-``Discrete`` case -- one index in, one mask out -- and
-its own docstring names catan as the game it does not serve. What catan reuses
-instead is ``gamekit.rl.protocols``/``driver``/``selfplay``, which are
-head-agnostic, plus ``gamekit.rl.masking.coerce_to_legal``.
+serves the case where one env step is one engine action (``ActionCodec`` maps
+each index to exactly one action); catan's sub-steps (below) are not engine
+actions. What catan reuses instead is ``gamekit.rl.protocols``/``driver``/
+``selfplay``, which are head-agnostic, plus ``gamekit.rl.masking.coerce_to_legal``.
 
-The contract below mirrors ``SingleAgentEnv``'s where there is no reason to
-differ -- reset draw order, ``on_illegal="coerce"``, zero observation on a
-terminal step, ``action_masks()`` named for sb3-contrib's ``ActionMasker``
-convention -- so the two envs stay comparable. What it adds is the composition
+The reset contract is *shared*, not copied: ``reset`` calls
+``gamekit.rl.driver.place_fixed_agents`` and ``deal_until_learner`` (the same
+two calls ``SingleAgentEnv`` makes), so the seat mapping, the RNG draw order
+and the bounded re-deal loop cannot drift. The rest mirrors ``SingleAgentEnv``
+where there is no reason to differ -- ``on_illegal="coerce"``, zero observation
+on a terminal step, ``action_masks()`` named for sb3-contrib's ``ActionMasker``
+convention, ``step_budget`` counting engine actions. What it adds is the composition
 buffer (see ``rl.action_space``), which lets one ``Discrete`` head express
 discard multisets and ordered road-building pairs exactly.
 
@@ -29,7 +32,11 @@ from typing import Any, Literal
 import gymnasium as gym
 import numpy as np
 from gamekit.agent import Agent
-from gamekit.rl.driver import advance_until_learner
+from gamekit.rl.driver import (
+    advance_until_learner,
+    deal_until_learner,
+    place_fixed_agents,
+)
 from gamekit.rl.masking import coerce_to_legal
 from gamekit.rl.protocols import RewardFn
 from gamekit.rl.selfplay import OpponentPool
@@ -47,11 +54,6 @@ from rl.reward import ShapedReward
 # Matches experiments/rollout.py's STEP_BUDGET_DEFAULT: the budget belongs to
 # the driver, never to is_terminal.
 STEP_BUDGET_DEFAULT = 20_000
-
-# A deal whose game ends before the learner ever acts is re-dealt. Bounded so a
-# misconfigured opponent set fails loudly instead of spinning forever --
-# SingleAgentEnv's equivalent loop is unbounded.
-MAX_RESET_REDEALS = 100
 
 
 class CatanEnv(gym.Env[NDArray[np.float32], np.int64]):
@@ -117,7 +119,8 @@ class CatanEnv(gym.Env[NDArray[np.float32], np.int64]):
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[NDArray[np.float32], dict[str, Any]]:
-        """Reset, following ``SingleAgentEnv``'s draw order exactly.
+        """Reset, following ``SingleAgentEnv``'s draw order exactly (both call
+        ``gamekit.rl.driver.place_fixed_agents`` / ``deal_until_learner``).
 
         reseed -> pick the learner seat -> resample or place opponents ->
         ``agent.reset()`` each -> deal -> ``on_episode_start`` -> advance
@@ -138,7 +141,7 @@ class CatanEnv(gym.Env[NDArray[np.float32], np.int64]):
             )
         else:
             assert self._fixed_agents is not None  # enforced in __init__
-            seat_agents = _place_fixed_agents(
+            seat_agents = place_fixed_agents(
                 self._fixed_agents, self.num_players, self._learner_seat
             )
         for agent in seat_agents:
@@ -147,18 +150,13 @@ class CatanEnv(gym.Env[NDArray[np.float32], np.int64]):
         self._seat_agents = seat_agents
         self._composer.reset()
 
-        for _ in range(MAX_RESET_REDEALS):
-            state = self._game.reset(seed=self._rng.randint(0, 2**31 - 1))
+        def on_deal(state: GameState) -> None:
             self._encoder.reset(state)
             self._reward.on_episode_start(state, self._learner_seat)
-            advance_until_learner(self._game, state, seat_agents)
-            if not self._game.is_terminal(state):
-                break
-        else:
-            raise RuntimeError(
-                f"every one of {MAX_RESET_REDEALS} deals ended before the learner "
-                f"acted -- check the opponent configuration"
-            )
+
+        # Bounded at gamekit's MAX_REDEALS_DEFAULT: a misconfigured opponent
+        # set raises RuntimeError instead of spinning forever.
+        state = deal_until_learner(self._game, self._rng, seat_agents, on_deal=on_deal)
 
         self._state = state
         self._episode_steps = 0
@@ -251,21 +249,6 @@ class CatanEnv(gym.Env[NDArray[np.float32], np.int64]):
         return self._encoder.encode(
             state, self._learner_seat, buffer_prefix=self._composer.prefix
         )
-
-
-def _place_fixed_agents(
-    agents: Sequence[Agent[GameState, Action]], num_seats: int, learner_seat: int
-) -> list[Agent[GameState, Action] | None]:
-    """Spread ``agents`` over every seat but ``learner_seat``, in order."""
-    out: list[Agent[GameState, Action] | None] = []
-    cursor = 0
-    for seat in range(num_seats):
-        if seat == learner_seat:
-            out.append(None)
-        else:
-            out.append(agents[cursor])
-            cursor += 1
-    return out
 
 
 def make_env(
