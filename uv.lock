@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 resolution-markers = [
     "python_full_version >= '3.15' and extra != 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda'",
@@ -49,7 +49,7 @@ version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
-    { name = "typing-extensions", marker = "python_full_version < '3.15' or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.15'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
@@ -171,7 +171,7 @@ dev = [
 requires-dist = [
     { name = "catan", extras = ["rl"], marker = "extra == 'rl-train'" },
     { name = "catan", extras = ["rl"], marker = "extra == 'rl-train-cuda'" },
-    { name = "fastapi", specifier = ">=0.143.1" },
+    { name = "fastapi", specifier = ">=0.143.2" },
     { name = "gamekit", git = "https://github.com/guidodinello/gamekit?tag=v0.5.0" },
     { name = "gamekit", extras = ["rl"], marker = "extra == 'rl'", git = "https://github.com/guidodinello/gamekit?tag=v0.5.0" },
     { name = "gymnasium", marker = "extra == 'rl'", specifier = ">=1.4.0" },
@@ -191,12 +191,12 @@ provides-extras = ["rl", "rl-train", "rl-train-cuda"]
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "hypothesis", specifier = ">=6.169.3" },
+    { name = "hypothesis", specifier = ">=6.170.0" },
     { name = "mypy", specifier = ">=2.4.0" },
     { name = "pre-commit", specifier = ">=4.7.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-benchmark", specifier = ">=5.3.0" },
-    { name = "ruff", specifier = ">=0.17.0" },
+    { name = "ruff", specifier = ">=0.17.1" },
 ]
 
 [[package]]
@@ -280,43 +280,43 @@ wheels = [
 
 [package.optional-dependencies]
 cublas = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 cufile = [
-    { name = "nvidia-cufile", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cufile", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 cusolver = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
-    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
 ]
 
 [[package]]
@@ -713,7 +713,7 @@ version = "2.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ast-serialize" },
-    { name = "librt", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "librt", marker = "platform_python_implementation != 'PyPy'" },
     { name = "mypy-extensions" },
     { name = "pathspec" },
     { name = "typing-extensions" },
@@ -994,14 +994,14 @@ wheels = [
 
 [[package]]
 name = "opentelemetry-api"
-version = "1.45.0"
+version = "1.45.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/dc/e12c1fe1ed8a7b7149777127b1a0e12ce5bd5a81d97408bedc2128c260f5/opentelemetry_api-1.45.0.tar.gz", hash = "sha256:711ede81773c8025c2c03dac0450bc89f3d30aea6eabcc815c570d4e35a963f7", size = 72115, upload-time = "2026-09-25T12:32:28.399Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/02/6e0ae9cc61bd3169d401077b507b3ebc344745171e1051ab430be012dcd9/opentelemetry_api-1.45.1.tar.gz", hash = "sha256:aa38ed19bcc084ba42782a73255b3582283eced7ad6dddbd6695189e69adfb75", size = 72804, upload-time = "2026-10-06T17:32:58.133Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/b9/040d1a1c7836922828e6480cd2366bb8fe0ebf75b413d2bb51a9b0e7f78f/opentelemetry_api-1.45.0-py3-none-any.whl", hash = "sha256:80e068aba7cd56c8b58512d6a36f8d25cb1dfaa0c0a4cc1c938ccf9f362d9cb3", size = 60020, upload-time = "2026-09-25T12:32:03.192Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/41/f7dcf80b81ee8e71c1a2b59f14208bc723edbd89ed027a73b175abf6348e/opentelemetry_api-1.45.1-py3-none-any.whl", hash = "sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb", size = 60256, upload-time = "2026-10-06T17:32:33.506Z" },
 ]
 
 [[package]]
@@ -1200,7 +1200,7 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -1464,7 +1464,7 @@ resolution-markers = [
     "python_full_version < '3.15'",
 ]
 dependencies = [
-    { name = "cuda-bindings", marker = "(python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (python_full_version >= '3.15' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "cuda-bindings", marker = "(python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
     { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
     { name = "filelock", marker = "extra == 'extra-5-catan-rl-train-cuda'" },
     { name = "fsspec", marker = "extra == 'extra-5-catan-rl-train-cuda'" },
@@ -1476,7 +1476,7 @@ dependencies = [
     { name = "nvidia-nvshmem-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
     { name = "setuptools", marker = "extra == 'extra-5-catan-rl-train-cuda'" },
     { name = "sympy", marker = "extra == 'extra-5-catan-rl-train-cuda'" },
-    { name = "triton", marker = "(python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (python_full_version >= '3.15' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform != 'linux' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "triton", marker = "(python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-5-catan-rl-train-cuda') or (extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
     { name = "typing-extensions", marker = "extra == 'extra-5-catan-rl-train-cuda'" },
 ]
 wheels = [
@@ -1544,7 +1544,7 @@ standard = [
     { name = "httptools" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "uvloop", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32') or (platform_python_implementation == 'PyPy' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'cygwin' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda') or (sys_platform == 'win32' and extra == 'extra-5-catan-rl-train' and extra == 'extra-5-catan-rl-train-cuda')" },
+    { name = "uvloop", marker = "platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'" },
     { name = "watchfiles" },
     { name = "websockets" },
 ]
