@@ -3,7 +3,7 @@
 **Date:** pre-registered 2026-10-11. No run, smoke or measurement exists before this file's merge.
 **Note:** [gamekit#008 — Board-aware encoder / spatial inductive bias](https://github.com/guidodinello/gamekit/blob/main/docs/research/008-board-aware-encoder.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Implementation plan: [docs/plans/graph-encoder.md](../plans/graph-encoder.md). Motivated by [004](004-bc-warm-start.md) (spatial BC accuracy) and [010](010-entropy-schedule.md) (run-to-run spread).
 
-**Status: Stage 1 measured; Gate S1 PASSED (graph 86.03% vs flat 53.90% val spatial accuracy, +32.1 pts, all 3 graph seeds above all 3 flat seeds). Stage 2 (PPO fine-tune) has not been run; #42 stays open until S2's outcome.** The smoke in Amendment 1 read no win rate. See [Result](#result) and [Verdict](#verdict).
+**Status: Stage 1 measured; Gate S1 PASSED (graph 86.03% vs flat 53.90% val spatial accuracy, +32.1 pts, all 3 graph seeds above all 3 flat seeds). Stage 2 (PPO fine-tune): 3 of 4 fine-tunes are done (flat s3, graph s3, flat s4); graph s4 is still training. TODO(S2): n=4000 results and the Gate S2 verdict. #42 stays open until S2's outcome.** The smoke in Amendment 1 read no win rate. See [Result](#result) and [Verdict](#verdict).
 
 ## Hypothesis
 
@@ -202,9 +202,43 @@ All Stage 1 runs used the dedicated worktree `/home/guido/projects/catan-014-run
 - **Clone benchmarks (secondary, 2026-10-20 21:49 to 21:59):** `helpers/bench_clones.sh 8` in tmux `catan014-bench`, 8 workers, `experiments.benchmark --mode rl_vs_heuristic --games 4000 --players 4 --engine-seed-base 21000001 --driver-seed-base 21000001` on each arm's seed-0 final checkpoint, run only after all 6 BC jobs had finished (flat 1 min 44 s, graph 8 min 18 s). The worktree stayed clean; result JSONs were moved to `rl_runs/exp014/bench/`.
 - **Helper hashes (as-run copies in `rl_runs/exp014/helpers/`, sha256):** `stage1.sh` `2cc9b7b3…fdede`, `stage1_tools.py` `33ac790f…1e69`, `score_tune.py` `cd10566a…1ce`, `bench_clones.sh` `4f44f26e…10a2`. The committed `experiments/exp014/` copies of the two shell scripts are byte-identical; the two Python files are lint-fixed (ruff) copies, and `stage1_tools.py` gained the `gate` and `check-splits` subcommands after the runs (they read only run logs and `game_id.npy`).
 
+### Stage 2 run log
+
+All four fine-tunes used the same worktree (`7b353e3`, clean) and locked venv as Stage 1, `PYTHONPATH=$PWD OMP_NUM_THREADS=1`, `--device cuda`, `timeout 8h`, the flags in Design > Stage 2 with `--bc-init rl_runs/exp014/bc/<arm>_s0.zip` and `--bc-init-rate` equal to that clone's `fresh_014` rate (flat 0.107, graph 0.25025), `--selfplay-dir rl_runs/exp014/selfplay`, `--run-dir rl_runs/exp014/<label>`, label `catan014_ft_<arm>_s<seed>`. Driver: `helpers/stage2.sh` (one tmux session `catan014-ft-<arm>-s<seed>` per job, `tee` to `logs/ft_<arm>_s<seed>.log`, `done/ft_<arm>_s<seed>` marker on `EXIT=0`). Raw outputs are under `rl_runs/exp014/` (gitignored, on the HDD): `selfplay/`, `logs/`, `done/`, `bench/`.
+
+| run | launched to finished | training / in-loop eval | `train_fps` | exit |
+|---|---|---|---|---|
+| flat s3 | 2026-10-23 14:13 to 15:53 | 86.9 / 12.7 min | 576 to 647 | 0 |
+| graph s3 | 2026-10-23 15:53 to 19:21 | 178.8 / 28.2 min | 280 to 287 | 0 |
+| flat s4 | 2026-10-23 19:21 to 20:50 | 74.1 / 12.9 min | 620 to 678 | 0 |
+| graph s4 | 2026-10-25 17:43 to TODO(S2) | TODO(S2) | 279 at 250k | TODO(S2) |
+
+Graph s3 took 3 h 28 min against the 4 to 4.5 h projected in Amendment 1. All finished runs reached the fixed 3,000,000-step checkpoint (`stopped_early=False`; the regression stop rule was disabled by `--regression-patience 1000`). Graph s4 was launched on its own two days after the other three (the batch was split across days); it is the same command.
+
+**Benchmarks (primary metric).** Each fixed `catan014_ft_<arm>_s<seed>_3000000.zip` once, `helpers/bench_stage2.sh`, in tmux `catan014-bench-stage2`, `tee -a logs/bench_stage2.log`: `experiments.benchmark --mode rl_vs_heuristic --games 4000 --players 4 --engine-seed-base 21000001 --driver-seed-base 21000001 --checkpoint <3M zip>`, CPU only (`CUDA_VISIBLE_DEVICES=` empty), 3 workers, result JSONs moved from the worktree to `rl_runs/exp014/bench/`. Flat s3, flat s4 and graph s3 ran on 2026-10-25, 18:11 to 18:26 (3 min 27 s, 3 min 19 s and 7 min 21 s), one JSON each with 4000 games, no game without a winner, 1000 games per seat position, while graph s4 was still training (see Deviations); graph s4 is TODO(S2). A timing/RAM smoke (tmux `catan014-bench-smoke`, 8, 40 and 200 games on the Amendment 1 smoke seeds from 4,000,501, with the unmeasured `catan014_ft_graph_s3_250000.zip`, outputs in `rl_runs/exp014/smoke_bench/`) read no win rate and played no `fresh_014` board: 2 workers peaked at 989 MB total PSS, and 160 extra games took 22 s of wall time at 2 workers (about 0.28 worker-s per game). Helper hashes (sha256): `stage2.sh` `baa4a856…`, `bench_stage2.sh` `342f9a17…`.
+
+**In-loop curves (n = 200, monitoring only; seed scheme per README §In-loop eval caveats, catan commit `7b353e3`).** `reported` (seed varies per chunk) / `guard(fixed)` win rate % vs 3 `HeuristicAgent` at each 250k-step chunk, from `logs/ft_*.log`. These are not results: n = 200 has a Wilson half-width of about 6 to 7 points, the best-of-12 is biased upward, and the gate uses the n = 4000 benchmark of the fixed 3M checkpoint.
+
+| steps (k) | flat s3 | graph s3 | flat s4 | graph s4 |
+|---|---|---|---|---|
+| 250 | 11.5 / 16.0 | 40.0 / 36.5 | 12.0 / 8.0 | 34.5 / 35.5 |
+| 500 | 16.0 / 9.0 | 36.5 / 41.0 | 8.5 / 12.0 | TODO(S2) |
+| 750 | 12.5 / 11.0 | 40.0 / 43.5 | 9.0 / 12.0 | TODO(S2) |
+| 1000 | 8.0 / 12.5 | 42.0 / 50.0 | 11.0 / 12.0 | TODO(S2) |
+| 1250 | 15.5 / 17.5 | 47.5 / 51.0 | 13.0 / 15.0 | TODO(S2) |
+| 1500 | 12.0 / 16.5 | 48.5 / 52.5 | 13.5 / 14.0 | TODO(S2) |
+| 1750 | 9.5 / 16.0 | 51.0 / 61.5 | 17.5 / 18.0 | TODO(S2) |
+| 2000 | 11.0 / 15.0 | 58.0 / 55.5 | 14.0 / 15.0 | TODO(S2) |
+| 2250 | 17.5 / 19.5 | 60.0 / 54.0 | 16.0 / 9.0 | TODO(S2) |
+| 2500 | 12.0 / 15.0 | 62.5 / 62.5 | 19.5 / 17.5 | TODO(S2) |
+| 2750 | 16.0 / 19.5 | 59.5 / 63.0 | 15.5 / 12.0 | TODO(S2) |
+| 3000 | 15.0 / 21.0 | 63.0 / 55.0 | 14.5 / 16.0 | TODO(S2) |
+
+What the curves show, and nothing more: the flat arm hovers around 8 to 20% with no clear trend across 3M steps (the seed-0 clone benchmarked 10.7% at n = 4000); the graph s3 arm starts near 40% and rises to about 60% in-loop. The graph in-loop level is far above the 25% equal-strength share and the 25.03% n = 4000 figure of the seed-0 clone; whether that survives on the 4000 fresh boards is what the benchmark below decides, so no reading is drawn from the curves. The in-loop "best" checkpoints (flat s3 at 2.25M, flat s4 at 2.5M, graph s3 at 3M) are not used: the registered checkpoint is the fixed 3M one.
+
 ## Result
 
-Stage 1 only. Source: the six `val` reports in `rl_runs/exp014/logs/final_*.log`, parsed by `stage1_tools.py gate` into `experiments/results/bc_014_stage1.json`. Val (`game_id % 10 == 0`, 300 games, 51,893 rows) was scored exactly once per model, at the end of its run, and never used for a choice. The logs print accuracies to 0.1 point; nothing was re-scored.
+Stage 1 first, then Stage 2. Source for Stage 1: the six `val` reports in `rl_runs/exp014/logs/final_*.log`, parsed by `stage1_tools.py gate` into `experiments/results/bc_014_stage1.json`. Val (`game_id % 10 == 0`, 300 games, 51,893 rows) was scored exactly once per model, at the end of its run, and never used for a choice. The logs print accuracies to 0.1 point; nothing was re-scored.
 
 **Metric S1: val masked top-1 accuracy pooled over `vertex_settlement`, `edge`, `hex` (%).**
 
@@ -246,7 +280,28 @@ The flat arm's per-block accuracies (50 to 56% on the three spatial blocks) matc
 
 No game ended without a winner in either run. 25% is the share a seat gets against equal-strength players; the graph clone plays at about the strength of the heuristic it was cloned from, the flat clone well below it. This is one checkpoint per arm, so it carries no information on training-seed variance, and no choice depends on it. The 3M-step PPO fine-tune (Stage 2) is the registered test of whether the BC gain converts to strength after fine-tuning; these clone numbers are not a substitute for it. These boards have now been played by these two clones; Stage 2 checkpoints will use the same 4000 boards, as registered.
 
+### Stage 2 result
+
+Primary metric: win rate vs 3 `HeuristicAgent` of each fixed 3M checkpoint, n = 4000, `fresh_014` (engine seeds 21,000,001 to 21,004,000), `rl_vs_heuristic`, Wilson 95%. Source: `rl_runs/exp014/bench/benchmark_rl_vs_heuristic_p4_catan014_ft_<arm>_s<seed>_3000000.json`, to be copied to `experiments/results/` with the results PR.
+
+| checkpoint | wins / n | win rate | Wilson 95% |
+|---|---|---|---|
+| flat s3 | TODO(S2) | TODO(S2) | TODO(S2) |
+| flat s4 | TODO(S2) | TODO(S2) | TODO(S2) |
+| graph s3 | TODO(S2) | TODO(S2) | TODO(S2) |
+| graph s4 | TODO(S2) (fine-tune still training) | TODO(S2) | TODO(S2) |
+
+**Gate S2** (all three clauses must hold), TODO(S2) for every line:
+
+1. Pooled graph (2 x 4000) vs pooled flat (2 x 4000), `gamekit.mc.testing.two_proportion_test`, two-sided, p < 0.05 with a positive difference: pooled graph TODO(S2), pooled flat TODO(S2), difference TODO(S2), p = TODO(S2).
+2. Both graph checkpoints above both flat checkpoints: TODO(S2).
+3. Pooled difference > 2.2 points: TODO(S2).
+
+Secondary (reported, not gated), all TODO(S2): board-paired exact McNemar for each graph-vs-flat checkpoint pair; per-rotation-position wins; steps to first reach the flat arm's final level (from the n = 200 curves, monitoring only); games without a winner.
+
 ## Verdict
+
+**Stage 2: TODO(S2)** (verdict-map row: validated / fidelity improved, not converted to strength at 3M). Not decidable until graph s4 is trained and all four checkpoints are benchmarked.
 
 **Stage 1: Gate S1 passed.** Both pre-registered clauses hold with large margins: the graph arm's pooled spatial val accuracy is 86.0% against 53.9% for the flat arm (+32.1 pts), and every graph seed (85.0, 85.7, 87.4) is above every flat seed (53.8, 53.9, 54.0). Under the verdict map this means **Stage 2 is run** (flat s3, graph s3, flat s4, graph s4, 3M steps each); it has not been run, and **#42 closes on S2's outcome, not S1's**. Nothing here is a claim about win rate after fine-tuning.
 
@@ -258,6 +313,8 @@ What the result does and does not say: for this data (3000 heuristic games, one 
 - **`sweep_graph_lr3e-4`: truncated log, tune score recovered by rescoring.** Our own Ctrl-C killed that job's `tee` during the sweep (2026-10-11, the log's last epoch line is 21:10:50). The training process kept going and saved its checkpoint at 21:28, but the log stops at epoch 14 with `EXIT=120` and no `done/` marker exists for it. Its tune score (85.65%) therefore comes from rescoring the saved checkpoint on the tune split with `score_tune.py` (`n = 52,243` rows; it loads no val game, as the sweep dataset has none). The same rescoring of the three surviving sweep checkpoints gives 53.17, 55.24 and 86.57, which match their logs (53.2, 55.2, 86.6) to within 0.05, so the rescoring reproduces the logged metric. `lr_choice.json` records the rescored values and the same registered rule (highest tune spatial accuracy, ties to 1e-3), which picks 1e-3 for the graph arm (86.57 > 85.65). `sweep_graph_lr3e-4` was not re-run, and `stage1.sh final` (not `sweep`) was launched so it would not be redone.
 - **The sweep ran on a val-stripped copy of the data.** To make "val is never used for any choice" structural, `stage1_tools.py make-sweep-ds` copied `rl_runs/bc/v1` without the `game_id % 10 == 0` rows into `rl_runs/exp014/bc_sweep_ds` (456,707 of 508,600 rows kept; the sweep's val metrics print as `nan`). Its manifest hashes: `obs` `2e8eb240…0a`, `masks` `dc7b1846…4fba`, `labels` `dc66b86f…d4c`, `returns` `f5826a69…64af1`, `game_id` `9813b0e7…5948`; the full values are in `bc_sweep_ds/manifest.json`. The final runs used the original `rl_runs/bc/v1` (hashes in Design).
 - **Seed-0 clone benchmarks at n = 4000 (registered secondary) were run after Stage 1**, once each, at the owner's go, after all six BC jobs had finished so they did not overlap training. They are descriptive.
-- **Not done in this change:** Stage 2 (fine-tunes, their benchmarks and Gate S2). The tie-aware secondary stays dropped (Amendment 1).
+- **Stage 2 benchmarks ran in parallel with graph s4 training**, not "sequential, one at a time" as the Run protocol says, and with a narrower duplicate guard (no other `experiments.benchmark` process and no other `catan014-bench-*` session; the registered `rl.train` pattern would have matched the live trainer). They ran on CPU only, in a cgroup scope capped at 1.8 GB with `choom -n 1000` so memory pressure would hit them and not the trainer, with 3 workers sized by free RAM (Stage 1 used 8). Play is CPU-deterministic and seeded per board, so results do not depend on timing or worker count; only wall-clock time is affected, and graph s4's `train_fps` stayed at its 279 baseline reading (TODO(S2): confirm against the full log).
+- **Graph s4 was trained in a separate batch two days after the other three**, and benchmarked separately (TODO(S2)).
+- **Not done in this change:** the graph s4 fine-tune and benchmark, the Gate S2 verdict, and the results JSONs. The tie-aware secondary stays dropped (Amendment 1).
 - Written before any code, smoke or measured run. The code PR and the Amendment follow this merge.
 - The HDD behind `rl_runs` and `.venv-cuda` was unmounted at the start of the planning session and mounted during it; the dataset hashes above were computed read-only after the mount. Nothing was written to it.
