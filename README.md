@@ -358,13 +358,14 @@ the phase history.
       touched. See `~/projects/docs/shared-ml-package.md`.
 - [ ] **Phase 5 — RL**: gymnasium env, state encoder, MaskablePPO training
       vs heuristic opponents, self-play with anti-collapse controls. **In
-      progress, gate not yet met**: the env/encoder (PR #17), MaskablePPO
+      progress**: the env/encoder (PR #17), MaskablePPO
       training vs random (PR #18, 81.75% [80.5%, 82.9%] vs 3 `RandomAgent`s),
       self-play with anti-collapse controls (PR #19), and a behaviour-cloning
       warm start before self-play fine-tuning (PR #21) have all landed, but
-      the Phase-5-done bar — beating `HeuristicAgent` — has not: the best
-      result so far is in [`docs/experiments/README.md`](docs/experiments/README.md#current-best-phase-5-as-of-2026-09-29),
-      short of the >25%-with-CI-excluding-it gate.
+      a board-aware graph policy network (experiment 014, 3M-step fine-tune)
+      then beat `HeuristicAgent` at 59.05% [57.52%, 60.56%] (n=4000), clearing
+      the >25%-with-CI-excluding-it bar; the flat-MLP best before it was 20.72%.
+      The best result is in [`docs/experiments/README.md`](docs/experiments/README.md#current-best-phase-5-as-of-2026-10-25).
       See `docs/experiments/` for every run's numbers, config, and verdict,
       and `~/projects/docs/shared-ml-package.md`'s "`gamekit.rl`" section for
       what Phase 5 supplies vs. reuses. As planned, it reuses

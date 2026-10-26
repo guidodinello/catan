@@ -55,13 +55,25 @@ a checkpoint *shortlist*, never a result. Cite this section from a log's Environ
   40 evals vs 185.7 min training), so about +20 min on a 10M-step run (~4% of an 8 h budget),
   or ~9% fewer training steps on a timeout-bound 8 h run.
 
-## Current best (Phase 5, as of 2026-09-29)
+## Current best (Phase 5, as of 2026-10-25)
 
-**20.72% [19.50%, 22.01%] win rate vs 3 `HeuristicAgent`s**, n=4000,
-seat-rotated — [006](006-longer-run.md), `catan_bc_ft_long_10031616` (the highest of the five
-pre-registered n=4000 fixed points; the +10M checkpoint's 19.90% [18.69%, 21.17%] is
-statistically indistinguishable from it). Non-overlapping with [004](004-bc-warm-start.md)'s
-16.2% [15.09%, 17.37%]. Still below the Phase-5-done gate (>25% with the CI excluding it);
-the roadmap checkbox stays unchecked. Beats 3 `RandomAgent`s at **94.6% [93.86%, 95.26%]**.
-The 20.72% is the best of five fixed points, so it carries a small selection bias; every
-fixed point from +4M on clears 004's interval regardless.
+**59.05% [57.52%, 60.56%] win rate vs 3 `HeuristicAgent`s**, n=4000 on the fresh boards
+21,000,001-21,004,000, seat-rotated — [014](014-graph-encoder.md) Stage 2 (Gate S2 passed),
+`catan014_ft_graph_s3_3000000.zip`: the board-aware graph policy network, BC clone then a 3M-step
+PPO fine-tune (fine-tune seed 3; the other graph run, seed 4, scored 56.57% [55.03%, 58.10%]; the
+flat MLP arm scored 16.35% and 15.78% under identical code and rules). The checkpoint is
+gitignored, on the HDD: `rl_runs/exp014/selfplay/catan014_ft_graph_s3/catan014_ft_graph_s3_3000000.zip`
+(sha256 prefix `6cb96ab7d856`). It clears the Phase-5-done gate (>25% with the CI excluding it).
+Budget caveat: it was trained for 3M fine-tune steps, not comparable with the previous best's
+~12M, and it is a different architecture; the comparison is on win rate against the same
+opponents, not on a matched budget. One BC seed fed the fine-tunes, and the 59.05% is one of
+two fine-tune seeds (the pre-registered fixed 3M checkpoint, not a best-of selection).
+
+Previous best (flat MLP, Phase 5 as of 2026-09-29): **20.72% [19.50%, 22.01%]** vs 3
+`HeuristicAgent`s, n=4000 on boards 1..4000 — [006](006-longer-run.md),
+`catan_bc_ft_long_10031616` (the highest of the five pre-registered n=4000 fixed points; the
++10M checkpoint's 19.90% [18.69%, 21.17%] is statistically indistinguishable from it).
+Non-overlapping with [004](004-bc-warm-start.md)'s 16.2% [15.09%, 17.37%]. Beats 3
+`RandomAgent`s at **94.6% [93.86%, 95.26%]**. The 20.72% is the best of five fixed points, so
+it carries a small selection bias; every fixed point from +4M on clears 004's interval
+regardless. The two bests were measured on different boards (006: 1..4000; 014: 21,000,001+).
