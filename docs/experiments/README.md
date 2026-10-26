@@ -25,7 +25,7 @@ there links forward to the log(s) that tested it).
 | [011](011-decision-time-search.md) | Decision-time search (ISMCTS over `catan_bc_ft_long_10031616`, policy prior + V⁺ leaf) vs the same checkpoint without search (issue #41) | search helps: **34.62% [33.17, 36.11]** vs 20.72% (+13.9 pts, n=4000, S=128, opponents modelled as `HeuristicAgent`, an **upper bound**); transferable self-model arm (exploratory, S=64, n=1000) **27.2% [24.53, 30.04]**, +5.6 pts; ~0.8 s per searched decision; budget curve 21.6 → 26.3 → 29.8 → 35.3% at 0/32/64/128 simulations | [021](https://github.com/guidodinello/gamekit/blob/main/docs/research/021-decision-time-search.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
 | [012](012-self-search-confirmation.md) | Confirming decision-time search with the self opponent model (issue #46): `self` S=128, n=4000, fresh boards 20000001+, vs the same checkpoint without search | **gate passed**: `self` S=128 32.58% [31.14, 34.04] vs 21.00% [19.77, 22.29] without search on the same 4000 fresh boards (+11.6 pts, z 11.69, McNemar p 4.6e-54); 252 worker-s/game | [021](https://github.com/guidodinello/gamekit/blob/main/docs/research/021-decision-time-search.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
 | [013](013-first-league.md) | First catan league: 11 agents (8 RL checkpoints + heuristic, trading_heuristic, random), 4 seats `(a,b,a,b)`, anchored Bradley-Terry ratings, run on the HP (gamekit#38) | run 2026-10-08..10: 220,000 games, 0 ties; descriptive, none scored (see log) | [022](https://github.com/guidodinello/gamekit/blob/main/docs/research/022-league-ratings.md) |
-| [014](014-graph-encoder.md) | Board-aware (graph) policy network vs the flat MLP (issue #42): BC spatial accuracy (3 seeds/arm), then 2 fine-tune seeds/arm at 3M steps, n=4000 on fresh boards 21000001+ | Stage 1 done: Gate S1 passed (graph 86.0% vs flat 53.9% val spatial accuracy); Stage 2 not run yet | [008](https://github.com/guidodinello/gamekit/blob/main/docs/research/008-board-aware-encoder.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
+| [014](014-graph-encoder.md) | Board-aware (graph) policy network vs the flat MLP (issue #42): BC spatial accuracy (3 seeds/arm), then 2 fine-tune seeds/arm at 3M steps, n=4000 on fresh boards 21000001+ | Stage 1 done: Gate S1 passed (graph 86.0% vs flat 53.9% val spatial accuracy); Stage 2 done: Gate S2 passed (graph 57.8% vs flat 16.1% pooled, n=4000 on fresh boards; validated) | [008](https://github.com/guidodinello/gamekit/blob/main/docs/research/008-board-aware-encoder.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
 
 ## In-loop eval caveats
 
@@ -55,13 +55,25 @@ a checkpoint *shortlist*, never a result. Cite this section from a log's Environ
   40 evals vs 185.7 min training), so about +20 min on a 10M-step run (~4% of an 8 h budget),
   or ~9% fewer training steps on a timeout-bound 8 h run.
 
-## Current best (Phase 5, as of 2026-09-29)
+## Current best (Phase 5, as of 2026-10-25)
 
-**20.72% [19.50%, 22.01%] win rate vs 3 `HeuristicAgent`s**, n=4000,
-seat-rotated — [006](006-longer-run.md), `catan_bc_ft_long_10031616` (the highest of the five
-pre-registered n=4000 fixed points; the +10M checkpoint's 19.90% [18.69%, 21.17%] is
-statistically indistinguishable from it). Non-overlapping with [004](004-bc-warm-start.md)'s
-16.2% [15.09%, 17.37%]. Still below the Phase-5-done gate (>25% with the CI excluding it);
-the roadmap checkbox stays unchecked. Beats 3 `RandomAgent`s at **94.6% [93.86%, 95.26%]**.
-The 20.72% is the best of five fixed points, so it carries a small selection bias; every
-fixed point from +4M on clears 004's interval regardless.
+**59.05% [57.52%, 60.56%] win rate vs 3 `HeuristicAgent`s**, n=4000 on the fresh boards
+21,000,001-21,004,000, seat-rotated — [014](014-graph-encoder.md) Stage 2 (Gate S2 passed),
+`catan014_ft_graph_s3_3000000.zip`: the board-aware graph policy network, BC clone then a 3M-step
+PPO fine-tune (fine-tune seed 3; the other graph run, seed 4, scored 56.57% [55.03%, 58.10%]; the
+flat MLP arm scored 16.35% and 15.78% under identical code and rules). The checkpoint is
+gitignored, on the HDD: `rl_runs/exp014/selfplay/catan014_ft_graph_s3/catan014_ft_graph_s3_3000000.zip`
+(sha256 prefix `6cb96ab7d856`). It clears the Phase-5-done gate (>25% with the CI excluding it).
+Budget caveat: it was trained for 3M fine-tune steps, not comparable with the previous best's
+~12M, and it is a different architecture; the comparison is on win rate against the same
+opponents, not on a matched budget. One BC seed fed the fine-tunes, and the 59.05% is one of
+two fine-tune seeds (the pre-registered fixed 3M checkpoint, not a best-of selection).
+
+Previous best (flat MLP, Phase 5 as of 2026-09-29): **20.72% [19.50%, 22.01%]** vs 3
+`HeuristicAgent`s, n=4000 on boards 1..4000 — [006](006-longer-run.md),
+`catan_bc_ft_long_10031616` (the highest of the five pre-registered n=4000 fixed points; the
++10M checkpoint's 19.90% [18.69%, 21.17%] is statistically indistinguishable from it).
+Non-overlapping with [004](004-bc-warm-start.md)'s 16.2% [15.09%, 17.37%]. Beats 3
+`RandomAgent`s at **94.6% [93.86%, 95.26%]**. The 20.72% is the best of five fixed points, so
+it carries a small selection bias; every fixed point from +4M on clears 004's interval
+regardless. The two bests were measured on different boards (006: 1..4000; 014: 21,000,001+).
