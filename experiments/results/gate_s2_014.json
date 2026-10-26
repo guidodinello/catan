@@ -1,0 +1,116 @@
+{
+  "rows": {
+    "flat_s3": {
+      "wins": 654,
+      "n": 4000,
+      "rate": 0.1635,
+      "wilson95": [
+        0.15236313478958244,
+        0.17528257054438667
+      ]
+    },
+    "flat_s4": {
+      "wins": 631,
+      "n": 4000,
+      "rate": 0.15775,
+      "wilson95": [
+        0.14678305188616325,
+        0.16937368704563743
+      ]
+    },
+    "graph_s3": {
+      "wins": 2362,
+      "n": 4000,
+      "rate": 0.5905,
+      "wilson95": [
+        0.575181286670659,
+        0.605645054093905
+      ]
+    },
+    "graph_s4": {
+      "wins": 2263,
+      "n": 4000,
+      "rate": 0.56575,
+      "wilson95": [
+        0.5503338365012056,
+        0.5810399967061987
+      ]
+    }
+  },
+  "pooled": {
+    "graph": [
+      4625,
+      8000
+    ],
+    "flat": [
+      1285,
+      8000
+    ],
+    "diff_pts": 41.75,
+    "test": {
+      "z": 54.71005288446619,
+      "p_value": 0.0
+    }
+  },
+  "clauses": {
+    "1_pooled_test": true,
+    "2_seed_consistency": true,
+    "3_gt_2.2pts": true
+  },
+  "gate_s2_passed": true,
+  "mcnemar": {
+    "graph_s3_vs_flat_s3": {
+      "only_graph": 1941,
+      "only_flat": 233,
+      "p_exact": 0.0
+    },
+    "graph_s3_vs_flat_s4": {
+      "only_graph": 1940,
+      "only_flat": 209,
+      "p_exact": 0.0
+    },
+    "graph_s4_vs_flat_s3": {
+      "only_graph": 1851,
+      "only_flat": 242,
+      "p_exact": 1.815288481655385e-306
+    },
+    "graph_s4_vs_flat_s4": {
+      "only_graph": 1867,
+      "only_flat": 235,
+      "p_exact": 6.051481384e-315
+    }
+  },
+  "per_rotation_wins": {
+    "flat_s3": [
+      168,
+      159,
+      186,
+      141
+    ],
+    "flat_s4": [
+      162,
+      168,
+      142,
+      159
+    ],
+    "graph_s3": [
+      591,
+      605,
+      589,
+      577
+    ],
+    "graph_s4": [
+      555,
+      554,
+      568,
+      586
+    ]
+  },
+  "steps_to_flat_final": {
+    "flat_final_rate_n4000_pooled": 0.160625,
+    "first_chunk_reported_ge": {
+      "graph_s3": 250000,
+      "graph_s4": 250000
+    }
+  }
+}
