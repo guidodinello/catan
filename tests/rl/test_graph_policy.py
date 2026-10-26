@@ -463,25 +463,29 @@ def test_the_same_seed_plays_the_same_game(graph_checkpoint: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 10. fresh_014 seed hygiene
+# 10. fresh_014 / fresh_015 / fresh_016 seed hygiene
 # ---------------------------------------------------------------------------
+
+FRESH_BLOCKS = ("fresh_014", "fresh_015", "fresh_016")
 
 
 def _overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
     return a[0] <= b[1] and b[0] <= a[1]
 
 
-def test_fresh_014_seeds_are_disjoint_from_every_used_range() -> None:
+@pytest.mark.parametrize("name", FRESH_BLOCKS)
+def test_fresh_seeds_are_disjoint_from_every_used_range(name: str) -> None:
     # league_013 needs gamekit.league.run_pairing (>= 0.5.0); skip where absent.
     lg = pytest.importorskip("experiments.league_013")
-    lo, n = se.SEED_RANGES["fresh_014"]
+    lo, n = se.SEED_RANGES[name]
     fresh = (lo, lo + n - 1)
     assert n % 4 == 0  # exact seat rotation
     used = list(lg.USED_RANGES) + [(1, 3000)]  # BC boards (rl.bc generate, seed 1)
     used += [(0, 12_100_000)]  # in-loop evals: cfg.seed + 977 + step, step <~ 12.05M
     used += [(3 * MILLION + 1, 4 * MILLION), (4 * MILLION + 1, 5 * MILLION)]
-    for name in ("smoke", "measured", "fresh_012"):
-        used.append((se.SEED_RANGES[name][0], sum(se.SEED_RANGES[name]) - 1))
+    for other in ("smoke", "measured", "fresh_012", *FRESH_BLOCKS):
+        if other != name:
+            used.append((se.SEED_RANGES[other][0], sum(se.SEED_RANGES[other]) - 1))
     assert not any(_overlaps(fresh, u) for u in used if u != fresh)
     assert fresh in lg.USED_RANGES  # registered, so later leagues avoid it
 
