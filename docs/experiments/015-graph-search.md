@@ -117,6 +117,32 @@ $PY -m experiments.search_eval analyze 015_none 015_self_s128 --baseline 015_non
 
 To be filled by the Amendment (code SHA, lock-pinned versions). The smoke's environment is above. In-loop eval caveats: not applicable (no training).
 
+## Amendment 1 (2026-10-25): pre-run prep, before any measured game
+
+Recorded before any `015_none` or `015_self_s128` game exists. Nothing in the Design, gate or verdict rule changes.
+
+**Code.** `fresh_015` (22,000,001-22,004,000) and `fresh_016` are registered in `experiments/search_eval.py` `SEED_RANGES` and `experiments/league_013.py` `USED_RANGES` by PR #100, squash-merged as **`c3a8b97c3c84e7916d6c269f13188f3926af1041`**; the disjointness test is `test_fresh_seeds_are_disjoint_from_every_used_range` in `tests/rl/test_graph_policy.py` (parametrized over `fresh_014`/`fresh_015`/`fresh_016`). Measured runs use the worktree `/home/guido/projects/catan-015-run`, detached at that SHA, clean tree (still clean after the checks).
+
+**Environment (lock-pinned).** `UV_CACHE_DIR=<HDD>/uv-cache UV_PROJECT_ENVIRONMENT=/media/guido/0DF7128F0DF7128F/catan-015-venv uv sync --frozen --dev --extra rl-train` (tmux `catan015-venv`, log `rl_runs/exp015/logs/venv.log`, exit 0). Read back: Python 3.14.5, torch 2.14.1+cpu, gamekit 0.5.0, sb3-contrib 2.9.0, stable-baselines3 2.9.0, numpy 2.5.4, gymnasium 1.4.0. The smoke above ran in 014's venv (gamekit 0.4.0, numpy 2.5.3); this one differs in those two packages.
+
+**Checkpoint hashes (sha256 re-verified).** Graph s3 3M `6cb96ab7d856...` (matches); flat `catan_bc_ft_long_10031616.zip` `e8001d3e81ba...` (the checks' recorded `checkpoint_sha256_12`).
+
+**Harness checks (not part of the gate).** Tmux `catan015-check`, one session, log `rl_runs/exp015/logs/check.log`, run in order with `PYTHONPATH=$PWD OMP_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=` from the worktree, 4 workers (8 GB available at launch; 4 workers, about 0.4 GB peak RSS each, keep the 4 GB headroom), chunks of 200:
+
+```
+$PY -m experiments.search_eval run --arm none --seed-range fresh_014 --games 4000 --workers 4 --checkpoint <graph s3 3M zip> --label 015_check_graph_none --out-dir /home/guido/projects/catan/rl_runs/exp015
+$PY -m experiments.search_eval run --arm none --seed-range measured --games 4000 --workers 4 --checkpoint <flat zip> --label 015_check_flat_none --out-dir /home/guido/projects/catan/rl_runs/exp015
+```
+
+| check | result | expected |
+|---|---|---|
+| graph s3 3M, `none`, `fresh_014` (seeds 21,000,001-21,004,000, 4000 unique) | **2362 / 4000** | 2362 |
+| flat `catan_bc_ft_long_10031616`, `none`, boards 1..4000 (4000 unique) | **829 / 4000** | 829 |
+
+Both exited 0 and reproduce exactly, so the harness is confirmed. Cost: 1362 worker-s (0.34 per game) for graph and 608 worker-s (0.15 per game) for flat. The invocation records and chunks are in `rl_runs/exp015/015_check_{graph,flat}_none/`.
+
+**Deviation / note for the measured runs.** The checks pass `--out-dir` as an absolute path on the HDD, because the driver's `DEFAULT_OUT` is `ROOT/rl_runs/search_eval` and `ROOT` is the worktree, where no `rl_runs` link exists. The measured `015_none` and `015_self_s128` runs must pass `--out-dir` the same way (the Config block above omits it).
+
 ## Run log
 
 Empty until the Amendment and the first launch.
