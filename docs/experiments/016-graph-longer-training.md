@@ -99,6 +99,22 @@ To be filled by the Amendment (code SHA, lock-pinned versions, GPU driver). In-l
 
 None before this file's merge.
 
+## Amendment 1 (2026-10-25): pre-run prep, before any training
+
+Recorded before any `catan016_*` run exists. Nothing in the Design, gate or verdict rule changes.
+
+**Code.** `fresh_015` (22,000,001-22,004,000) and `fresh_016` (23,000,001-23,004,000) are registered in `experiments/search_eval.py` `SEED_RANGES` and `experiments/league_013.py` `USED_RANGES` by PR #100, squash-merged as **`c3a8b97c3c84e7916d6c269f13188f3926af1041`**. The disjointness test is `test_fresh_seeds_are_disjoint_from_every_used_range` in `tests/rl/test_graph_policy.py` (the `fresh_014` test, now parametrized over `fresh_014`, `fresh_015`, `fresh_016`; each block is checked against every used range and against the other fresh blocks, with the in-loop bound `(0, 12_100_000)`). Runs use the dedicated worktree `/home/guido/projects/catan-016-run`, detached at that SHA, clean tree; never the main checkout.
+
+**Environment (lock-pinned).** `UV_CACHE_DIR=<HDD>/uv-cache UV_PROJECT_ENVIRONMENT=/media/guido/0DF7128F0DF7128F/catan-016-venv uv sync --frozen --dev --extra rl-train-cuda` from the worktree (tmux `catan016-venv`, log `rl_runs/exp016/logs/venv.log`, exit 0). Read back: Python 3.14.5, torch 2.14.1+cu130 (CUDA 13.0, `cuda.is_available()` true), **gamekit 0.5.0**, sb3-contrib 2.9.0, stable-baselines3 2.9.0, numpy 2.5.4, gymnasium 1.4.0; GPU NVIDIA GeForce RTX 4050 Laptop (6 GB), driver 595.99.02. **Versus 014's run environment: gamekit 0.4.0 -> 0.5.0 and numpy 2.5.3 -> 2.5.4.**
+
+**Start zips (sha256 re-verified).** `catan014_ft_graph_s3_3000000.zip` `6cb96ab7d856...` (matches the pre-registered prefix); `catan014_ft_graph_s4_3000000.zip` `ed7c57e28f6e...`.
+
+**Resume sanity smoke.** Tmux `catan016-smoke`, `timeout 15m`, `--resume` the s3 3M zip, `--init-rate 0.5905`, the Design flags, `--seed 3`, `--steps 4096`, `--eval-every 10000000`, label `smoke016_graph_s3`, everything under `rl_runs/exp016_smoke/` (log `smoke.log`); no registered label was used. It exited 0. The trainer logged `resumed hyperparameters: learning_rate=0.0001 (lr_schedule(0)=0.0001 lr_schedule(1)=0.0001) ent_coef=0.01 n_steps=512 n_envs=8 num_timesteps=3047424`, i.e. all four match the start and the pre-registered flags, and it finished at `steps=3051520` (3,047,424 + 4,096), `train_fps=197`. **Disclosure:** the trainer always runs one in-loop eval when a run ends, so a 200-game win rate (`reported=55.5%`, `guard(fixed)=58.0%`) was printed in the smoke log. It was not used for any decision and is not a result: the boards are in-loop eval seeds, and the run is 4,096 steps. **What the smoke does not show:** it does not test whether the post-`d27b6f9` `CatanEnv` changes training behavior for the graph policy; it shows only that a resume loads, keeps the hyperparameters, and steps. The Design's rule stands: if a later comparison shows a behavior change, the log says so.
+
+**Harness check (log 016 step 3).** Run from the 015 worktree (same SHA) with the CPU venv, `experiments.search_eval run --arm none`, 4 workers, `CUDA_VISIBLE_DEVICES` empty: graph s3 3M on `fresh_014` = **2362 / 4000** (expected 2362) and flat `catan_bc_ft_long_10031616` on boards 1..4000 = **829 / 4000** (expected 829). Both reproduce exactly (see Amendment 1 of log 015 for the commands).
+
+**Runner.** `rl_runs/exp016/helpers/train016.sh` (sha256 `ad17a62e9635...`, on the HDD, not committed; modeled on `experiments/exp014/stage2.sh`): guards (bracketed `pgrep`, `tmux ls`, HDD mounted, 5 GB RAM wait), one tmux session per leg (`catan016-graph-s<seed>[-<suffix>]`), `tee` to `rl_runs/exp016/logs/<name>.log`, `EXIT=` line and `done/` marker, **`timeout 14h`** (as pre-registered), refuses a label that already has a run dir. Not launched. Continuation legs are `s3:b:<last 250k zip>:<remaining steps>`. A leg is stopped by SIGTERM to its own `rl.train` process (found by exact label), never `C-c` on the `tee`'d session or `pkill`.
+
 ## Run log
 
 Empty until the Amendment and the first launch.
