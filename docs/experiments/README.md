@@ -37,8 +37,10 @@ a checkpoint *shortlist*, never a result. Cite this section from a log's Environ
 
 - **Seed scheme (from issue #25's fix).** Every chunk runs two n=200 evals from one CPU model
   copy. The **guard** eval uses the fixed seed `cfg.seed + 977`; only `RegressionGuard`'s stop
-  decision reads it. The **reported** eval uses `cfg.seed + 977 + step` (`step` = cumulative
-  `num_timesteps`-based `done`, so a `--resume` leg never replays the previous leg's seeds);
+  decision reads it. The **reported** eval uses `cfg.seed + 977 + step` (`step` = the model's
+  cumulative `num_timesteps` after the chunk, so a `--resume` leg never replays the previous
+  leg's seeds; runs up to log 016 used the nominal count, see
+  [Checkpoint names and step counts](#checkpoint-names-and-step-counts));
   it alone picks `TrainResult.best_checkpoint` / `best_win_rate`. Both rates are logged
   (`reported=` and `guard(fixed)=`).
 - **Experiments 001-006 used the fixed seed for everything**, including best-checkpoint
@@ -56,6 +58,29 @@ a checkpoint *shortlist*, never a result. Cite this section from a log's Environ
 - **Cost.** The second eval doubles in-loop eval time: ~31 s per n=200 eval (006: 20.4 min over
   40 evals vs 185.7 min training), so about +20 min on a 10M-step run (~4% of an 8 h budget),
   or ~9% fewer training steps on a timeout-bound 8 h run.
+
+## Checkpoint names and step counts
+
+`rl/train.py` writes `<label>_<n>.zip` after each `--eval-every` chunk (default 250k).
+
+- **From the real-step fix on, `n` is the zip's own `num_timesteps`.** SB3's `learn()` only
+  stops on a whole rollout (`envs x n_steps`, 4,096 for the 8 x 512 runs), so chunks land a
+  little past their grid point `start + k x eval_every`, at the first rollout boundary at or
+  after it. The surplus does not accumulate, and a run ends at the first rollout boundary at
+  or after `start + --steps`. Names are therefore not multiples of `eval_every` (for example
+  `_3301376`, not `_3297424`): **glob checkpoints, do not construct their names.**
+- **Runs up to and including log 016 used nominal names.** The loop added up the chunk sizes it
+  asked for, so names ran behind the real count by about 3,952 per 250k chunk, accumulating
+  over chunks and `--resume` legs (016: s4's final zip holds 12,189,696 steps for a 12,047,424
+  target; [016 Amendment 2](016-graph-longer-training.md)). Those names and logs are left as
+  they were and stay valid; read the real count from the zip:
+  `python3 -I -c 'import sys,zipfile,json; print(json.loads(zipfile.ZipFile(sys.argv[1]).read("data"))["num_timesteps"])' <zip>`.
+  Their `train_fps` figures were computed from the nominal count and read about 1.6% low.
+- **A continuation's `--steps`** is the target minus the zip's real `num_timesteps`, never a
+  number read off the file name.
+- Helpers of finished experiments that hardcode a name (for example 014's
+  `bench_stage2.sh` and `perboard.py`, `<label>_3000000.zip`) describe the run as it was; a
+  re-run under the new counting would write different names.
 
 ## Current best (Phase 5, as of 2026-10-25)
 
