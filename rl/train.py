@@ -31,6 +31,16 @@ set explicitly to ``heuristic``, since that's the actual Phase 5 gate,
 independent of whatever the training-side pool happens to contain at a given
 point.
 
+**Steps are counted from the model, not the loop.** ``MaskablePPO.learn(n)``
+only stops on a whole rollout (``envs * n_steps``), so a loop that adds up the
+chunk sizes it asked for falls behind the model's real ``num_timesteps`` --
+by ~4k per 250k chunk at 8 envs x 512 steps, accumulating over a run and
+across ``--resume`` legs (log 016 Amendment 2). Checkpoint names, the
+``steps=`` log line, the loop bound and the in-loop eval seed all use the
+real count, so a ``<label>_<n>.zip`` holds exactly ``n`` steps and a run
+stops at the first rollout boundary at or after its target. Runs before this
+change (logs <= 016) carry nominal names; read the real count from the zip.
+
 **The pool is always run-scoped, not opt-in.** ``OpponentPool`` gained a
 ``run_id`` argument in gamekit 0.3.0 (gamekit#23) specifically because an
 unscoped pool globs its whole directory forever, so a checkpoint left over
@@ -168,6 +178,9 @@ class TrainConfig:
     policy_explicit: bool = False  # --policy was passed on the command line
     gnn_dim: int = 64
     gnn_layers: int = 3
+    # Grid spacing, anchored at the run's starting step. Each checkpoint/eval
+    # lands at the first whole rollout at or after a grid point (see
+    # `_next_chunk_goal`), so file names are real step counts, not multiples.
     eval_every: int = 250_000
     eval_episodes: int = 200
     torch_threads: int = 1
@@ -515,10 +528,39 @@ def _resume_step_bookkeeping(
     first chunk -- a resumed model already restored its true cumulative count
     (confirmed empirically: ``MaskablePPO`` persists ``num_timesteps`` across
     save/load), and resetting it here would discard that.
+
+    ``start_step`` is therefore the model's *real* ``num_timesteps`` (a whole
+    number of rollouts), and ``target_step`` is a nominal bound on it: the
+    loop reads the real count back from the model after every ``learn()`` and
+    stops at the first rollout boundary at or after ``target_step``.
     """
     if resumed_from is None:
         return 0, steps, True
     return resumed_from, resumed_from + steps, False
+
+
+def _next_chunk_goal(
+    start_step: int, done: int, eval_every: int, target_step: int
+) -> int:
+    """The step count the next ``learn()`` chunk aims for: the first point of
+    the ``start_step + k * eval_every`` grid strictly after ``done``, capped at
+    ``target_step``.
+
+    ``MaskablePPO.learn(n)`` only stops on a whole rollout (``n_envs *
+    n_steps``), so a chunk really trains up to a rollout more than asked, and
+    ``done`` -- the model's real ``num_timesteps`` -- lands a little past its
+    goal. Aiming each chunk at the *grid* point, not at ``done + eval_every``,
+    absorbs that surplus in the next chunk instead of carrying it forward, so
+    checkpoints stay within one rollout of their nominal step (log 016
+    Amendment 2: +3,952 per 250k chunk accumulated to +142,272 over 36).
+
+    Always ``> done`` while ``done < target_step``, so the ``learn()`` argument
+    ``goal - done`` is at least 1 even when ``eval_every`` is below a rollout.
+    """
+    if eval_every <= 0:
+        raise ValueError(f"eval_every must be positive, got {eval_every}")
+    next_point = start_step + ((done - start_step) // eval_every + 1) * eval_every
+    return min(next_point, target_step)
 
 
 def _checkpoint_dir(cfg: TrainConfig) -> Path:
@@ -774,7 +816,12 @@ def train(cfg: TrainConfig) -> TrainResult:
     start_step, target_step, reset_num_timesteps = _resume_step_bookkeeping(
         resumed_from, cfg.steps
     )
-    chunk = min(cfg.eval_every, cfg.steps)
+    # `done` is the model's real `num_timesteps`, read back after every
+    # learn() below (never a nominal running sum): learn() only stops on a whole
+    # rollout, so a sum of requested chunk sizes drifts from the real count and
+    # checkpoint names stop matching their zips (log 016 Amendment 2). Before
+    # the first chunk it is `start_step`, not `model.num_timesteps`: a --bc-init
+    # model may still hold its clone's count until learn() resets it.
     done = start_step
     # Training and evaluation are timed separately. Folding eval into the FPS
     # number understates throughput badly -- in-loop eval is single-process and
@@ -810,17 +857,17 @@ def train(cfg: TrainConfig) -> TrainResult:
         )
 
     while done < target_step:
-        this_chunk = min(chunk, target_step - done)
+        goal = _next_chunk_goal(start_step, done, cfg.eval_every, target_step)
         t0 = time.perf_counter()
         model.learn(
-            this_chunk,
+            goal - done,
             callback=ent_callback,
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=False,
         )
         reset_num_timesteps = False  # never reset again after the first chunk
         train_seconds += time.perf_counter() - t0
-        done += this_chunk
+        done = model.num_timesteps
         checkpoint = checkpoint_dir / f"{cfg.label}_{done}.zip"
         _save_new(model, checkpoint)
 
