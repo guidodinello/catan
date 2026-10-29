@@ -63,7 +63,7 @@ a checkpoint *shortlist*, never a result. Cite this section from a log's Environ
 
 `rl/train.py` writes `<label>_<n>.zip` after each `--eval-every` chunk (default 250k).
 
-- **From the real-step fix on, `n` is the zip's own `num_timesteps`.** SB3's `learn()` only
+- **From PR #103 on, `n` is the zip's own `num_timesteps`.** SB3's `learn()` only
   stops on a whole rollout (`envs x n_steps`, 4,096 for the 8 x 512 runs), so chunks land a
   little past their grid point `start + k x eval_every`, at the first rollout boundary at or
   after it. The surplus does not accumulate, and a run ends at the first rollout boundary at
