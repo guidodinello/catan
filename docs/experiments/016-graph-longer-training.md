@@ -3,7 +3,7 @@
 **Date:** pre-registered 2026-10-25. No run, smoke or measurement exists before this file's merge; this PR is docs only.
 **Note:** [gamekit#009 — Longer runs / resume when the curve has not bent](https://github.com/guidodinello/gamekit/blob/main/docs/research/009-longer-runs-and-resume.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Follows [014 — graph encoder](014-graph-encoder.md) (issue #42, PR #95) and [006 — longer run](006-longer-run.md), whose shape it copies.
 
-**Status: pre-registered, not run.**
+**Status: pre-registered; training finished (Amendment 2); benchmarks not run.**
 
 ## Hypothesis
 
@@ -115,11 +115,81 @@ Recorded before any `catan016_*` run exists. Nothing in the Design, gate or verd
 
 **Runner.** `rl_runs/exp016/helpers/train016.sh` (sha256 `ad17a62e9635...`, on the HDD, not committed; modeled on `experiments/exp014/stage2.sh`): guards (bracketed `pgrep`, `tmux ls`, HDD mounted, 5 GB RAM wait), one tmux session per leg (`catan016-graph-s<seed>[-<suffix>]`), `tee` to `rl_runs/exp016/logs/<name>.log`, `EXIT=` line and `done/` marker, **`timeout 14h`** (as pre-registered), refuses a label that already has a run dir. Not launched. Continuation legs are `s3:b:<last 250k zip>:<remaining steps>`. A leg is stopped by SIGTERM to its own `rl.train` process (found by exact label), never `C-c` on the `tee`'d session or `pkill`.
 
+## Amendment 2 (2026-10-29): training legs, step-count correction, overshoot cause
+
+Recorded after all training finished and **before any benchmark**. Nothing in the Design, gate or verdict rule changes. The Design says the Amendment records the fixed points' file names and how many continuations occurred; both are below.
+
+**Legs.** Runner `train016.sh`, logs in `rl_runs/exp016/logs/`, checkpoints in `rl_runs/exp016/selfplay/`. "Real" is the zip's own `num_timesteps` (see the correction below), read from the zip.
+
+| leg (label) | start | `--steps` | ended | exit | last checkpoint (real `num_timesteps`) |
+|---|---|---|---|---|---|
+| `catan016_graph_s3` | 014 s3 3M zip (3,047,424) | 9,000,000 | killed 2026-10-27 22:11 (started 13:24) | **137** | `_10297424.zip` (10,412,032) |
+| `catan016_graph_s3_b` | `s3_10297424` (10,412,032) | **1,750,000** | stopped about 23:23, no `EXIT` line (started 22:34) | none | `_b_10662032.zip` (10,665,984) |
+| `catan016_graph_s3_c` | `s3_b_10662032` (10,665,984) | 1,381,440 | 2026-10-28 15:22 (started 13:47) | 0 | `_final.zip` (12,070,912) |
+| `catan016_graph_s4` | 014 s4 3M zip (3,047,424) | 9,000,000 | 2026-10-29 01:33 (started 2026-10-28 15:23) | 0 | `_final.zip` (12,189,696) |
+
+- **s3 leg 1: exit 137** (SIGKILL), a **global OOM kill, verified** in the kernel log of the previous boot (the laptop rebooted afterwards, so plain `journalctl -k` shows only the current boot; use `journalctl -k -b -1`). It records `oct 27 22:11:04 kernel: Out of memory: Killed process 70930 (python) ... oom-kill:constraint=CONSTRAINT_NONE,...,global_oom,task_memcg=/user.slice/user-1000.slice/session-c2.scope`, one second after a browser kill at 22:11:03 (`Killed process 3497 (WebExtensions)`). The leg's log stops at 22:11, matching. It is the only `python` kill in that boot; the same boot has other `global_oom` kills of browser processes (and Docker Desktop at 21:37) from 21:37 to 23:19, i.e. the 15 GB laptop was short of memory while the browser and concurrent agents shared it with the training. The leg had run about 8 h 47 min, inside the `timeout 14h`.
+- **Leg b** was launched with `--steps 1750000`, computed from the **checkpoint file name** (`_10297424`: 12,047,424 - 10,297,424 = 1,750,000). The zip's real count was 10,412,032, so leg b would have finished at 12,162,032, 114,608 past the target. It was stopped before that. Its log has one line (22:53:10, `steps=10662032/12162032`, one 250k checkpoint) and no later entry; the stop time of about 23:23 is from the run notes and is not in any log. Leg b's checkpoint stays in the s3 lineage and leg c resumed from it.
+- **Leg c** took its `--steps` from the corrected rule (12,047,424 - 10,665,984 = 1,381,440), hence `steps=.../12047424` in its log and a target met in the trainer's own accounting.
+- **Work lost** to the two interruptions is the training after the last checkpoint of each leg: leg 1 after its 21:45 checkpoint (killed 22:11), leg b after its 22:53 checkpoint. Each is under one 250k chunk and was never saved; nothing from those partial chunks is in any checkpoint.
+- **Continuations:** s3 ran in **3 legs (2 continuations)**, s4 in **1**. Each continuation starts a new self-play opponent pool from the checkpoint it resumes (the `_seed.zip` copy), unlike one uninterrupted run, as the Compute budget section warned. s3's three pools and s4's single pool are a difference between the two seeds that the gate does not account for.
+- The `RegressionGuard` stop never fired (`--regression-patience 1000`), as designed.
+
+**Step-count correction.** A checkpoint's file name is **not** its trained step count; the zip's `data` JSON holds the real one:
+
+```
+python3 -I -c 'import sys,zipfile,json; print(json.loads(zipfile.ZipFile(sys.argv[1]).read("data"))["num_timesteps"])' <zip>
+```
+
+A continuation's `--steps` is 12,047,424 minus that number. The runner's usage comment suggested file names; it now says this (runner change below).
+
+**Why the final zips overshoot the 12,047,424 target (verified).** Final real counts: s3_c 12,070,912 (+23,488), s4 12,189,696 (+142,272). Cause, from `rl/train.py` and the pinned SB3 2.9.0 / sb3-contrib 2.9.0 source:
+
+- `rl/train.py` (the `while done < target_step` loop) calls `model.learn(this_chunk, reset_num_timesteps=False)` and then advances **its own counter** `done += this_chunk`. Checkpoint names, the `steps=` log line and the loop bound all use `done`, never `model.num_timesteps`.
+- `MaskablePPO.learn` loops `while self.num_timesteps < total_timesteps` and adds `env.num_envs` per environment step, so it only stops after a **whole rollout** of `n_steps x n_envs` = 512 x 8 = **4,096** steps. A 250,000-step chunk therefore trains ceil(250000 / 4096) x 4096 = 253,952 steps: **+3,952 per chunk**, which `done` does not see.
+- `_resume_step_bookkeeping` restarts `done` from the zip's real `num_timesteps` on `--resume`, so the hidden surplus of earlier legs is carried into the next leg's names, while later chunks add their own again.
+
+Every real count read from a zip matches this arithmetic exactly:
+
+| zip | arithmetic | real |
+|---|---|---|
+| 014 start (both seeds) | 12 chunks x 253,952 | 3,047,424 (vs 3,000,000 nominal) |
+| `s3_10297424` | 3,047,424 + 29 x 253,952 | 10,412,032 |
+| `s3_b_10662032` | 10,412,032 + 253,952 | 10,665,984 |
+| `s3_c_11165984` | 10,665,984 + 2 x 253,952 | 11,173,888 |
+| `s3_c_final` | 10,665,984 + 5 x 253,952 + 33 x 4,096 (last chunk 131,440 -> 33 rollouts) | 12,070,912 |
+| `s4_6047424` / `s4_9047424` | 3,047,424 + 12 / 24 x 253,952 | 6,094,848 / 9,142,272 |
+| `s4_final` | 3,047,424 + 36 x 253,952 | 12,189,696 |
+
+No step is untrained or logged as trained when it was not; the defect is that names, the `steps=` line and the loop bound count a nominal number. [006](006-longer-run.md) and [010](010-entropy-schedule.md) already noted a per-chunk overshoot of up to one rollout; 016 adds that it **accumulates over chunks and across resumed legs**, and that reading a file name as a step count produced leg b's wrong `--steps`. It also leaves the two seeds at slightly different real step counts at the 12M point (s3 +0.2%, s4 +1.2% over the target); the 6M and 9M points are matched (6,094,848 and 9,142,272 for both).
+
+**This is a code issue, not fixed here.** The suggested fix is in `rl/train.py`: take `done` from `model.num_timesteps` after each `learn()` and loop on `model.num_timesteps < target_step` (or round each chunk to a multiple of `n_steps x n_envs`), with a test beside the `_resume_step_bookkeeping` tests. It changes checkpoint naming, which logs 006, 010, 014 and this one cite, so it should be its own change; this Amendment only records the behavior as run.
+
+**Fixed measurement points (file names, as the Design asks).** The checkpoints the trainer wrote at nominal +3M, +6M and +9M. Real counts and sha256 prefixes read from the zips on 2026-10-29:
+
+| seed | nominal | file | real `num_timesteps` | sha256 |
+|---|---|---|---|---|
+| s3 | +3M | `catan016_graph_s3/catan016_graph_s3_6047424.zip` | 6,094,848 | `e3c92c539efc` |
+| s3 | +6M | `catan016_graph_s3/catan016_graph_s3_9047424.zip` | 9,142,272 | `e842d689fca3` |
+| s3 | +9M | `catan016_graph_s3_c/catan016_graph_s3_c_12047424.zip` | 12,070,912 | `f24c64b8ca28` |
+| s4 | +3M | `catan016_graph_s4/catan016_graph_s4_6047424.zip` | 6,094,848 | `915bf8543399` |
+| s4 | +6M | `catan016_graph_s4/catan016_graph_s4_9047424.zip` | 9,142,272 | `079a6c2ec90a` |
+| s4 | +9M | `catan016_graph_s4/catan016_graph_s4_12047424.zip` | 12,189,696 | `6b7e921955d8` |
+
+The `+9M` point is the trainer-named `_12047424` checkpoint, not `_final.zip`: the two hold the same `num_timesteps` but their file hashes differ (`s3_c_final` `0406ef034288`, `s4_final` `7a0b91faac22`), and the Design names the checkpoint written at the point. The 3M baselines are the 014 start zips from Amendment 1. Nothing has been benchmarked.
+
+**Best in-loop checkpoints (n = 200, monitoring only; not the pre-registered measure).** The in-loop `reported` rate is the maximum of noisy n = 200 evals and is biased upward (README, In-loop eval caveats); the Design says the gate does not use it. For the record: s3 `catan016_graph_s3_c_11165984.zip` 73.5% (147/200, real 11,173,888); s4 `catan016_graph_s4_11297424.zip` 75.0% (150/200, real 11,427,840). They are not benchmarked and not candidates for any claim.
+
+**Runner change (comment only).** The usage comment of `rl_runs/exp016/helpers/train016.sh` now gives the continuation `<steps>` as 12,047,424 minus the zip's real `num_timesteps`, with the one-liner above, and notes the leg still lands past the target by a rollout. No executable line changed (checked with `diff`: only `#` lines differ; `bash -n` passes). sha256 `ad17a62e9635...` -> **`2b0439d8cc97...`**. The script is on the HDD and not committed, as in Amendment 1.
+
 ## Run log
 
-Empty until the Amendment and the first launch.
+Training ran 2026-10-27 to 2026-10-29; the legs, interruptions and counts are in Amendment 2. No benchmark has been run.
 
 ## Deviations / disclosures
 
 - Written before any run, smoke or measurement.
 - The `timeout 14h` for a +9M job replaces 014's `timeout 8h` for a 3M job (see Compute budget).
+- s3 was trained in 3 legs and s4 in 1 (Amendment 2): one OOM kill (exit 137) and one stopped leg, each losing less than a 250k chunk of unsaved training.
+- The real step counts of the +9M checkpoints are 12,070,912 (s3) and 12,189,696 (s4), not 12,047,424: `rl/train.py` counts nominal chunk steps while SB3 trains whole 4,096-step rollouts (Amendment 2).
+- Leg b's `--steps` was computed from a checkpoint file name and was wrong; the leg was stopped before it overshot, and leg c used the corrected rule.
