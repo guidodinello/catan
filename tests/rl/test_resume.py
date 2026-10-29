@@ -10,7 +10,10 @@ needs the training stack and is skipped without it.
 from __future__ import annotations
 
 import dataclasses
+import json
+import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -178,3 +181,98 @@ def test_resumed_leg_continues_the_counter_and_never_touches_earlier_files(
     assert {"leg2_192.zip", "leg2_256.zip", "leg2_final.zip"} <= names
     assert not {"leg2_64.zip", "leg2_128.zip"} & names
     assert result.steps_completed == 256
+
+
+# ---------------------------------------------------------------------------
+# Step counting: checkpoint names, the loop bound and the in-loop eval step are
+# the model's real ``num_timesteps`` (log 016 Amendment 2). Here a rollout is
+# 64 steps (1 env x n_steps 64) and ``eval_every`` is deliberately not a
+# multiple of it, because with aligned sizes the old nominal counter and the
+# real one agree and the test cannot tell them apart.
+# ---------------------------------------------------------------------------
+
+ROLLOUT = 64
+
+
+def _zip_num_timesteps(path: Path) -> int:
+    """The step count SB3 itself saved -- the method the 016 logs use, and
+    independent of anything ``train()`` computes."""
+    return int(json.loads(zipfile.ZipFile(path).read("data"))["num_timesteps"])
+
+
+def _stepped_checkpoints(ckpt_dir: Path, label: str) -> dict[int, Path]:
+    """``{number in the file name: path}`` for the ``<label>_<n>.zip`` files."""
+    return {
+        int(p.stem.rsplit("_", 1)[1]): p
+        for p in ckpt_dir.glob(f"{label}_*.zip")
+        if p.stem.rsplit("_", 1)[1].isdigit()
+    }
+
+
+def _step_cfg(tmp_path: Path, **overrides: object) -> TrainConfig:
+    return _cfg(
+        tmp_path,
+        label="t",
+        regression_margin=1.0,  # never trips: this test is about bookkeeping
+        **overrides,
+    )
+
+
+def test_a_fresh_run_names_its_checkpoints_by_the_real_step_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _step_cfg(tmp_path, steps=300, eval_every=100)
+    eval_steps: list[int] = []
+    real_eval = train_mod.evaluate_in_loop
+
+    def spy(cfg_: TrainConfig, model: Any, step: int) -> Any:
+        eval_steps.append(step)
+        return real_eval(cfg_, model, step)
+
+    monkeypatch.setattr(train_mod, "evaluate_in_loop", spy)
+    result = train(cfg)
+
+    # learn(100) stops at the first whole rollout: 128, then the grid point
+    # 200 -> 256, then the target 300 -> 320 (not the nominal 100/200/300).
+    named = _stepped_checkpoints(cfg.run_dir, "t")
+    assert sorted(named) == [128, 256, 320]
+    for number, path in named.items():
+        assert _zip_num_timesteps(path) == number
+    assert _zip_num_timesteps(cfg.run_dir / "t_final.zip") == 320
+    assert result.steps_completed == 320
+    assert eval_steps == [128, 256, 320]
+    assert 300 <= result.steps_completed < 300 + ROLLOUT
+
+
+def test_a_resumed_leg_names_by_real_steps_and_stops_at_the_first_boundary(
+    tmp_path: Path,
+) -> None:
+    start = _saved_checkpoint(tmp_path)  # num_timesteps == 128
+    cfg = _step_cfg(tmp_path, resume=start, steps=300, eval_every=100)
+    ckpt_dir = train_mod._checkpoint_dir(cfg)
+    earlier = ckpt_dir / "t_64.zip"  # an earlier leg's file: must not be touched
+    earlier.write_bytes(b"previous leg")
+
+    result = train(cfg)
+
+    # Target 128 + 300 = 428; grid 228 / 328 / 428 -> real 256 / 384 / 448.
+    named = _stepped_checkpoints(ckpt_dir, "t")
+    assert sorted(named) == [64, 256, 384, 448]
+    for number in (256, 384, 448):
+        assert _zip_num_timesteps(named[number]) == number
+    assert earlier.read_bytes() == b"previous leg"
+    assert result.steps_completed == 448
+    assert 428 <= result.steps_completed < 428 + ROLLOUT
+
+
+def test_an_eval_every_below_the_rollout_still_terminates_on_real_steps(
+    tmp_path: Path,
+) -> None:
+    cfg = _step_cfg(tmp_path, steps=128, eval_every=32)
+    result = train(cfg)
+
+    named = _stepped_checkpoints(cfg.run_dir, "t")
+    assert sorted(named) == [64, 128]
+    for number, path in named.items():
+        assert _zip_num_timesteps(path) == number
+    assert result.steps_completed == 128

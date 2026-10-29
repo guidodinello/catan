@@ -25,6 +25,7 @@ from rl.train import (  # noqa: E402
     TrainConfig,
     TrainResult,
     _checkpoint_dir,
+    _next_chunk_goal,
     _resume_step_bookkeeping,
     _seed_selfplay_pool,
     build_env,
@@ -133,6 +134,76 @@ def test_resumed_checkpoint_step_numbers_never_collide_with_a_fresh_run() -> Non
         for i in range(1, (resumed_target - resumed_start) // chunk + 1)
     }
     assert fresh_checkpoints.isdisjoint(resumed_checkpoints)
+
+
+# ---------------------------------------------------------------------------
+# Chunk goals -- the other half of the step bookkeeping. SB3's learn() only
+# stops on a whole rollout, so a chunk really trains a little past what was
+# asked; log 016 Amendment 2 measured +3,952 per 250k chunk (rollout 4,096)
+# and the loop's own nominal counter hid it. The goals stay on the
+# ``start + k * eval_every`` grid so that surplus never accumulates.
+# ---------------------------------------------------------------------------
+
+ROLLOUT_016 = 8 * 512  # envs x n_steps of the 016 runs
+
+
+def test_the_next_goal_is_the_next_grid_point_after_the_real_count() -> None:
+    """Log 016's s3/s4 start (real 3,047,424), eval every 250k. After a chunk
+    that really trained 253,952, the next goal is still the grid point, not
+    ``done + 250_000`` (which would drift the cadence by 3,952 per chunk)."""
+    start, every, target = 3_047_424, 250_000, 12_047_424
+    assert _next_chunk_goal(start, start, every, target) == 3_297_424
+    assert _next_chunk_goal(start, 3_301_376, every, target) == 3_547_424
+    assert 3_301_376 + every != 3_547_424  # the drifting alternative differs
+
+
+def test_the_goal_is_capped_at_the_target() -> None:
+    assert _next_chunk_goal(0, 900, 250, 1_000) == 1_000
+    assert _next_chunk_goal(0, 0, 5_000, 1_000) == 1_000
+
+
+def test_the_goal_is_always_ahead_so_learn_never_gets_a_zero_chunk() -> None:
+    """The old ``--eval-every 0`` hung in ``learn(0)``; an ``eval_every``
+    below the rollout length must also keep moving."""
+    start, target = 128, 4_000
+    for every in (1, 32, 64, 100, 4_096, 9_999):
+        for done in range(start, target, 37):
+            goal = _next_chunk_goal(start, done, every, target)
+            assert done < goal <= target
+
+
+def test_a_non_positive_eval_every_is_refused() -> None:
+    for every in (0, -250_000):
+        with pytest.raises(ValueError, match="eval_every"):
+            _next_chunk_goal(0, 0, every, 1_000)
+
+
+def _sb3_learn(done: int, chunk: int) -> int:
+    """What ``MaskablePPO.learn(chunk)`` leaves ``num_timesteps`` at: it runs
+    whole rollouts until it has trained at least ``chunk`` more steps."""
+    return done + -(-chunk // ROLLOUT_016) * ROLLOUT_016
+
+
+def test_the_surplus_never_accumulates_and_the_run_ends_on_first_boundary() -> None:
+    """Log 016's s4 leg: from real 3,047,424, ``--steps 9_000_000``, eval every
+    250k. Driven with SB3's whole-rollout rounding, every checkpoint lands
+    within one rollout of its grid point (the old nominal counter ended at
+    12,189,696 = target + 142,272) and the run ends on the first rollout
+    boundary at or after the target."""
+    start, steps, every = 3_047_424, 9_000_000, 250_000
+    _, target, _ = _resume_step_bookkeeping(start, steps)
+    done, stops = start, []
+    while done < target:
+        goal = _next_chunk_goal(start, done, every, target)
+        done = _sb3_learn(done, goal - done)
+        stops.append((goal, done))
+    assert len(stops) == 36
+    for goal, real in stops:
+        assert goal <= real < goal + ROLLOUT_016
+    assert done == 12_050_432
+    assert target <= done < target + ROLLOUT_016
+    assert (done - start) % ROLLOUT_016 == 0
+    assert done != 12_189_696
 
 
 # ---------------------------------------------------------------------------
