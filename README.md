@@ -356,9 +356,9 @@ the phase history.
       extracted from this repo and adopted here. `truco-py` served as the
       second reference implementation, cross-checked but not itself
       touched. See `~/projects/docs/shared-ml-package.md`.
-- [ ] **Phase 5 — RL**: gymnasium env, state encoder, MaskablePPO training
-      vs heuristic opponents, self-play with anti-collapse controls. **In
-      progress**: the env/encoder (PR #17), MaskablePPO
+- [x] **Phase 5 — RL**: gymnasium env, state encoder, MaskablePPO training
+      vs heuristic opponents, self-play with anti-collapse controls. **Done**:
+      the env/encoder (PR #17), MaskablePPO
       training vs random (PR #18, 81.75% [80.5%, 82.9%] vs 3 `RandomAgent`s),
       self-play with anti-collapse controls (PR #19), and a behaviour-cloning
       warm start before self-play fine-tuning (PR #21) have all landed, but
@@ -445,7 +445,7 @@ and its `GameRecord` stayed local, untouched, since nothing in `gamekit`
 ever names a game's own record type. Every existing test still passes,
 including the golden bit-identity regression test, and the committed
 `experiments/results/benchmark_*.json` files remain reproducible from their
-recorded seeds. Phase 5 (RL) is in progress -- see the roadmap entry and
+recorded seeds. Phase 5 (RL) is done -- see the roadmap entry and
 `docs/experiments/` for the run-by-run numbers, current best, and every
 verdict so far.
 
