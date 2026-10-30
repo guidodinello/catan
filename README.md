@@ -33,6 +33,49 @@ uv run uvicorn server.app:app         # then open http://127.0.0.1:8000
 The images are generated from seeded games by `scripts/capture_screenshots.py`
 (`--gif` for the clip; it needs Playwright and ffmpeg, see its docstring).
 
+## Leaderboard
+
+Two separate measurements on different scales. Do not rank across the tables.
+
+### League Elo (experiment 013)
+
+From [013 § Result](docs/experiments/013-first-league.md#result). Round robin of
+11 agents, 55 pairings, n = 4000 games per pairing, 4 seats as `(a,b,a,b)`.
+Elo is anchored at `heuristic = 0`, with 95% bootstrap CIs. Run 2026-10-08 to
+2026-10-10. RL seats always reject trade offers.
+
+| rank | agent | Elo | 95% CI |
+|---|---|---|---|
+| 1 | `trading_heuristic` | +16.2 | [+10.6, +21.2] |
+| 2 | `heuristic` (anchor) | 0 | [0, 0] by construction |
+| 3 | `long_10m` | -62.9 | [-67.6, -57.8] |
+| 4 | `long_8m` | -69.2 | [-74.4, -64.2] |
+| 5 | `ent_decay_3m` | -89.9 | [-95.0, -84.6] |
+| 6 | `ent_ctrl_3m` | -116.1 | [-121.0, -111.2] |
+| 7 | `long_4m` | -123.4 | [-128.9, -118.4] |
+| 8 | `ent_ramp_3m` | -132.3 | [-137.6, -127.2] |
+| 9 | `bc_clone` | -161.1 | [-166.4, -156.1] |
+| 10 | `bc_ft_2m` | -178.8 | [-183.8, -173.6] |
+| 11 | `random` | -687.3 | [-696.2, -676.6] |
+
+### Graph encoder, 1v3 vs heuristic (experiment 014)
+
+From [014 § Stage 2 result](docs/experiments/014-graph-encoder.md#stage-2-result).
+Win rate of each fixed 3M-step checkpoint against 3 `HeuristicAgent`, n = 4000
+on the `fresh_014` boards, Wilson 95% CIs, benchmarked 2026-10-25. Parity
+(equal strength) is 25%. The flat rows are 014's MLP control arm.
+
+| agent | wins / n | win rate | 95% CI |
+|---|---|---|---|
+| graph s3 | 2362 / 4000 | 59.05% | [57.52, 60.56] |
+| graph s4 | 2263 / 4000 | 56.57% | [55.03, 58.10] |
+| flat s3 | 654 / 4000 | 16.35% | [15.24, 17.53] |
+| flat s4 | 631 / 4000 | 15.78% | [14.68, 16.94] |
+
+The graph agents were not in the 013 league, so the two tables are not
+comparable; a single ladder needs a new league that includes them. Experiment
+016 (longer graph training) is not listed until its benchmarks are run.
+
 ## Idea & Motivation
 
 The goal is to *understand the game mathematically*, not just to play it
