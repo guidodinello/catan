@@ -445,7 +445,7 @@ and its `GameRecord` stayed local, untouched, since nothing in `gamekit`
 ever names a game's own record type. Every existing test still passes,
 including the golden bit-identity regression test, and the committed
 `experiments/results/benchmark_*.json` files remain reproducible from their
-recorded seeds. Phase 5 (RL) is in progress -- see the roadmap entry and
+recorded seeds. Phase 5 (RL) is done -- see the roadmap entry and
 `docs/experiments/` for the run-by-run numbers, current best, and every
 verdict so far.
 
