@@ -5,7 +5,7 @@ description = "Base-game Catan rules engine and hot-seat CLI"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.162.2",
+    "fastapi>=0.163.0",
     "gamekit",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -51,7 +51,7 @@ catan = "main:main"
 [dependency-groups]
 dev = [
     "pre-commit>=4.7.0",
-    "ruff>=0.17.4",
+    "ruff>=0.17.5",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "pytest-benchmark>=5.3.1",
