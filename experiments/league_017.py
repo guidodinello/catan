@@ -226,6 +226,9 @@ def run(cfg: RunConfig) -> list[dict[str, Any]]:
     with ProcessPoolExecutor(cfg.workers, initializer=lg13._worker_init) as pool:
         play = lg13.make_play(pool, ckpt_paths, telemetry, cfg.step_budget)
         for a, b in pairs:
+            # A finished file is skipped by run_pairing; its ties were judged when
+            # it was played, so a resume after "continue" must not trip again.
+            finished = (cfg.results_dir / cfg.name / f"{a}{SEP}{b}.json").exists()
             payload = run_pairing(
                 a,
                 b,
@@ -238,7 +241,8 @@ def run(cfg: RunConfig) -> list[dict[str, Any]]:
                 name=cfg.name,
             )
             payloads.append(payload)
-            check_ties(payload)
+            if not finished:
+                check_ties(payload)
     return payloads
 
 

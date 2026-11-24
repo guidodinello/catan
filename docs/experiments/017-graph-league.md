@@ -125,7 +125,7 @@ Same pattern as 013, serial over pairings with one persistent process pool, via 
 
 `launch.sh` runs under nice 19 in a detached tmux session named `catan-017`, logging to `~/projects/catan-eval-data/logs/catan-017.log` (persistent). Long-job rules: check `pgrep -f '[l]eague_01'` and `tmux ls` first and refuse a duplicate; a dead wrapper is not a dead job; stop only with the job's `tmux send-keys -t catan-017 C-c` / SIGTERM, never a broad `pkill -f`; results and logs stay in `catan-eval-data`, not `/tmp`. Resume is per pairing: a finished file with a matching `config_hash` is skipped, so a stop loses at most the current pairing. When it ends: `python -m experiments.league_017 summarize --results-dir <dir> --name league --dir-013 experiments/results/league_013`. The 26 pairing files, their telemetry sidecars and `league.json` are committed with the results PR.
 
-**Stop rules during the run.** Stop and ask if (a) a pairing has more than 1% of games without a winner (`MAX_TIE_SHARE`, enforced after each pairing in `league_017.run`; 013 had 0 in 220,000), (b) the projected time breaks the rate check above, (c) `verify_manifest` or `reuse_013` fails.
+**Stop rules during the run.** Stop and ask if (a) a pairing has more than 1% of games without a winner (`MAX_TIE_SHARE`, enforced after each pairing played in this invocation by `league_017.run`; a finished file skipped on resume is not judged again, so the owner's "continue" sticks; 013 had 0 in 220,000; the same rule applies to the n = 8 smoke and the n = 200 cross-check, where a single tie already exceeds 1% and stops the run, which is intended), (b) the projected time breaks the rate check above, (c) `verify_manifest` or `reuse_013` fails.
 
 ## Environment
 

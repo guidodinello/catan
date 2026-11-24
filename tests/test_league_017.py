@@ -189,3 +189,19 @@ def test_tie_stop_rule_fires_above_one_percent() -> None:
     lg.check_ties(_payload(2000, 1960, 4000))  # 40 ties = exactly 1%
     with pytest.raises(RuntimeError, match="stop and ask"):
         lg.check_ties(_payload(1990, 1960, 4000))  # 50 ties
+
+
+def test_tie_rule_judges_a_pairing_once_not_again_on_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pair = lg.pairings()[0]
+    tied = _payload(0, 0, 8)
+    monkeypatch.setattr(lg, "verify_manifest", lambda *_a, **_k: None)
+    monkeypatch.setattr(lg, "run_pairing", lambda *_a, **_k: tied)
+    cfg = _cfg(tmp_path, pairs=(pair,))
+    with pytest.raises(RuntimeError, match="stop and ask"):
+        lg.run(cfg)  # played now, all ties: stops
+    finished = tmp_path / "out" / "t" / f"{pair[0]}{lg.SEP}{pair[1]}.json"
+    finished.parent.mkdir(parents=True)
+    finished.write_text("{}")
+    assert lg.run(cfg) == [tied]  # already on disk: resumes past it
