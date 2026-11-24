@@ -1,0 +1,18 @@
+{
+  "graph_s3_3m": {
+    "path": "catan014_ft_graph_s3_3000000.zip",
+    "sha256": "6cb96ab7d856bc98b158bdf6781c0541be8872b6f75bfa2ecac0860508477f91"
+  },
+  "graph_s4_3m": {
+    "path": "catan014_ft_graph_s4_3000000.zip",
+    "sha256": "ed7c57e28f6e1091d6035ea61aa44ca4e05ab13be351cda971db5f4a2699ba53"
+  },
+  "graph_s3_12m": {
+    "path": "catan016_graph_s3_c_12047424.zip",
+    "sha256": "f24c64b8ca285a098f5ac66b27f4cd8a01bef6395ed30ef49b245fec7f955c8a"
+  },
+  "graph_s4_12m": {
+    "path": "catan016_graph_s4_12047424.zip",
+    "sha256": "6b7e921955d81cd6a23de9988e47dc0a4b20f79aa1c82a3a36d7ada30acf0f48"
+  }
+}
