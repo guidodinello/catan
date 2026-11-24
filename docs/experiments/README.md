@@ -27,7 +27,7 @@ there links forward to the log(s) that tested it).
 | [013](013-first-league.md) | First catan league: 11 agents (8 RL checkpoints + heuristic, trading_heuristic, random), 4 seats `(a,b,a,b)`, anchored Bradley-Terry ratings, run on the HP (gamekit#38) | run 2026-10-08..10: 220,000 games, 0 ties; descriptive, none scored (see log) | [022](https://github.com/guidodinello/gamekit/blob/main/docs/research/022-league-ratings.md) |
 | [014](014-graph-encoder.md) | Board-aware (graph) policy network vs the flat MLP (issue #42): BC spatial accuracy (3 seeds/arm), then 2 fine-tune seeds/arm at 3M steps, n=4000 on fresh boards 21000001+ | Stage 1 done: Gate S1 passed (graph 86.0% vs flat 53.9% val spatial accuracy); Stage 2 done: Gate S2 passed (graph 57.8% vs flat 16.1% pooled, n=4000 on fresh boards; validated) | [008](https://github.com/guidodinello/gamekit/blob/main/docs/research/008-board-aware-encoder.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
 | [015](015-graph-search.md) | Decision-time search on the graph checkpoint (issue #96): `self` S=128 vs no search on `catan014_ft_graph_s3_3000000.zip`, n=4000 on fresh boards 22000001+ | pending (pre-registered, no measured run yet); timing smoke: 597 worker-s/game, about 83 h for the search arm at 8 workers | [021](https://github.com/guidodinello/gamekit/blob/main/docs/research/021-decision-time-search.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
-| [016](016-graph-longer-training.md) | Training the graph encoder longer (issue #97): resume the two 3M graph fine-tunes to 12M steps, fixed points at +3M/+6M/+9M, n=4000 on fresh boards 23000001+ | pending (pre-registered, no run yet) | [009](https://github.com/guidodinello/gamekit/blob/main/docs/research/009-longer-runs-and-resume.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
+| [016](016-graph-longer-training.md) | Training the graph encoder longer (issue #97): resume the two 3M graph fine-tunes to 12M steps, fixed points at +3M/+6M/+9M, n=4000 on fresh boards 23000001+ | Done: gate passed, "longer training helps" (pooled 68.40% at ~12M vs 56.30% at 3M, +12.10 points, n=4000 per checkpoint on fresh boards 23000001+) | [009](https://github.com/guidodinello/gamekit/blob/main/docs/research/009-longer-runs-and-resume.md); statistics [005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md) |
 
 ## In-loop eval caveats
 
@@ -82,10 +82,23 @@ a checkpoint *shortlist*, never a result. Cite this section from a log's Environ
   `bench_stage2.sh` and `perboard.py`, `<label>_3000000.zip`) describe the run as it was; a
   re-run under the new counting would write different names.
 
-## Current best (Phase 5, as of 2026-10-25)
+## Current best (Phase 5, as of 2026-11-24)
 
-**59.05% [57.52%, 60.56%] win rate vs 3 `HeuristicAgent`s**, n=4000 on the fresh boards
-21,000,001-21,004,000, seat-rotated — [014](014-graph-encoder.md) Stage 2 (Gate S2 passed),
+**69.53% [68.08%, 70.93%] win rate vs 3 `HeuristicAgent`s**, n=4000 on the fresh boards
+23,000,001-23,004,000, seat-rotated — [016](016-graph-longer-training.md) (gate passed),
+`catan016_graph_s4_12047424.zip`: the same graph policy network as below, resumed from fine-tune
+seed 4's 3M checkpoint and trained to about 12M steps (real `num_timesteps` 12,189,696). The
+checkpoint is gitignored, on the HDD:
+`rl_runs/exp016/selfplay/catan016_graph_s4/catan016_graph_s4_12047424.zip` (sha256 prefix
+`6b7e921955d8`). It is the better of two seeds (s3's +9M checkpoint scored 67.28% [65.80%, 68.71%]),
+so it is a best-of-two and somewhat upward biased. The same 3M start checkpoints re-benchmarked on
+these boards scored 58.18% (s3) and 54.43% (s4), so the measured gain from 3M to about 12M is +12.10
+points pooled. These boards differ from 014's, so this number is not comparable to the 59.05%
+below except through that paired 3M re-benchmark. Budget caveat: about 12M fine-tune steps, the same
+order as 006's ~12M, same opponent type only.
+
+Previous best (graph 3M, as of 2026-10-25): **59.05% [57.52%, 60.56%]**, n=4000 on the fresh boards
+21,000,001-21,004,000 — [014](014-graph-encoder.md) Stage 2 (Gate S2 passed),
 `catan014_ft_graph_s3_3000000.zip`: the board-aware graph policy network, BC clone then a 3M-step
 PPO fine-tune (fine-tune seed 3; the other graph run, seed 4, scored 56.57% [55.03%, 58.10%]; the
 flat MLP arm scored 16.35% and 15.78% under identical code and rules). The checkpoint is
