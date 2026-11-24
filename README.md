@@ -72,9 +72,34 @@ on the `fresh_014` boards, Wilson 95% CIs, benchmarked 2026-10-25. Parity
 | flat s3 | 654 / 4000 | 16.35% | [15.24, 17.53] |
 | flat s4 | 631 / 4000 | 15.78% | [14.68, 16.94] |
 
-The graph agents were not in the 013 league, so the two tables are not
-comparable; a single ladder needs a new league that includes them. Experiment
-016 (longer graph training) is not listed until its benchmarks are run.
+### Graph encoder, longer training (experiment 016)
+
+From [016 § Result](docs/experiments/016-graph-longer-training.md#result).
+The two 014 graph fine-tunes resumed from 3M to about 12M steps, win rate
+against 3 `HeuristicAgent` at the pre-registered fixed points, n = 4000 on the
+`fresh_016` boards (engine seeds 23,000,001 to 23,004,000, a different set from
+014's), Wilson 95% CIs, benchmarked 2026-11-24. The 3M rows are 014's
+checkpoints re-benchmarked on these boards, so every row is on the same boards.
+Parity is 25%. Gate passed: pooled 68.40% at about 12M against 56.30% at 3M
+(+12.10 points).
+
+| agent | steps | wins / n | win rate | 95% CI |
+|---|---|---|---|---|
+| graph s3 | 3M | 2327 / 4000 | 58.18% | [56.64, 59.70] |
+| graph s3 | ~6M | 2637 / 4000 | 65.93% | [64.44, 67.38] |
+| graph s3 | ~9M | 2701 / 4000 | 67.53% | [66.06, 68.96] |
+| graph s3 | ~12M | 2691 / 4000 | 67.28% | [65.80, 68.71] |
+| graph s4 | 3M | 2177 / 4000 | 54.43% | [52.88, 55.96] |
+| graph s4 | ~6M | 2621 / 4000 | 65.53% | [64.04, 66.98] |
+| graph s4 | ~9M | 2699 / 4000 | 67.48% | [66.01, 68.91] |
+| graph s4 | ~12M | 2781 / 4000 | **69.53%** | [68.08, 70.93] |
+
+The best checkpoint is `catan016_graph_s4_12047424.zip` (the better of two
+seeds, so somewhat upward biased). The 014 table above is on other boards; its
+59.05% and 56.57% are not directly comparable to these rows.
+
+The graph agents were not in the 013 league, so the Elo and 1v3 tables are not
+comparable; a single ladder needs a new league that includes them.
 
 ## Idea & Motivation
 

@@ -3,7 +3,7 @@
 **Date:** pre-registered 2026-10-25. No run, smoke or measurement exists before this file's merge; this PR is docs only.
 **Note:** [gamekit#009 — Longer runs / resume when the curve has not bent](https://github.com/guidodinello/gamekit/blob/main/docs/research/009-longer-runs-and-resume.md). Statistics per [gamekit#005](https://github.com/guidodinello/gamekit/blob/main/docs/research/005-eval-statistics.md). Follows [014 — graph encoder](014-graph-encoder.md) (issue #42, PR #95) and [006 — longer run](006-longer-run.md), whose shape it copies.
 
-**Status: pre-registered; training finished (Amendment 2); benchmarks not run.**
+**Status: gate PASSED, "longer training helps" (pooled +12.10 points, 56.30% to 68.40% on `fresh_016`); see [Result](#result).**
 
 ## Hypothesis
 
@@ -182,9 +182,113 @@ The `+9M` point is the trainer-named `_12047424` checkpoint, not `_final.zip`: t
 
 **Runner change (comment only).** The usage comment of `rl_runs/exp016/helpers/train016.sh` now gives the continuation `<steps>` as 12,047,424 minus the zip's real `num_timesteps`, with the one-liner above, and notes the leg still lands past the target by a rollout. No executable line changed (checked with `diff`: only `#` lines differ; `bash -n` passes). sha256 `ad17a62e9635...` -> **`2b0439d8cc97...`**. The script is on the HDD and not committed, as in Amendment 1.
 
+## Result
+
+Benchmarked 2026-11-24, after both training runs had finished, from the worktree `/home/guido/projects/catan-016-run` (detached at `c3a8b97c3c84`, clean tree, lock-pinned venv `catan-016-venv`: Python 3.14.5, torch 2.14.1+cu130, gamekit 0.5.0, stable-baselines3 2.9.0). Every job was `experiments.search_eval run --arm none --games 4000 --workers 4 --chunk 200` under `nice -n 10`, one named tmux session each, run one after another, with the sha256 prefix of the zip checked against Amendment 1/2 right before each launch. `EXIT=0` and 20 chunk files in every label. Win rates are the 3-heuristic benchmark (`rl_vs_heuristic`, seat-rotated by `engine_seed % 4`, deterministic `RLAgent`), Wilson 95% CIs; parity is 25%. Logs are `rl_runs/exp016/logs/bench_<label>.log` and outputs `rl_runs/exp016/<label>/` (gitignored, on the HDD).
+
+**Harness checks (log 016 step 3): both reproduce exactly.**
+
+| label | board range | wins / n | expected | wall |
+|---|---|---|---|---|
+| `016_check_graph_none` (graph s3 3M) | `fresh_014` | **2362 / 4000** | 2362 | 7m22s |
+| `016_check_flat_none` (flat `catan_bc_ft_long_10031616`) | `measured` (1..4000) | **829 / 4000** | 829 | 2m32s |
+
+**Fixed-point benchmarks, `fresh_016` (engine seeds 23,000,001 to 23,004,000, n = 4000 each).** Labels are `016_bench_<file stem>`; "+9M" is the pre-registered name of the checkpoint written about 12M cumulative steps in (real counts in Amendment 2).
+
+| seed | point | checkpoint | wins / n | win rate | 95% CI | wall |
+|---|---|---|---|---|---|---|
+| s3 | 3M | `catan014_ft_graph_s3_3000000` | 2327 / 4000 | 58.18% | [56.64, 59.70] | 5m42s |
+| s3 | +3M (6M) | `catan016_graph_s3_6047424` | 2637 / 4000 | 65.93% | [64.44, 67.38] | 5m25s |
+| s3 | +6M (9M) | `catan016_graph_s3_9047424` | 2701 / 4000 | 67.53% | [66.06, 68.96] | 5m14s |
+| s3 | +9M (12M) | `catan016_graph_s3_c_12047424` | 2691 / 4000 | 67.28% | [65.80, 68.71] | 5m16s |
+| s4 | 3M | `catan014_ft_graph_s4_3000000` | 2177 / 4000 | 54.43% | [52.88, 55.96] | 5m45s |
+| s4 | +3M (6M) | `catan016_graph_s4_6047424` | 2621 / 4000 | 65.53% | [64.04, 66.98] | 5m25s |
+| s4 | +6M (9M) | `catan016_graph_s4_9047424` | 2699 / 4000 | 67.48% | [66.01, 68.91] | 5m24s |
+| s4 | +9M (12M) | `catan016_graph_s4_12047424` | 2781 / 4000 | 69.53% | [68.08, 70.93] | 5m28s |
+
+The eight jobs took about 45 minutes of wall time in all (15:57 to 16:42); the two harness checks took the 10 minutes before that.
+
+**Gate (computed as the pre-registered rule says): PASSED, verdict "longer training helps".**
+
+| quantity | value |
+|---|---|
+| `P3` (s3 + s4 at 3M, 2 x 4000) | 4504 / 8000 = **56.30%** [55.21, 57.38] |
+| `P12` (s3 + s4 at +9M, 2 x 4000) | 5472 / 8000 = **68.40%** [67.37, 69.41] |
+| difference | **+12.10 points** (unpaired 95% interval [+10.61, +13.59]) |
+| `two_proportion_test(P12, P3)` | z = 15.79, p = 3.4e-56 |
+
+1. p < 0.05 with a positive difference: z = +15.79, p = 3.4e-56. Holds.
+2. Each seed improves: s3 67.28% > 58.18%, s4 69.53% > 54.43%. Holds.
+3. The pooled difference is +12.10 points, above the 2.2 threshold by about 10 points. Holds.
+
+All three hold by a wide margin, so no clause depends on rounding.
+
+**Secondary (reported, not gated).**
+
+*Every fixed point against its seed's 3M baseline*: `two_proportion_test` (unpaired, 4000 vs 4000) with Benjamini-Hochberg across the six comparisons (q = 0.05), and the board-paired exact McNemar (`experiments.search_eval.mcnemar_exact`; "only point" = boards won by the later checkpoint and lost by the 3M one, "only 3M" the reverse):
+
+| seed | point | difference (pts) | z | p (unpaired) | BH-adjusted p | only point / only 3M | McNemar p |
+|---|---|---|---|---|---|---|---|
+| s3 | 6M | +7.75 | 7.14 | 9.2e-13 | 9.2e-13 | 971 / 661 | 1.7e-14 |
+| s3 | 9M | +9.35 | 8.65 | 5.0e-18 | 7.5e-18 | 1025 / 651 | 5.7e-20 |
+| s3 | 12M | +9.10 | 8.42 | 3.9e-17 | 4.7e-17 | 982 / 618 | 7.9e-20 |
+| s4 | 6M | +11.10 | 10.13 | 4.0e-24 | 8.0e-24 | 1047 / 603 | 5.2e-28 |
+| s4 | 9M | +13.05 | 11.96 | 5.6e-33 | 1.7e-32 | 1097 / 575 | 8.9e-38 |
+| s4 | 12M | +15.10 | 13.91 | 5.5e-44 | 3.3e-43 | 1143 / 539 | 5.4e-50 |
+
+All six are rejected at q = 0.05; the two 12M rows are the McNemar tests the Design names (each seed's +9M against its 3M). How they were computed: the per-board outcome (`won`) is stored in every `chunk_*.json` that `search_eval run` writes, keyed by engine seed, so no deterministic replay (014's `perboard.py`) was needed. Each label holds exactly the 4000 seeds 23,000,001 to 23,004,000 once, and the sum of `won` equals the wins above for all eight. The BH family is these six comparisons (each later point against the same seed's 3M); the Design says "every fixed point against the 3M baseline" without fixing the family. The p-values are `erfc(z / sqrt 2)` from the z above, because `two_proportion_test` returns 0.0 below float resolution here. `gamekit.mc.testing.benjamini_hochberg` gives the same six rejections.
+
+*Curve per seed (n = 4000 each, `fresh_016`).*
+
+| seed | 3M | 6M | 9M | 12M |
+|---|---|---|---|---|
+| s3 | 58.18% | 65.93% | 67.53% | 67.28% |
+| s4 | 54.43% | 65.53% | 67.48% | 69.53% |
+| pooled | 56.30% | 65.73% | 67.50% | 68.40% |
+
+Both seeds rise steeply over the first 3M additional steps (+7.75 and +11.10 points) and more slowly after that. s3 is flat from 9M to 12M (-0.25 points, inside noise: a 4000-game CI is about +/-1.5 points); s4 is still rising (+2.05 points, and its 12M interval [68.08, 70.93] only just clears its 9M point). With two seeds and no test of the 9M-to-12M step, this shows neither a plateau for s3 nor its absence for s4.
+
+*Per-rotation-position wins* (wins out of 1000 per position; position r = `engine_seed % 4`, the left rotation of the lineup `(rl, h, h, h)`, so the RL agent sits in seat `(4 - r) % 4`):
+
+| checkpoint | r = 0 | r = 1 | r = 2 | r = 3 |
+|---|---|---|---|---|
+| s3 3M | 555 | 571 | 615 | 586 |
+| s3 6M | 654 | 645 | 669 | 669 |
+| s3 9M | 686 | 664 | 677 | 674 |
+| s3 12M | 651 | 655 | 701 | 684 |
+| s4 3M | 533 | 526 | 533 | 585 |
+| s4 6M | 657 | 649 | 650 | 665 |
+| s4 9M | 691 | 654 | 682 | 672 |
+| s4 12M | 690 | 690 | 684 | 717 |
+
+Every position gains for both seeds. A 1000-game cell has a 95% half-width of about 3 points, so differences of a few points between cells are within noise; no position test is registered and none was run.
+
+*In-loop curves, monitoring only (README, In-loop eval caveats).* These are the trainer's n = 200 evals on its own seeds, parsed from `rl_runs/exp016/logs/graph_s3.log`, `graph_s3_b.log`, `graph_s3_c.log` and `graph_s4.log` (`reported`, wins out of 200, at the nominal steps of Amendment 2, not the real timesteps). They are not benchmarks, are noisy (95% half-width about 6.5 points) and are biased upward when one takes a maximum; the gate does not use them.
+
+| nominal steps | s3 | s4 |
+|---|---|---|
+| 3.30M | 114 (57.0%) | 126 (63.0%) |
+| 4.05M | 133 (66.5%) | 111 (55.5%) |
+| 5.05M | 124 (62.0%) | 131 (65.5%) |
+| 6.05M (fixed point) | 129 (64.5%) | 119 (59.5%) |
+| 7.05M | 140 (70.0%) | 125 (62.5%) |
+| 8.05M | 131 (65.5%) | 136 (68.0%) |
+| 9.05M (fixed point) | 140 (70.0%) | 140 (70.0%) |
+| 10.05M | 140 (70.0%) | 136 (68.0%) |
+| 11.05M | no eval logged at this step | 135 (67.5%) |
+| 12.05M (fixed point) | 138 (69.0%) | 136 (68.0%) |
+
+The in-loop numbers rise with the benchmark ones, but not point by point (s4 at 6.05M: 59.5% in loop, 65.53% on `fresh_016`), as expected at n = 200. The best in-loop checkpoints (Amendment 2) were not benchmarked and are not claimed.
+
+*Against earlier numbers (different boards, not a paired comparison).* The +9M checkpoints (67.28% and 69.53% on `fresh_016`) are far above 006's 20.72% (flat MLP, about 12M steps, boards 1..4000, a different architecture) and above 014's 59.05% (graph s3 3M, `fresh_014`). The 3M re-benchmark on `fresh_016` gives 58.18% for s3 (014: 59.05%) and 54.43% for s4 (014: 56.57%): both slightly lower than on `fresh_014`, the direction the Design predicted for a selected checkpoint, but within about two CI half-widths and not tested.
+
+**Verdict.** Gate passed: **longer training helps** this graph policy, from 3M to about 12M steps, against 3 `HeuristicAgent`s. The gain is large (+12.1 points pooled) and the seeds agree on its sign and rough size (+9.1 and +15.1 points); most of it comes in the first 3M additional steps. It is a claim about this opponent type and these boards only (see Limitations).
+
+**README "current best".** The re-benchmarked 3M baseline on `fresh_016` is 58.18% (s3) and 54.43% (s4). Every +9M checkpoint beats it, so the rule moves the line, to **`catan016_graph_s4_12047424.zip`: 69.53% [68.08, 70.93], n = 4000 on `fresh_016`** (sha256 prefix `6b7e921955d8`). It is the better of the two seeds, whose 12M intervals overlap (s3: 67.28% [65.80, 68.71]), so it is a best-of-two and somewhat upward biased. The checkpoint is gitignored, on the HDD.
+
 ## Run log
 
-Training ran 2026-10-27 to 2026-10-29; the legs, interruptions and counts are in Amendment 2. No benchmark has been run.
+Training ran 2026-10-27 to 2026-10-29; the legs, interruptions and counts are in Amendment 2. Benchmarks ran 2026-11-24 (see Result).
 
 ## Deviations / disclosures
 
@@ -193,3 +297,7 @@ Training ran 2026-10-27 to 2026-10-29; the legs, interruptions and counts are in
 - s3 was trained in 3 legs and s4 in 1 (Amendment 2): one OOM kill (exit 137) and one stopped leg, each losing less than a 250k chunk of unsaved training.
 - The real step counts of the +9M checkpoints are 12,070,912 (s3) and 12,189,696 (s4), not 12,047,424: `rl/train.py` counts nominal chunk steps while SB3 trains whole 4,096-step rollouts (Amendment 2).
 - Leg b's `--steps` was computed from a checkpoint file name and was wrong; the leg was stopped before it overshot, and leg c used the corrected rule.
+- Benchmarks ran in a re-created worktree at the same SHA `c3a8b97` (the Amendment 1 worktree no longer existed on 2026-11-24), clean tree, lock-pinned venv `catan-016-venv` (the CUDA-extra environment, run with `CUDA_VISIBLE_DEVICES` empty, so inference was on CPU).
+- The harness checks were run again here (log 016 step 3 of the Docs-first protocol) with the 016 venv; Amendment 1's checks were run in the 015 worktree.
+- The per-board secondaries (McNemar, rotation) were read from the per-game `won` fields that `search_eval run` already stores in its chunk files; the deterministic replay the Design mentions was not needed. The BH family (six per-seed comparisons) is a choice made here, see Result.
+- No benchmark was run on any checkpoint other than the eight fixed points and the two harness-check checkpoints.
