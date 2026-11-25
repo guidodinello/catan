@@ -40,7 +40,7 @@ permissions:
 jobs:
   lint-python:
     name: Lint Python
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNERS || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -103,7 +103,7 @@ jobs:
 
   test-python:
     name: Tests (Python)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNERS || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -131,7 +131,7 @@ jobs:
   # is not green.
   test-rl:
     name: Tests (RL)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNERS || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -163,7 +163,7 @@ jobs:
       - test-rl
       - audit-workflows
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNERS || '["ubuntu-latest"]') }}
     steps:
       - name: Check results
         env:
