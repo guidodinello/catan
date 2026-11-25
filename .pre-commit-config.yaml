@@ -10,6 +10,12 @@ repos:
             # scripts/capture_screenshots.py); everything else stays capped.
             exclude: ^docs/images/gameplay\.gif$
           - id: check-toml
+          # Copier leaves inline conflict markers in a sync PR it couldn't merge
+          # (dev-standards' sync.py). --assume-in-merge makes the hook check every file
+          # even outside a git merge, so CI stays red on markers in any file, not only
+          # the ones check-yaml parses.
+          - id: check-merge-conflict
+            args: [--assume-in-merge]
 
     - repo: https://github.com/astral-sh/ruff-pre-commit
       rev: v0.17.5
