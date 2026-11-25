@@ -1,4 +1,5 @@
 repos:
+<<<<<<< before updating
     - repo: https://github.com/pre-commit/pre-commit-hooks
       rev: v6.0.0
       hooks:
@@ -10,6 +11,25 @@ repos:
             # scripts/capture_screenshots.py); everything else stays capped.
             exclude: ^docs/images/gameplay\.gif$
           - id: check-toml
+=======
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      # Copier leaves inline conflict markers in a sync PR it couldn't merge
+      # (dev-standards' sync.py). --assume-in-merge makes the hook check every file
+      # even outside a git merge, so CI stays red on markers in any file, not only
+      # the ones check-yaml parses.
+      - id: check-merge-conflict
+        args: [--assume-in-merge]
+      - id: check-added-large-files
+      - id: debug-statements
+        language_version: python3.14
+>>>>>>> after updating
 
     - repo: https://github.com/astral-sh/ruff-pre-commit
       rev: v0.17.5
