@@ -1,0 +1,12 @@
+{
+  "a": "graph_s4_3m",
+  "b": "trading_heuristic",
+  "n": 2000,
+  "winners_sha256": "495e02d0423ed892206309f2b9d30d79e39aed73e7718ab151b079b538438e17",
+  "digests_sha256": "d9260d73173b6d45363a52a0f72a11b78c3691070504d81b72c73f09f0fefb4b",
+  "worker_s_total": 11414.58369885484,
+  "worker_s_per_game": 5.70729184942742,
+  "peak_rss_mb": 385.265625,
+  "wall_s": 6271.310668596008,
+  "ties": 0
+}

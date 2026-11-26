@@ -37,26 +37,34 @@ The images are generated from seeded games by `scripts/capture_screenshots.py`
 
 Two separate measurements on different scales. Do not rank across the tables.
 
-### League Elo (experiment 013)
+### League Elo (experiment 017)
 
-From [013 § Result](docs/experiments/013-first-league.md#result). Round robin of
-11 agents, 55 pairings, n = 4000 games per pairing, 4 seats as `(a,b,a,b)`.
-Elo is anchored at `heuristic = 0`, with 95% bootstrap CIs. Run 2026-10-08 to
-2026-10-10. RL seats always reject trade offers.
+From [017 § Result](docs/experiments/017-graph-league.md#result). 15 agents on
+one anchored scale: [013](docs/experiments/013-first-league.md#result)'s round
+robin of 11 (55 pairings, n = 4000 games each) plus 26 pairings for 4 graph
+checkpoints (n = 2000 each: each against 5 agents from the top of 013's ladder,
+and against each other). 4 seats as `(a,b,a,b)`, Elo anchored at
+`heuristic = 0`, 95% bootstrap CIs. The new games ran 2026-11-24 to 2026-11-26.
+RL seats always reject trade offers; graph agents play without search. This
+ladder replaces 013's, since adding agents refits every rating.
 
 | rank | agent | Elo | 95% CI |
 |---|---|---|---|
-| 1 | `trading_heuristic` | +16.2 | [+10.6, +21.2] |
-| 2 | `heuristic` (anchor) | 0 | [0, 0] by construction |
-| 3 | `long_10m` | -62.9 | [-67.6, -57.8] |
-| 4 | `long_8m` | -69.2 | [-74.4, -64.2] |
-| 5 | `ent_decay_3m` | -89.9 | [-95.0, -84.6] |
-| 6 | `ent_ctrl_3m` | -116.1 | [-121.0, -111.2] |
-| 7 | `long_4m` | -123.4 | [-128.9, -118.4] |
-| 8 | `ent_ramp_3m` | -132.3 | [-137.6, -127.2] |
-| 9 | `bc_clone` | -161.1 | [-166.4, -156.1] |
-| 10 | `bc_ft_2m` | -178.8 | [-183.8, -173.6] |
-| 11 | `random` | -687.3 | [-696.2, -676.6] |
+| 1 | `graph_s4_12m` | +393.7 | [+384.5, +402.1] |
+| 2 | `graph_s3_12m` | +382.7 | [+373.4, +391.3] |
+| 3 | `graph_s3_3m` | +255.6 | [+247.4, +263.1] |
+| 4 | `graph_s4_3m` | +193.5 | [+186.3, +200.8] |
+| 5 | `trading_heuristic` | +15.0 | [+10.5, +19.7] |
+| 6 | `heuristic` (anchor) | 0 | [0, 0] by construction |
+| 7 | `long_10m` | -65.7 | [-70.3, -60.7] |
+| 8 | `long_8m` | -71.4 | [-76.2, -66.7] |
+| 9 | `ent_decay_3m` | -92.7 | [-97.3, -87.7] |
+| 10 | `ent_ctrl_3m` | -118.0 | [-122.8, -112.8] |
+| 11 | `long_4m` | -125.3 | [-130.0, -120.5] |
+| 12 | `ent_ramp_3m` | -134.2 | [-139.1, -129.3] |
+| 13 | `bc_clone` | -163.0 | [-167.6, -157.8] |
+| 14 | `bc_ft_2m` | -180.7 | [-185.1, -175.3] |
+| 15 | `random` | -689.3 | [-698.6, -678.2] |
 
 ### Graph encoder, 1v3 vs heuristic (experiment 014)
 
@@ -98,8 +106,9 @@ The best checkpoint is `catan016_graph_s4_12047424.zip` (the better of two
 seeds, so somewhat upward biased). The 014 table above is on other boards; its
 59.05% and 56.57% are not directly comparable to these rows.
 
-The graph agents were not in the 013 league, so the Elo and 1v3 tables are not
-comparable; a single ladder needs a new league that includes them.
+The Elo and 1v3 tables are different measurements and their numbers are not
+comparable. On the 017 ladder above, this checkpoint (`graph_s4_12m`) rates
++393.7 [+384.5, +402.1]; its interval overlaps `graph_s3_12m`'s.
 
 ## Idea & Motivation
 

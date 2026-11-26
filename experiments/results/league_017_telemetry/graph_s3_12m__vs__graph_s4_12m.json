@@ -1,0 +1,12 @@
+{
+  "a": "graph_s3_12m",
+  "b": "graph_s4_12m",
+  "n": 2000,
+  "winners_sha256": "86a7b6a3321608883bb0364848a704892512d442bd3284ff8f2c4ff504345196",
+  "digests_sha256": "80bbe5d6bad16bdcac711f4b69a1c78622208813afdb8a10a67462c4000be6c5",
+  "worker_s_total": 12540.722846429057,
+  "worker_s_per_game": 6.270361423214529,
+  "peak_rss_mb": 385.265625,
+  "wall_s": 6278.895946387987,
+  "ties": 0
+}
