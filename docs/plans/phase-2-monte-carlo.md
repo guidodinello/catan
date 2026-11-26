@@ -72,7 +72,7 @@ no number is ever read as policy-free.
 ### New: `experiments/mcstats.py` — local generic MC utilities
 
 Stdlib-only (`math`, `statistics`). Mirrors the *names* used in
-`~/Desktop/fac/2026/mmo/mmo-utils` so a later swap is mechanical:
+`~/Documents/facultad/2026/mmo/mmo-utils` so a later swap is mechanical:
 
 - `ConfidenceInterval(lower, upper)` with a `.width` property
 - `MCResult(mean, variance, n)` with `.confidence_interval(alpha)`

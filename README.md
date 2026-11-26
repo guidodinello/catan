@@ -128,7 +128,7 @@ This project follows the pattern already proven in the Truco/Roulette family:
 |---|---|---|
 | `truco` | `~/projects/truco` | Hand-probability simulator only (flowers, piezas, muestra). No game-play loop. Superseded by `truco-py`. |
 | `roulette` | `~/projects/roulette` | Notebook with `BetStrategy` abstract class + heuristic strategies + balance simulation. |
-| `truco-py` | `~/Desktop/fac/2026/mmo/truco-py` | **The reference pipeline**: full game engine, Agent protocol, VonNeumannAgent (online MC rollouts + EV cache), gymnasium env, MaskablePPO training, self-play, match benchmarking. Best result: 85.3% vs ThresholdAgent at 2M steps. |
+| `truco-py` | `~/projects/truco-py` | **The reference pipeline**: full game engine, Agent protocol, VonNeumannAgent (online MC rollouts + EV cache), gymnasium env, MaskablePPO training, self-play, match benchmarking. Best result: 85.3% vs ThresholdAgent at 2M steps. |
 | `catan` | this repo | Rules engine, Monte Carlo analysis, heuristic and RL agents, and a web UI; see the [Roadmap](#roadmap). |
 
 `truco-py` is the template this project is designed after.
