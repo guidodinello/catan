@@ -3,7 +3,7 @@
 **Date:** pre-registered 2026-11-24 (before any measured run, replay, cross-check or timing smoke on the HP)
 **Note:** [gamekit#022 — League ratings](https://github.com/guidodinello/gamekit/blob/main/docs/research/022-league-ratings.md). Issue [#125](https://github.com/guidodinello/catan/issues/125). Extends [013](013-first-league.md); the graph checkpoints come from [014](014-graph-encoder.md) and [016](016-graph-longer-training.md).
 
-**Status: pre-registered, not run.** Descriptive: no hypothesis test, no decision rule, no pass/fail threshold on any rating. The only pass/fail items are the two pre-launch gates below, and they test the harness, not an agent.
+**Status: run 2026-11-24 to 2026-11-26 (UTC); see Run log and Result.** Everything from "What this is for" through "How the run is executed" is the pre-registered text, unchanged. Descriptive: no hypothesis test, no decision rule, no pass/fail threshold on any rating. The only pass/fail items are the two pre-launch gates below, and they test the harness, not an agent.
 
 ## What this is for
 
@@ -129,15 +129,131 @@ Same pattern as 013, serial over pairings with one persistent process pool, via 
 
 ## Environment
 
-To fill at run time: laptop and HP torch / python / numpy / sb3-contrib / gamekit versions, catan commit, HP load average and worker count, concurrent jobs. Local figures so far (laptop, 2026-11-24): the lock-pinned venv, gamekit 0.5.0.
+| | HP (league, HP cross-check leg, timing smoke) | laptop (replay gate, laptop cross-check leg) |
+|---|---|---|
+| catan commit | `7372ad7` | `7372ad7` (separate worktrees) |
+| python | 3.14.4 | 3.14.5 |
+| torch | 2.14.1+cpu (capability DEFAULT) | 2.14.0+cpu (capability AVX2) |
+| numpy | 2.5.4 | 2.5.3 |
+| sb3-contrib / stable-baselines3 | 2.9.2 / 2.9.2 | 2.9.0 / 2.9.0 |
+| gamekit | 0.5.0 | 0.5.0 |
+
+Versions were read on 2026-11-26, after the run. The HP column matches `uv.lock` (`launch.sh` runs `uv sync --frozen --extra rl-train`). **The laptop column does not:** both laptop gates ran with the main checkout's `.venv` (the launch command and the cross-check script name its interpreter), whose torch, numpy and sb3 are older patch releases than the lock; their install dates are from September, before the gates. gamekit was at the locked version. See Deviations.
+
+`summarize` ran on the laptop at `d4117ca` (the commit stamped in `league.json`); the 26 pairing files are stamped `7372ad7`. `git diff 7372ad7 d4117ca -- uv.lock pyproject.toml experiments/ src/ tests/` is empty.
 
 ## Run log
 
-Not run. Nothing in this document is a measurement; the Step 0 numbers are timing only.
+- **Gate 1, replay: PASS** (laptop, 2026-11-24, `7372ad7`, `heuristic__vs__long_10m`, seed 20261013, n = 4000, **4 workers**, nice 10, 252 s). `config_hash`, `by_role` and `by_seat` equal the committed 013 file's (re-checked 2026-11-26), and both telemetry hashes equal 013's: `winners_sha256` `b95c852e511aae3e7ffcc34173c8ffc5d186d726967c17d5b5fc505a4433d210`, `digests_sha256` `7ccb7cab29f537f68703ec63abe0f7dc4383918ad270f31db587c75fc4082ecb`.
+- **Gate 1 replay repeated on the locked environment: PASS** (laptop, 2026-11-26, after the league, not pre-registered; worktree at `0e3101a`, whose `uv.lock` and code match `7372ad7`; venv matching the lock: python 3.14.5, torch 2.14.1+cpu, numpy 2.5.4, sb3-contrib / stable-baselines3 2.9.2, gamekit 0.5.0; same pairing, seed, n and 4 workers, nice 10, 451 s, on battery): `winners_sha256` (`b95c852e...`), `digests_sha256` (`7ccb7cab...`), `config_hash`, `by_role` and `by_seat` equal 013's, 0 ties. Files: laptop `~/projects/catan-eval-data-laptop/017/replay-locked/`.
+- **Gate 2, cross-machine: PASS** (seed 20261015, n = 200, league name `xcheck`, `7372ad7`; laptop 4 workers at nice 10, HP 1 worker; HP leg 21:22-22:27 UTC, 2026-11-24). All five fields are identical on both machines in all three pairings, and every pairing had 0 ties. The rows below are both machines' values. Wins are from the timing seed and enter no result.
+
+  - `graph_s3_12m__vs__long_10m` (wall: laptop 27 s, HP 1061 s)
+    - wins: graph_s3_12m 184, long_10m 16; ties 0; `config_hash` `3a7cf56b39c3`
+    - `winners_sha256` `aed4f3018c783e8f5bbc685fc91969093ae1ba6d6a865ea72c0d8c969997abb9`
+    - `digests_sha256` `e44e25f381c5e5aefaa2c7892c7801a1cfa295022286860563e324b2fa0bdfee`
+  - `graph_s3_3m__vs__graph_s4_12m` (wall: laptop 44 s, HP 1819 s)
+    - wins: graph_s4_12m 143, graph_s3_3m 57; ties 0; `config_hash` `7fc15934f624`
+    - `winners_sha256` `6571ebf438918c5bd25b4c2979b8bcb8ddf8aae242482c42012c1fa0d8d03c96`
+    - `digests_sha256` `e305fead81b2d3fb87085e1e604ae1581b0a286f5656979138839210e53c19da`
+  - `graph_s4_12m__vs__heuristic` (wall: laptop 26 s, HP 1004 s)
+    - wins: heuristic 25, graph_s4_12m 175; ties 0; `config_hash` `f9c27b6cd856`
+    - `winners_sha256` `669765f86ad3f16e5554655bcdb84fc014521d5ee63441476e5e2f299fce73f6`
+    - `digests_sha256` `e9e4c5f4da79a94edc62c1e33a339dd02cfba075e2761fed6e6d19da5822ad3d`
+- **Timing smoke:** see below. It gave **n = 2000**.
+- **Launch:** 2026-11-24 23:15:54 UTC on the HP, `launch.sh 7372ad7 catan-017 -- experiments.league_017 run --n 2000 --workers 2 --ckpt-root ~/projects/catan-eval-data/checkpoints --results-dir ~/projects/catan-eval-data/out/017 --name league` (seed 20261013, the default), tmux `catan-017`, nice 19, `OMP_NUM_THREADS=1`. **2 workers**, from the registered load clause: the HP load average was 6.1-7.7 at launch (above 4), with 3 GitHub runner workers active.
+- **Rate checks** (telemetry only, no win rate read). The projection is the finished pairings' wall time plus each remaining pairing's smoke worker time times its class's actual/smoke ratio, at 2 workers. Stop-and-ask limit: 62.4 h.
+  - 2026-11-25 about 15:32 UTC, 9 of 26 done, all three classes represented, 0 ties: 1.16x the smoke, **projected 43.7 h**. Load average at that check: 5.96 (1 min). The third class's first pairing had finished at 13:23 UTC, about 2 h earlier.
+  - 2026-11-26 about 01:53 UTC, 14 of 26 done, 0 ties: 1.19x, projected 47.6 h.
+  - Neither check triggered the stop rule.
+- **Finished:** `exit 0` 2026-11-26 19:14:28 UTC, **44.0 h** after launch (sum of the 26 pairing wall times: 43.9 h). 26 pairing files and 26 telemetry sidecars.
+- **Stamps re-derived from the files (2026-11-26):** 26 pairing files, 26 distinct `config_hash`es, each with `n_games` 2000, seed 20261013 and `git_commit` `7372ad7`; wins sum to 2000 in every file (**0 ties in 52,000 games**); each agent has 4000 seat occupancies per pairing, 1000 in each seat; telemetry agrees on n and ties. The 52 files on the laptop mirror had the same sha256 as the HP's. The committed copies differ from the HP's only by a final newline (the `end-of-file-fixer` hook, as for 013).
+- **`summarize`:** `python -m experiments.league_017 summarize --results-dir experiments/results --name league_017 --dir-013 experiments/results/league_013`. A second run on a scratch copy of the 26 raw files gave the same `league.json` apart from `generated_at`.
+- **Timing by pairing class (actual, 2 workers, nice 19, 2000 games per pairing):**
+
+  | class | pairings | wall per pairing, mean (min-max) | worker-s / game, mean (min-max) | smoke worker-s / game, mean | ties |
+  |---|---|---|---|---|---|
+  | graph-baseline | 8 | 83.0 min (60.7-104.5) | 4.68 (3.63-5.71) | 4.69 | 0/16000 |
+  | graph-flat | 12 | 94.3 min (66.9-122.7) | 5.27 (4.01-6.71) | 4.87 | 0/24000 |
+  | graph-graph | 6 | 140.2 min (104.6-170.6) | 7.87 (6.27-9.22) | 7.19 | 0/12000 |
+
+  Wall time was **1.14x** the smoke projection (44.0 h vs 38.6 h), within the 1.3x headroom and under 48 h. Summed worker time per unit of n was 147.9 s against the smoke's 139.0 s (1.06x). Peak RSS was 385 MB per worker.
+
+### Timing (HP smoke) and the chosen n
+
+HP, 2026-11-24 22:50-23:08 UTC, `7372ad7`, seed 20261015, n = 8 per pairing, all 26 pairings, 1 worker, nice 19, `OMP_NUM_THREADS=1`. No win rate was read. Worker time is per-game CPU time (`time.process_time`).
+
+| pairing class | pairings | worker-s / game, mean (min-max) | peak RSS | ties |
+|---|---|---|---|---|
+| graph-baseline | 8 | 4.69 (3.45-5.92) | 450 MB | 0/64 |
+| graph-flat | 12 | 4.87 (3.41-6.18) | 450 MB | 0/96 |
+| graph-graph | 6 | 7.19 (5.90-9.52) | 445 MB | 0/48 |
+
+Sum over the 26 pairings: 139.0 worker-s per unit of n (estimate before the smoke: 138). Linear scaling gives n = 4000 at 3 workers 51.5 h (77 h at 2) and n = 2000 at 3 workers 25.7 h (**38.6 h at 2**). n = 4000 is over 48 h at either worker count, so the rule gives **n = 2000**. Load was not constant during the smoke: the load average was about 1.2 in the first half and about 9.7 in the second, with 3 GitHub runner workers active.
 
 ## Result
 
-Not run.
+Roster of 15, 81 pairings (013's 55 at n = 4000 plus 26 at n = 2000; 272,000 games, 52,000 of them new), seed 20261013, 4-seat `(a,b,a,b)` reduction, anchor `heuristic = 0`, `prior_draws = 1`, 1000 bootstrap resamples (`bootstrap_seed = 0`), 95% intervals. **0 ties** in all 81 pairings. Graph agents play without search; RL seats always reject trade offers. Files: `experiments/results/league_017/` (26 pairing files plus `league.json`), `experiments/results/league_017_telemetry/`.
+
+**Ratings**, with 013's own fit (11 agents) alongside. The 017 ladder replaces 013's; "shift" is Question 6.
+
+| rank | agent | 017 Elo | 017 95% CI | 013 rank | 013 Elo | 013 95% CI | shift |
+|---|---|---|---|---|---|---|---|
+| 1 | `graph_s4_12m` | +393.7 | [+384.5, +402.1] | - | - | - | - |
+| 2 | `graph_s3_12m` | +382.7 | [+373.4, +391.3] | - | - | - | - |
+| 3 | `graph_s3_3m` | +255.6 | [+247.4, +263.1] | - | - | - | - |
+| 4 | `graph_s4_3m` | +193.5 | [+186.3, +200.8] | - | - | - | - |
+| 5 | `trading_heuristic` | +15.0 | [+10.5, +19.7] | 1 | +16.2 | [+10.6, +21.2] | -1.1 |
+| 6 | `heuristic` (anchor) | 0 | [0, 0] by construction | 2 | 0 | by construction | 0 |
+| 7 | `long_10m` | -65.7 | [-70.3, -60.7] | 3 | -62.9 | [-67.6, -57.8] | -2.7 |
+| 8 | `long_8m` | -71.4 | [-76.2, -66.7] | 4 | -69.2 | [-74.4, -64.2] | -2.2 |
+| 9 | `ent_decay_3m` | -92.7 | [-97.3, -87.7] | 5 | -89.9 | [-95.0, -84.6] | -2.9 |
+| 10 | `ent_ctrl_3m` | -118.0 | [-122.8, -112.8] | 6 | -116.1 | [-121.0, -111.2] | -1.9 |
+| 11 | `long_4m` | -125.3 | [-130.0, -120.5] | 7 | -123.4 | [-128.9, -118.4] | -1.9 |
+| 12 | `ent_ramp_3m` | -134.2 | [-139.1, -129.3] | 8 | -132.3 | [-137.6, -127.2] | -1.9 |
+| 13 | `bc_clone` | -163.0 | [-167.6, -157.8] | 9 | -161.1 | [-166.4, -156.1] | -1.9 |
+| 14 | `bc_ft_2m` | -180.7 | [-185.1, -175.3] | 10 | -178.8 | [-183.8, -173.6] | -1.9 |
+| 15 | `random` | -689.3 | [-698.6, -678.2] | 11 | -687.3 | [-696.2, -676.6] | -1.9 |
+
+**The 26 new cells.** Percent of games the **column** graph agent wins in its 2v2 pairing with the row opponent (n = 2000, Wilson 95%). Graph-vs-graph pairings appear twice, once from each side.
+
+| opponent | `graph_s4_12m` | `graph_s3_12m` | `graph_s3_3m` | `graph_s4_3m` |
+|---|---|---|---|---|
+| `trading_heuristic` | 86.85 [85.3, 88.3] | 87.75 [86.2, 89.1] | 81.40 [79.6, 83.0] | 75.05 [73.1, 76.9] |
+| `heuristic` | 87.25 [85.7, 88.6] | 88.10 [86.6, 89.4] | 80.95 [79.2, 82.6] | 76.25 [74.3, 78.1] |
+| `long_10m` | 94.00 [92.9, 95.0] | 93.10 [91.9, 94.1] | 86.60 [85.0, 88.0] | 83.25 [81.6, 84.8] |
+| `long_8m` | 93.30 [92.1, 94.3] | 92.80 [91.6, 93.9] | 87.85 [86.3, 89.2] | 82.90 [81.2, 84.5] |
+| `ent_decay_3m` | 94.40 [93.3, 95.3] | 94.35 [93.3, 95.3] | 88.25 [86.8, 89.6] | 86.15 [84.6, 87.6] |
+| `graph_s4_12m` | - | 47.45 [45.3, 49.6] | 27.35 [25.4, 29.3] | 22.75 [21.0, 24.6] |
+| `graph_s3_12m` | 52.55 [50.4, 54.7] | - | 31.65 [29.6, 33.7] | 21.65 [19.9, 23.5] |
+| `graph_s3_3m` | 72.65 [70.7, 74.6] | 68.35 [66.3, 70.4] | - | 38.90 [36.8, 41.1] |
+| `graph_s4_3m` | 77.25 [75.4, 79.0] | 78.35 [76.5, 80.1] | 61.10 [58.9, 63.2] | - |
+
+**Answers to the pre-registered questions (descriptive; nothing is called confirmed):**
+
+1. **Against the anchor and `trading_heuristic`:** all four graph agents rate far above both, from +193.5 (`graph_s4_3m`) to +393.7 (`graph_s4_12m`), against +15.0 for `trading_heuristic`; their intervals do not overlap either baseline's. Head-to-head they win 76.25-88.10% against `heuristic` and 75.05-87.75% against `trading_heuristic`. They are the first RL agents on this ladder to rate above `heuristic`. For the two 12M agents the single-scale fit predicts a larger margin over both baselines than was observed (see Question 5), so the rating gap should not be read as an exact head-to-head prediction. 013's trading caveats carry over.
+2. **3M vs 12M within a seed:** 3M orders below 12M in both. Seed 3: +255.6 [+247.4, +263.1] vs +382.7 [+373.4, +391.3]; `graph_s3_12m` wins 68.35% of the direct games. Seed 4: +193.5 [+186.3, +200.8] vs +393.7 [+384.5, +402.1]; `graph_s4_12m` wins 77.25%. The intervals do not overlap within either seed. At 3M, seed 3 is above seed 4 (direct 61.10%), the same order as 014's 1v3 benchmark.
+3. **`graph_s3_12m` vs `graph_s4_12m`:** the ratings do not separate them: s4 is 11.0 points higher by point estimate and the marginal intervals overlap ([+384.5, +402.1] and [+373.4, +391.3]). The direct pairing leans to s4: s3 wins 47.45% [45.3, 49.6], so s4 wins 52.55%, an interval that excludes 50% by a small margin. That is one of 26 new cells, with no multiplicity correction, and no pre-registered test. Against the five shared flat and baseline opponents neither is ahead everywhere: s3's point estimate is higher against `heuristic` and `trading_heuristic`, s4's against the three flat agents, all by under 1 point. The overlap of marginal intervals is not a test of the difference; `league.json` has no interval for the difference.
+4. **Against `long_10m`:** `graph_s4_12m` wins 94.00%, `graph_s3_12m` 93.10%, `graph_s3_3m` 86.60% and `graph_s4_3m` 83.25% (intervals in the table). On the ladder `long_10m` is at -65.7.
+5. **Single-scalar fit:** gamekit reports 5 significant 3-cycles (every edge's Wilson interval entirely above 50%). They are **the same 5 as in 013**, all through `long_10m`; **none contains a graph agent**. A cycle can only be found among agents that all played each other, so the bridge design limits which graph triples could show one. No cycle does not mean the fit is exact: in 8 of the 26 new cells the fitted value lies outside the observed Wilson interval (the same check on 013's fit finds 35 of its 55 cells). The new cells' residuals are much smaller than 013's largest: mean absolute 1.3 points, maximum 3.8, against 15.8 for `long_10m` vs `long_8m`, which is still the largest in the joint fit.
+
+| pairing (A vs B) | A observed % | A fitted % | residual (points) |
+|---|---|---|---|
+| `graph_s3_3m` vs `graph_s4_12m` | 27.35 | 31.1 | -3.8 |
+| `graph_s3_12m` vs `graph_s4_3m` | 78.35 | 74.8 | +3.5 |
+| `graph_s4_12m` vs `heuristic` | 87.25 | 90.6 | -3.4 |
+| `graph_s4_12m` vs `trading_heuristic` | 86.85 | 89.8 | -3.0 |
+| `ent_decay_3m` vs `graph_s4_3m` | 13.85 | 16.1 | -2.3 |
+| `graph_s3_3m` vs `graph_s4_3m` | 61.10 | 58.8 | +2.3 |
+| `graph_s3_12m` vs `heuristic` | 88.10 | 90.1 | -2.0 |
+| `graph_s3_12m` vs `trading_heuristic` | 87.75 | 89.3 | -1.5 |
+
+   In the four 12M-vs-baseline cells above, the fit overstates the 12M agent's win rate. Among the graph agents, it misses three round-robin cells by 2.3 to 3.8 points.
+6. **Shifts of 013's ratings:** every non-anchor rating moved down relative to `heuristic`, by 1.1 points (`trading_heuristic`) to 2.9 (`ent_decay_3m`); `long_10m` moved -2.7, `long_8m` -2.2, `random` -1.9. The order of 013's 11 agents is unchanged, and each new point estimate lies inside that agent's 013 interval. These are shifts between two fits that share the 55 files, not new measurements of the flat agents.
+
+## Verdict
+
+Descriptive; none scored. No hypothesis was tested and no rating had a pass/fail threshold. Both pre-launch gates passed, with the laptop environment disclosure below. The four graph agents now sit on the anchored scale, above `trading_heuristic` and `heuristic`; their positions rest on the bridge pairings described in Design.
 
 ## Deviations / disclosures
 
@@ -145,3 +261,9 @@ Not run.
 - **Bridge pairings instead of full rows** and **four of ten candidate agents** are cost choices with their trade-offs stated above, not findings.
 - **The cost numbers are estimates** from n = 4 laptop games times one HP/laptop ratio (4.3x), itself taken from a 4-game laptop sample for `heuristic__vs__long_10m` against 013's 4000-game HP mean; the HP smoke replaces them.
 - The Step 0 smoke and the RSS measurement ran on the laptop before this document existed, outside any pre-registered pairing, with 013's timing seed; neither read a win rate.
+- **n = 2000** for the 26 new pairings (by the registered rule), against 4000 for 013's files, so the graph cells carry less weight and wider intervals.
+- **2 workers instead of 3**, from the registered load clause (load 6.1-7.7 at launch). The HP is shared with GitHub Actions runners; load was not recorded continuously during the run. Concurrent load can change timings, not results, since games are deterministic functions of the seeds.
+- **Worker counts in the gates differ from the registered commands:** the replay and the laptop cross-check leg used 4 workers (the commands say 2), and the HP cross-check leg used 1.
+- **The laptop gates did not run on the locked torch, numpy and sb3** (see Environment). Gate 1 was meant to check the lock bump since 013; it did exercise gamekit 0.5.0, and it passed on torch 2.14.0 / numpy 2.5.3 / sb3 2.9.0, not on the locked 2.14.1 / 2.5.4 / 2.9.2. Indirect evidence for the locked versions: in Gate 2 the HP, on the locked versions, matched the laptop on all five fields in its three pairings (600 games). The replay was repeated on the locked versions on 2026-11-26 and passed (Run log).
+- **The first rate check was later than "after the first pairing of each class"** by about 2 h, with 9 pairings finished.
+- Timing: 44.0 h against the smoke's 38.6 h (1.14x).
